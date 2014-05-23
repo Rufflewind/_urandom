@@ -1,7 +1,36 @@
+#!/usr/bin/env python
 from fractions import Fraction
 
-# generates Euler zigzag numbers (A000111) using the Seidel triangle.
+def bernoulli(n):
+    '''
+    Returns an iterator that generates the first `n` Bernoulli numbers
+    (sequence A027641 divided by sequence A027642) as `Fraction`s.  The
+    convention used here sets the second Bernoulli number to -1/2.
+
+    The sequence is computed using Euler zigzag numbers.
+    '''
+    if n <= 0:
+        return
+    yield Fraction(1, 1)
+    if n == 1:
+        return
+    yield Fraction(-1, 2)
+    seq = enumerate(euler_zigzag(n - 1))
+    next(seq)
+    for i, e in seq:
+        j = i + 1
+        if j % 2 == 1:
+            yield 0
+        else:
+            yield Fraction(e * j * (-1) ** (j // 2), 2 ** j - 4 ** j)
+
 def euler_zigzag(n):
+    '''
+    Returns an iterator that generates the first `n` Euler zigzag numbers
+    (sequence A000111, also known as up/down numbers) as `int`s.
+
+    The sequence is computed using the Seidal triangle method.
+    '''
     if n <= 0:
         return
     center = (n - 3) // 2 + 1
@@ -21,25 +50,9 @@ def euler_zigzag(n):
                 row[j] += row[j + 1]
             yield row[end + 1]
 
-# generates Bernoulli numbers (A027641 divided by A027642) using Euler zigzag numbers.
-def bernoulli(n):
-    if n <= 0:
-        return
-    yield Fraction(1, 1)
-    if n == 1:
-        return
-    yield Fraction(-1, 2)
-    seq = enumerate(euler_zigzag(n - 1))
-    next(seq)
-    for i, e in seq:
-        j = i + 1
-        if j % 2 == 1:
-            yield 0
-        else:
-            yield Fraction(e * j * (-1) ** (j // 2), 2 ** j - 4 ** j)
-
-for i in range(10):
-    print(list(euler_zigzag(i)))
-
-for i in range(10):
-    print(list(map(str, bernoulli(i))))
+# example usage
+if __name__ == "__main__":
+    for i in range(10):
+        print(list(euler_zigzag(i)))
+    for i in range(10):
+        print(list(map(str, bernoulli(i))))
