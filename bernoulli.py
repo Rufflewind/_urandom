@@ -15,21 +15,20 @@ def bernoulli(n):
     if n == 1:
         return
     yield Fraction(-1, 2)
-    seq = enumerate(euler_zigzag(n - 1))
-    next(seq)
-    for i, e in seq:
-        j = i + 1
-        if j % 2 == 1:
+    zs = euler_zigzag(n - 1)
+    next(zs)              # skip first element
+    for i, z in enumerate(zs, 2):
+        if i % 2 == 1:
             yield 0
         else:
-            yield Fraction(e * j * (-1) ** (j // 2), 2 ** j - 4 ** j)
+            yield Fraction(z * i * (-1) ** (i // 2), (1 << i) - (1 << 2 * i))
 
 def euler_zigzag(n):
     '''
     Returns an iterator that generates the first `n` Euler zigzag numbers
     (sequence A000111, also known as up/down numbers) as `int`s.
 
-    The sequence is computed using the Seidal triangle method.
+    The sequence is computed using the Seidel triangle method.
     '''
     if n <= 0:
         return
@@ -37,18 +36,20 @@ def euler_zigzag(n):
     row = [0] * n
     row[center] = 1
     for i in range(-1, n - 1):
+        offset = i // 2
+        length = i  + 1
         if i % 2 == 1:
-            begin = center - i // 2
-            end = begin + i + 1
-            for j in range(begin, end):
+            start = center - offset
+            stop  = start  + length
+            for j in range(start, stop):
                 row[j] += row[j - 1]
-            yield row[end - 1]
+            yield row[stop - 1]
         else:
-            begin = center + i // 2
-            end = begin - i - 1
-            for j in range(begin, end, -1):
+            start = center + offset
+            stop  = start  - length
+            for j in range(start, stop, -1):
                 row[j] += row[j + 1]
-            yield row[end + 1]
+            yield row[stop + 1]
 
 # example usage
 if __name__ == "__main__":
