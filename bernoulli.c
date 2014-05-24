@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 #include "bernoulli.h"
@@ -7,85 +6,87 @@
 extern "C" {
 #endif
 
-/* check for overflow */
-static int checked_add_assign(unsigned *left, unsigned right) {
-    if (UINT_MAX - right < *left)
-        return 75;
-    *left += right;
-    return 0;
-}
+struct euler_zigzag_iter {
+
+    /* max count */
+    unsigned count;
+
+    /* current counter */
+    unsigned i;
+
+    /* row of numbers used in the Seidel triangle method */
+    double *row;
+
+    /* pointer to the current location in the row */
+    double *loc;
+
+};
 
 void *euler_zigzag_create(unsigned count) {
-    /* reserve the initial elements of `row` for bookkeeping */
-    static const unsigned reserved = 3;
-    unsigned *row = (unsigned *) calloc(count + reserved, sizeof(unsigned));
-    if (row) {
-        row[0] = count;
-        row[1] = 0;
-        if (count) {
-            unsigned center = (count - 1) / 2 + reserved;
-            row[2] = center;
-            row[center] = 1;
+    struct euler_zigzag_iter *iter;
+
+    /* allocate struct */
+    iter = (struct euler_zigzag_iter *) calloc(1, sizeof(*iter));
+    if (!iter)
+        return NULL;
+    iter->count = count;
+
+    /* allocate row */
+    if (count) {
+        iter->row = calloc(count, sizeof(*iter->row));
+        if (!iter->row) {
+            free(iter);
+            return NULL;
         }
+        iter->loc = &iter->row[(count - 1) / 2];
+        *iter->loc = 1;
+        ++iter->loc;
     }
-    return row;
+
+    return iter;
 }
 
 void euler_zigzag_destroy(void *iter) {
+    free(((struct euler_zigzag_iter *) iter)->row);
     free(iter);
 }
 
-int euler_zigzag_next(void *iter, unsigned *out) {
-    unsigned *row = (unsigned *) iter;
-    unsigned count, center, i, offset, start, stop, j;
+int euler_zigzag_next(void *iter_, double *out) {
+    struct euler_zigzag_iter *iter = (struct euler_zigzag_iter *) iter_;
+    double *stop;
 
     /* check for invalid arguments */
-    if (!row)
+    if (!iter)
         return 22;
 
-    /* obtain the bookkeeping parameters */
-    count  = row[0];
-    i      = row[1];
-    center = row[2];
-
     /* termination condition */
-    if (i >= count)
+    if (iter->i >= iter->count)
         return 1;
 
     /* compute using Seidel triangle method */
-    offset = i ? (i - 1) / 2 : (unsigned) -1;
-    if (i % 2) {
-        start = center + offset;
-        stop  = start  - i;
-        for (j = start; j != stop; --j) {
-            if (checked_add_assign(&row[j], row[j + 1])) {
-                row[0] = 0; /* terminate the sequence */
-                return 75;
-            }
-        }
-        ++stop;
+    if (iter->i % 2) {
+        stop = iter->loc - iter->i;
+        for (; iter->loc != stop; --iter->loc)
+            *iter->loc += iter->loc[1];
+        ++iter->loc;
     } else {
-        start = center - offset;
-        stop  = start  + i;
-        for (j = start; j != stop; ++j) {
-            if (checked_add_assign(&row[j], row[j - 1])) {
-                row[0] = 0; /* terminate the sequence */
-                return 75;
-            }
-        }
-        --stop;
+        stop = iter->loc + iter->i;
+        for (; iter->loc != stop; ++iter->loc)
+            *iter->loc += iter->loc[-1];
+        --iter->loc;
     }
 
     /* yield the result */
     if (out)
-        *out = row[stop];
+        *out = *iter->loc;
 
     /* update the counter */
-    row[1] = i + 1;
+    ++iter->i;
     return 0;
 }
 
 struct bernoulli_iter {
+
     /* max count */
     unsigned count;
 
@@ -94,24 +95,28 @@ struct bernoulli_iter {
 
     /* Euler zigzag iterator */
     void *zs;
+
 };
 
 void *bernoulli_create(unsigned count) {
-    struct bernoulli_iter *iter = NULL;
-    void *zs = euler_zigzag_create(count ? count - 1 : 0);
-    if (zs) {
-        iter = (struct bernoulli_iter *) malloc(sizeof(*iter));
-        if (iter) {
-            iter->count = count;
-            iter->i = 0;
-            iter->zs = zs;
+    struct bernoulli_iter *iter;
 
-            /* discard the first number */
-            euler_zigzag_next(iter->zs, NULL);
-        } else {
-            euler_zigzag_destroy(zs);
-        }
+    /* allocate struct */
+    iter = (struct bernoulli_iter *) calloc(1, sizeof(*iter));
+    if (!iter)
+        return NULL;
+    iter->count = count;
+
+    /* create Euler zigzag iterator */
+    iter->zs = euler_zigzag_create(count ? count - 1 : 0);
+    if (!iter->zs) {
+        free(iter);
+        return NULL;
     }
+
+    /* discard the first element */
+    euler_zigzag_next(iter->zs, NULL);
+
     return iter;
 }
 
@@ -122,8 +127,7 @@ void bernoulli_destroy(void *iter) {
 
 int bernoulli_next(void *iter_, double *out) {
     int ret;
-    unsigned z;
-    double result;
+    double z, result;
     struct bernoulli_iter *iter = (struct bernoulli_iter *) iter_;
 
     /* check for invalid arguments */
@@ -150,7 +154,7 @@ int bernoulli_next(void *iter_, double *out) {
         } else {
             double denom = pow(2., (double) iter->i)
                          - pow(4., (double) iter->i);
-            result = iter->i * (iter->i / 2 % 2 ? -1. : 1.) * z / denom;
+            result = (iter->i / 2 % 2 ? -1. : 1.) * iter->i * z / denom;
         }
     }
 
