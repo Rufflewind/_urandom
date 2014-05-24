@@ -32,24 +32,23 @@ def euler_zigzag(n):
     '''
     if n <= 0:
         return
-    center = (n - 3) // 2 + 1
+    center = (n - 1) // 2
     row = [0] * n
     row[center] = 1
-    for i in range(-1, n - 1):
-        offset = i // 2
-        length = i  + 1
+    for i in range(n):
+        offset = (i - 1) // 2
         if i % 2 == 1:
-            start = center - offset
-            stop  = start  + length
-            for j in range(start, stop):
-                row[j] += row[j - 1]
-            yield row[stop - 1]
-        else:
             start = center + offset
-            stop  = start  - length
+            stop  = start  - i
             for j in range(start, stop, -1):
                 row[j] += row[j + 1]
             yield row[stop + 1]
+        else:
+            start = center - offset
+            stop  = start  + i
+            for j in range(start, stop):
+                row[j] += row[j - 1]
+            yield row[stop - 1]
 
 # example usage
 if __name__ == "__main__":
