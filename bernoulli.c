@@ -115,7 +115,7 @@ void *euler_zigzag_create(unsigned count) {
 
     /* allocate row */
     if (count) {
-        iter->row = calloc(count, sizeof(*iter->row));
+        iter->row = (double *) calloc(count, sizeof(*iter->row));
         if (!iter->row) {
             free(iter);
             return NULL;
