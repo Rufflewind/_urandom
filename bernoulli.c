@@ -3,6 +3,9 @@
 #ifndef NDEBUG
 # include <stdio.h>
 #endif
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void *euler_zigzag_create(unsigned count) {
     /* reserve the initial elements of `row` for bookkeeping */
@@ -138,6 +141,10 @@ int bernoulli_next(void *iter_, double *out) {
     ++iter->i;
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifndef NDEBUG
 #include "bernoulli.h"
