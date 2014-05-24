@@ -1,9 +1,19 @@
 #include <assert.h>
+#include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include "bernoulli.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* check for overflow */
+static int checked_add_assign(unsigned *left, unsigned right) {
+    if (UINT_MAX - right < *left)
+        return 75;
+    *left += right;
+    return 0;
+}
 
 void *euler_zigzag_create(unsigned count) {
     /* reserve the initial elements of `row` for bookkeeping */
@@ -47,14 +57,22 @@ int euler_zigzag_next(void *iter, unsigned *out) {
     if (i % 2) {
         start = center + offset;
         stop  = start  - i;
-        for (j = start; j != stop; --j)
-            row[j] += row[j + 1];
+        for (j = start; j != stop; --j) {
+            if (checked_add_assign(&row[j], row[j + 1])) {
+                row[0] = 0; /* terminate the sequence */
+                return 75;
+            }
+        }
         ++stop;
     } else {
         start = center - offset;
         stop  = start  + i;
-        for (j = start; j != stop; ++j)
-            row[j] += row[j - 1];
+        for (j = start; j != stop; ++j) {
+            if (checked_add_assign(&row[j], row[j - 1])) {
+                row[0] = 0; /* terminate the sequence */
+                return 75;
+            }
+        }
         --stop;
     }
 
@@ -68,11 +86,11 @@ int euler_zigzag_next(void *iter, unsigned *out) {
 }
 
 struct bernoulli_iter {
-    /* current counter */
-    unsigned i;
-
     /* max count */
     unsigned count;
+
+    /* current counter */
+    unsigned i;
 
     /* Euler zigzag iterator */
     void *zs;
@@ -84,8 +102,8 @@ void *bernoulli_create(unsigned count) {
     if (zs) {
         iter = (struct bernoulli_iter *) malloc(sizeof(*iter));
         if (iter) {
-            iter->i = 0;
             iter->count = count;
+            iter->i = 0;
             iter->zs = zs;
 
             /* discard the first number */
@@ -103,6 +121,7 @@ void bernoulli_destroy(void *iter) {
 }
 
 int bernoulli_next(void *iter_, double *out) {
+    int ret;
     unsigned z;
     double result;
     struct bernoulli_iter *iter = (struct bernoulli_iter *) iter_;
@@ -124,13 +143,15 @@ int bernoulli_next(void *iter_, double *out) {
         result = -.5;
         break;
     default:
-        if (euler_zigzag_next(iter->zs, &z))
-            return 2;
-        if (iter->i % 2)
+        if ((ret = euler_zigzag_next(iter->zs, &z)))
+            return ret;
+        if (iter->i % 2) {
             result = 0.;
-        else
-            result = z * iter->i * (iter->i / 2 % 2 ? -1. : 1.)
-                / (double) ((1 << iter->i) - (1 << 2 * iter->i));
+        } else {
+            double denom = pow(2., (double) iter->i)
+                         - pow(4., (double) iter->i);
+            result = iter->i * (iter->i / 2 % 2 ? -1. : 1.) * z / denom;
+        }
     }
 
     /* yield the result */
