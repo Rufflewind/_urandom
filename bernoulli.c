@@ -6,85 +6,6 @@
 extern "C" {
 #endif
 
-struct euler_zigzag_iter {
-
-    /* max count */
-    unsigned count;
-
-    /* current counter */
-    unsigned i;
-
-    /* row of numbers used in the Seidel triangle method */
-    double *row;
-
-    /* pointer to the current location in the row */
-    double *loc;
-
-};
-
-void *euler_zigzag_create(unsigned count) {
-    struct euler_zigzag_iter *iter;
-
-    /* allocate struct */
-    iter = (struct euler_zigzag_iter *) calloc(1, sizeof(*iter));
-    if (!iter)
-        return NULL;
-    iter->count = count;
-
-    /* allocate row */
-    if (count) {
-        iter->row = calloc(count, sizeof(*iter->row));
-        if (!iter->row) {
-            free(iter);
-            return NULL;
-        }
-        iter->loc = &iter->row[(count - 1) / 2];
-        *iter->loc = 1;
-        ++iter->loc;
-    }
-
-    return iter;
-}
-
-void euler_zigzag_destroy(void *iter) {
-    free(((struct euler_zigzag_iter *) iter)->row);
-    free(iter);
-}
-
-int euler_zigzag_next(void *iter_, double *out) {
-    struct euler_zigzag_iter *iter = (struct euler_zigzag_iter *) iter_;
-    double *stop;
-
-    /* check for invalid arguments */
-    if (!iter)
-        return 22;
-
-    /* termination condition */
-    if (iter->i >= iter->count)
-        return 1;
-
-    /* compute using Seidel triangle method */
-    if (iter->i % 2) {
-        stop = iter->loc - iter->i;
-        for (; iter->loc != stop; --iter->loc)
-            *iter->loc += iter->loc[1];
-        ++iter->loc;
-    } else {
-        stop = iter->loc + iter->i;
-        for (; iter->loc != stop; ++iter->loc)
-            *iter->loc += iter->loc[-1];
-        --iter->loc;
-    }
-
-    /* yield the result */
-    if (out)
-        *out = *iter->loc;
-
-    /* update the counter */
-    ++iter->i;
-    return 0;
-}
-
 struct bernoulli_iter {
 
     /* max count */
@@ -161,6 +82,85 @@ int bernoulli_next(void *iter_, double *out) {
     /* yield the result */
     if (out)
         *out = result;
+
+    /* update the counter */
+    ++iter->i;
+    return 0;
+}
+
+struct euler_zigzag_iter {
+
+    /* max count */
+    unsigned count;
+
+    /* current counter */
+    unsigned i;
+
+    /* row of numbers used in the Seidel triangle method */
+    double *row;
+
+    /* pointer to the current location in the row */
+    double *loc;
+
+};
+
+void *euler_zigzag_create(unsigned count) {
+    struct euler_zigzag_iter *iter;
+
+    /* allocate struct */
+    iter = (struct euler_zigzag_iter *) calloc(1, sizeof(*iter));
+    if (!iter)
+        return NULL;
+    iter->count = count;
+
+    /* allocate row */
+    if (count) {
+        iter->row = calloc(count, sizeof(*iter->row));
+        if (!iter->row) {
+            free(iter);
+            return NULL;
+        }
+        iter->loc = &iter->row[(count - 1) / 2];
+        *iter->loc = 1;
+        ++iter->loc;
+    }
+
+    return iter;
+}
+
+void euler_zigzag_destroy(void *iter) {
+    free(((struct euler_zigzag_iter *) iter)->row);
+    free(iter);
+}
+
+int euler_zigzag_next(void *iter_, double *out) {
+    struct euler_zigzag_iter *iter = (struct euler_zigzag_iter *) iter_;
+    double *stop;
+
+    /* check for invalid arguments */
+    if (!iter)
+        return 22;
+
+    /* termination condition */
+    if (iter->i >= iter->count)
+        return 1;
+
+    /* compute using Seidel triangle method */
+    if (iter->i % 2) {
+        stop = iter->loc - iter->i;
+        for (; iter->loc != stop; --iter->loc)
+            *iter->loc += iter->loc[1];
+        ++iter->loc;
+    } else {
+        stop = iter->loc + iter->i;
+        for (; iter->loc != stop; ++iter->loc)
+            *iter->loc += iter->loc[-1];
+        --iter->loc;
+    }
+
+    /* yield the result */
+    if (out)
+        *out = *iter->loc;
 
     /* update the counter */
     ++iter->i;
