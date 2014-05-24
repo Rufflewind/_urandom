@@ -10,11 +10,13 @@ void *euler_zigzag_create(unsigned count) {
     static const unsigned reserved = 3;
     unsigned *row = (unsigned *) calloc(count + reserved, sizeof(unsigned));
     if (row) {
-        unsigned center = (count - 1) / 2 + reserved;
         row[0] = count;
-        row[1] = center;
-        row[2] = 0;
-        row[center] = 1;
+        row[1] = 0;
+        if (count) {
+            unsigned center = (count - 1) / 2 + reserved;
+            row[2] = center;
+            row[center] = 1;
+        }
     }
     return row;
 }
@@ -25,19 +27,19 @@ void euler_zigzag_destroy(void *iter) {
 
 int euler_zigzag_next(void *iter, unsigned *out) {
     unsigned *row = (unsigned *) iter;
-    unsigned n, center, i, offset, start, stop, j;
+    unsigned count, center, i, offset, start, stop, j;
 
     /* check for invalid arguments */
     if (!row)
         return 22;
 
     /* obtain the bookkeeping parameters */
-    n      = row[0];
-    center = row[1];
-    i      = row[2];
+    count  = row[0];
+    i      = row[1];
+    center = row[2];
 
     /* termination condition */
-    if (i >= n)
+    if (i >= count)
         return 1;
 
     /* compute using Seidel triangle method */
@@ -61,7 +63,7 @@ int euler_zigzag_next(void *iter, unsigned *out) {
         *out = row[stop];
 
     /* update the counter */
-    row[2] = i + 1;
+    row[1] = i + 1;
     return 0;
 }
 
