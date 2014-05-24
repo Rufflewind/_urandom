@@ -1,8 +1,6 @@
 #include <assert.h>
 #include <stdlib.h>
-#ifndef NDEBUG
-# include <stdio.h>
-#endif
+#include "bernoulli.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -143,33 +141,5 @@ int bernoulli_next(void *iter_, double *out) {
 }
 
 #ifdef __cplusplus
-}
-#endif
-
-#ifndef NDEBUG
-#include "bernoulli.h"
-int main() {
-    int ret;
-    unsigned i = (unsigned) -1;
-    double d = (double) 1./0.;
-    void *p;
-
-    p = euler_zigzag_create(11);
-    while (!(ret = euler_zigzag_next(p, &i))) {
-        printf("%d\n", i);
-    }
-    if (ret != 1)
-        printf("error %d\n", ret);
-    euler_zigzag_destroy(p);
-
-    p = bernoulli_create(11);
-    while (!(ret = bernoulli_next(p, &d))) {
-        printf("%f\n", d);
-    }
-    if (ret != 1)
-        printf("error %d\n", ret);
-    bernoulli_destroy(p);
-
-    return 0;
 }
 #endif
