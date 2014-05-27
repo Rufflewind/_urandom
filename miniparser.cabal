@@ -1,0 +1,17 @@
+name:                miniparser
+version:             0.1.0.0
+synopsis:            A simple monadic parser.
+description:         A simple monadic parser.
+homepage:            https://github.com/Rufflewind/miniparser
+license:             MIT
+license-file:        LICENSE
+author:              Phil Ruffwind
+maintainer:          rf@rufflewind.com
+category:            Text
+build-type:          Simple
+cabal-version:       >=1.9
+
+library
+  exposed-modules:     MiniParser
+  ghc-options:         -Wall
+  build-depends:       base >=4.6 && <4.7
