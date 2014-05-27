@@ -14,4 +14,4 @@ cabal-version:       >=1.9
 library
   exposed-modules:     MiniParser
   ghc-options:         -Wall
-  build-depends:       base >=4.6 && <4.8
+  build-depends:       base >=4.5 && <4.8
