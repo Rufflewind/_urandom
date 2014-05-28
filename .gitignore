@@ -3,8 +3,12 @@ doc/
 a.out
 .\#*
 *.aux
+*.dll
 *.exe
+*.gch
+*.hi
 *.ipch
+*.lib
 *.log
 *.mod
 *.hi
