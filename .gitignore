@@ -1,0 +1,17 @@
+dist/
+doc/
+a.out
+.\#*
+*.aux
+*.exe
+*.ipch
+*.log
+*.mod
+*.hi
+*.o
+*.pyc
+*.sdf
+*.stackdump
+*.thm
+*.tmp
+*~
