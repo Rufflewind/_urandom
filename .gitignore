@@ -1,21 +1,36 @@
+# generic
 dist/
-doc/
-a.out
 .\#*
-*.aux
+*~
+*.log
+*.tmp
+
+# native
+a.out
+*.a
 *.dll
+*.dylib
 *.exe
 *.gch
-*.hi
 *.ipch
 *.lib
-*.log
-*.mod
-*.hi
 *.o
-*.pyc
+*.obj
+*.so
 *.sdf
 *.stackdump
+
+# Fortran
+*.mod
+
+# Haskell
+*.chi
+*.hi
+
+# Python
+*.pyc
+
+# TeX
+*.aux
+*.toc
 *.thm
-*.tmp
-*~
