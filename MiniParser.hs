@@ -52,6 +52,7 @@ instance Alternative (Parser t) where
   (<|>) = mplus
 
 instance Monad (Parser t) where
+  fail _         = mzero
   return x       = Parser $ \ s -> return (x, s)
   Parser p >>= f = Parser $ \ s -> do
     (x, s') <- p s
