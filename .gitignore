@@ -25,6 +25,7 @@ a.out
 
 # Haskell
 *.chi
+*.hcr
 *.hi
 
 # Python
