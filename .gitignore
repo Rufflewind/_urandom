@@ -24,6 +24,8 @@ a.out
 *.mod
 
 # Haskell
+.cabal-sandbox/
+cabal.sandbox.config
 *.chi
 *.hcr
 *.hi
