@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+
+# By Rufflewind.  No rights reserved (public domain / CC0).
+# https://gist.github.com/Rufflewind/10a821800dd32d50d723
+
 from fractions import Fraction
 
 def bernoulli(n):
