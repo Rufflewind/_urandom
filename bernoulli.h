@@ -1,5 +1,9 @@
 #ifndef KVBBDRCQRWSNNMYUWPQXSZJMZFWPLGYMEPLZRIST
 #define KVBBDRCQRWSNNMYUWPQXSZJMZFWPLGYMEPLZRIST
+
+/* By Rufflewind.  No rights reserved (public domain / CC0).
+   https://gist.github.com/Rufflewind/c5bf35263f034dbeb9c0 */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
