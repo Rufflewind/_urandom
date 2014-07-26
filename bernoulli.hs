@@ -1,3 +1,6 @@
+-- By Rufflewind.  No rights reserved (public domain / CC0).
+-- https://gist.github.com/Rufflewind/6ac5903d0a26a74e2818
+
 import Data.Foldable (foldl')
 
 -- | Returns an infinite list containing Euler zigzag numbers (sequence
