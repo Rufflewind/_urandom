@@ -1,6 +1,7 @@
 /* compiled with: gcc -std=c99 -O3 -funroll-loops
    Blas:   0.75s (single-threaded OpenBlas)
    manual: 0.90s
+   (CPU: Intel i7 Q720 @ 1.60GHz)
  */
 #include <stdio.h>
 #include <cblas.h>
