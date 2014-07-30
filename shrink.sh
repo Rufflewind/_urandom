@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Usage: shrink IN OUT
+# Usage: shrink.sh IN OUT
 #
 # This shell script uses ImageMagick to shrink PDFs.  Feel free to tweak the settings below.
 #
@@ -14,7 +14,7 @@ OUT="$2"
 
 if [ -z "$IN" ] || [ -z "$OUT" ]
 then
-    echo >&2 "Usage: shrink IN OUT"
+    echo >&2 "Usage: shrink.sh IN OUT"
     exit 1
 fi
 
