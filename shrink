@@ -4,6 +4,9 @@
 #
 # This shell script uses ImageMagick to shrink PDFs.  Feel free to tweak the settings below.
 #
+# By Rufflewind.  No rights reserved (public domain / CC0).
+# https://gist.github.com/Rufflewind/cab8c5ed57868cb74e72
+
 set -e
 
 IN="$1"
