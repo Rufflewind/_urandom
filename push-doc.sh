@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-REMOTE="git@github.com:???"
-DOCDIR="???"
+DOCDIR=???
+REMOTE=git@github.com:???
 doc_cmd() { doxygen; }
 
 [ -d "$DOCDIR/.git" ] || (
