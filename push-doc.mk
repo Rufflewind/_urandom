@@ -1,6 +1,9 @@
 DOCDIR=???
 REMOTE=git@github.com:???
 
+doc:
+	???
+
 doc-upload: doc $(DOCDIR)/.git/config
 	cd $(DOCDIR) \
 	  && git add -A \

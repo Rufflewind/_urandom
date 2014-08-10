@@ -3,7 +3,7 @@ set -e
 
 DOCDIR=???
 REMOTE=git@github.com:???
-doc_cmd() { doxygen; }
+doc_cmd() { ???; }
 
 [ -d "$DOCDIR/.git" ] || (
 
