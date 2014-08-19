@@ -35,5 +35,5 @@ cabal.sandbox.config
 
 # TeX
 *.aux
-*.toc
 *.thm
+*.toc
