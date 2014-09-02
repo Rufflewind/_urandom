@@ -23,6 +23,23 @@ std::tuple<Integral, Integral> div_floor(const Integral x, const Integral y) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
+// C89 implementation
+//////////////////////////////////////////////////////////////////////////////
+/*
+
+#include <stdlib.h>
+
+div_t div_floor_(int x, int y) {
+    div_t r = div(x, y);
+    if (r.rem && (x < 0) != (y < 0)) {
+        r.quot -= 1;
+        r.rem  += y;
+    }
+    return r;
+}
+
+*/
+//////////////////////////////////////////////////////////////////////////////
 // The rest of this file is for testing only
 //////////////////////////////////////////////////////////////////////////////
 
@@ -36,8 +53,13 @@ void div_trunc_int(int x, int y, int& w, int& z) {
     z = r.rem;
 }
 
+extern "C" div_t div_floor_(int x, int y);
+
 void div_floor_int(int x, int y, int& w, int& z) {
     std::tie(w, z) = div_floor(x, y);
+    // const auto r = div_floor_(x, y);
+    // w = r.quot;
+    // z = r.rem;
 }
 
 int check_mod(int x, int y, int w_expected, int z_expected) {
