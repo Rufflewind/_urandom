@@ -29,7 +29,7 @@ std::tuple<Integral, Integral> div_floor(const Integral x, const Integral y) {
 
 #include <stdlib.h>
 
-div_t div_floor_(int x, int y) {
+div_t div_floor(int x, int y) {
     div_t r = div(x, y);
     if (r.rem && (x < 0) != (y < 0)) {
         r.quot -= 1;
@@ -57,7 +57,7 @@ extern "C" div_t div_floor_(int x, int y);
 
 void div_floor_int(int x, int y, int& w, int& z) {
     std::tie(w, z) = div_floor(x, y);
-    // const auto r = div_floor_(x, y);
+    // const auto r = div_floor(x, y);
     // w = r.quot;
     // z = r.rem;
 }
