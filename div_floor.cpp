@@ -1,19 +1,22 @@
 #include <tuple>
 
-/// Calculates floored division and modulus (rounded towards minus infinity),
-/// returning a tuple of the form `(quotient, remainder)`.
+/// Calculates floored division and modulus where the quotient is rounded
+/// towards minus infinity.
 ///
-/// This function requires C++11, not simply because of `std::tuple` but also
-/// because the behavior of integer division and modulus was
-/// implementation-defined until C99/C++11.
-///
-/// If you really want this to be compatible with earlier versions, replace
-/// the division and modulus in this function with `std::div` instead.
+/// @param x   Dividend.
+/// @param y   Divisor.
+/// @return    Quotient and remainder.
 template<class Integral>
 std::tuple<Integral, Integral> div_floor(Integral x, Integral y);
 
 template<class Integral> inline
 std::tuple<Integral, Integral> div_floor(const Integral x, const Integral y) {
+    // This function requires C++11, not simply because of `std::tuple` but
+    // also because the behavior of integer division and modulus was
+    // implementation-defined until C99/C++11.
+    //
+    // If you really want this to be compatible with earlier versions, replace
+    // the division and modulus in this function with `std::div` instead.
     typedef std::tuple<Integral, Integral> result_type;
     const Integral quot = x / y;
     const Integral rem  = x % y;
