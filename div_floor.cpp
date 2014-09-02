@@ -1,4 +1,3 @@
-#include <cmath>
 #include <tuple>
 
 /// Calculates floored division and modulus (rounded towards minus infinity),
@@ -27,11 +26,12 @@ std::tuple<Integral, Integral> div_floor(const Integral x, const Integral y) {
 // The rest of this file is for testing only
 //////////////////////////////////////////////////////////////////////////////
 
+#include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
 
 void div_trunc_int(int x, int y, int& w, int& z) {
-    const std::div_t r = std::div(x, y);
+    const div_t r = div(x, y);
     w = r.quot;
     z = r.rem;
 }
