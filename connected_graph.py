@@ -1,7 +1,12 @@
-def find_blocks(connected, n):
+def find_connected(connected, n):
     '''
-    connected : (Int, Int) -> Bool
-    n : Int
+    connected: (Int, Int) -> Bool
+      Predicate to check if nodes are connected.
+
+    n: Int
+      Number of nodes.
+
+    Return value: ([Int], [{Int}])
     '''
     colors = [None] * n
     parts  = []
