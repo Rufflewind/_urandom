@@ -20,12 +20,9 @@
 ///   - Worst case (fully disconnected): `O(num_nodes ^ 2)`
 ///   - Best case (fully connected): `O(num_nodes)`
 ///
-template<class AdjFunc>
+template<class AdjFunc> inline
 std::vector<std::size_t>
-find_connected(
-    AdjFunc adjacency,
-    std::size_t num_nodes
-) {
+find_connected(AdjFunc adjacency, std::size_t num_nodes) {
     typedef std::size_t node;
     typedef std::unordered_set<node> set;
     typedef std::vector<node> vector;
