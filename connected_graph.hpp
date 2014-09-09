@@ -1,4 +1,3 @@
-#include <unordered_set>
 #include <vector>
 
 /// Find the connected components of an undirected graph.  Returns a vector
@@ -23,38 +22,29 @@
 template<class AdjFunc> inline
 std::vector<std::size_t>
 find_connected(AdjFunc adjacency, std::size_t num_nodes) {
-    typedef std::size_t node;
-    typedef std::unordered_set<node> set;
-    typedef std::vector<node> vector;
-    set others;
-    vector candidates, colors(num_nodes), connected;
-    node color = 0;
-    for (node i = 0; i != num_nodes; ++i) {
-        others.insert(i);
+    using std::size_t;
+    // here we keep track of the size of `others` manually for simplicity and
+    // just use the `vector` as a plain array (because of various
+    // complications due to `pop_back` potentially invalidating `j`)
+    std::vector<size_t> candidates, colors(num_nodes), others(num_nodes);
+    size_t others_count = num_nodes, color = 0;
+    for (size_t i = 0; i != num_nodes; ++i) {
+        others[i] = i;
     }
-    while (!others.empty()) {
-        const set::const_iterator i = others.begin();
-        candidates.push_back(*i);
-        others.erase(i);
+    while (others_count) {
+        candidates.push_back(others[--others_count]);
         while (!candidates.empty()) {
-            const node i = candidates.back();
+            const size_t i = candidates.back();
             candidates.pop_back();
             colors[i] = color;
-            // note in C++14 we can erase elements from `others` while
-            // iterating through `others` (without an intermediate array)
-            // assuming we use `std::unordered_set`
-            for (set::const_iterator j = others.begin(),
-                 j_end = others.end(); j != j_end; ++j) {
+            for (size_t *j = &others[0]; j != &others[0] + others_count;) {
                 if (adjacency(i, *j)) {
-                    connected.push_back(*j);
                     candidates.push_back(*j);
+                    *j = std::move(others[--others_count]);
+                } else {
+                    ++j;
                 }
             }
-            for (vector::const_iterator j = connected.begin(),
-                 j_end = connected.end(); j != j_end; ++j) {
-                others.erase(*j);
-            }
-            connected.clear();
         }
         ++color;
     }
