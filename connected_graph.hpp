@@ -1,6 +1,7 @@
+#include <cstddef>
 #include <vector>
 
-/// Find the connected components of an undirected graph.  Returns a vector
+/// Finds the connected components of an undirected graph.  Returns a vector
 /// containing the *colors* of each node: colors are arbitrary numbers
 /// uniquely assigned to each connected component.
 ///
@@ -22,31 +23,45 @@
 template<class AdjFunc> inline
 std::vector<std::size_t>
 find_connected(AdjFunc adjacency, std::size_t num_nodes) {
+    // The vector `others` stores the elements of a linked list: this allows
+    // elements to be removed in O(1) time while preserving the ordering of
+    // the elements.  While this algorithm doesn't care about the ordering, it
+    // can cause branch mispredictions if the adjacency function involves
+    // comparing the nodes.  This is why we don't use just a plain array with
+    // erase-remove instead.
     using std::size_t;
-    // here we keep track of the size of `others` manually for simplicity and
-    // just use the `vector` as a plain array (because of various
-    // complications due to `pop_back` potentially invalidating `j`)
-    std::vector<size_t> candidates, colors(num_nodes), others(num_nodes);
-    size_t others_count = num_nodes, color = 0;
-    for (size_t i = 0; i != num_nodes; ++i) {
-        others[i] = i;
+    using std::vector;
+    struct elem {
+        size_t value;
+        struct elem *next;
+    };
+    vector<size_t> candidates, colors(num_nodes);
+    vector<elem> others(num_nodes);
+    struct elem *others_begin = &others[0],
+          *const others_end   = others_begin + num_nodes;
+    size_t i, color;
+    for (i = 0; i != num_nodes; ++i) {
+        others[i].value = i;
+        others[i].next = others_begin + i + 1;
     }
-    while (others_count) {
-        candidates.push_back(others[--others_count]);
+    for (color = 0; others_begin != others_end; ++color) {
+        candidates.push_back(others_begin->value);
+        others_begin = others_begin->next;
         while (!candidates.empty()) {
+            struct elem **p_j;
             const size_t i = candidates.back();
             candidates.pop_back();
-            colors[i] = color;
-            for (size_t *j = &others[0]; j != &others[0] + others_count;) {
-                if (adjacency(i, *j)) {
-                    candidates.push_back(*j);
-                    *j = std::move(others[--others_count]);
+            for (p_j = &others_begin; *p_j != others_end;) {
+                struct elem *const j = *p_j;
+                if (adjacency(i, j->value)) {
+                    candidates.push_back(j->value);
+                    *p_j = j->next;
                 } else {
-                    ++j;
+                    p_j = &j->next;
                 }
             }
+            colors[i] = color;
         }
-        ++color;
     }
     return colors;
 }
