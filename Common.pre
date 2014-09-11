@@ -1,0 +1,809 @@
+#!/bin/sh
+#-*- haskell -*-{-
+MODULE=Common
+SCRIPT=$MODULE-pre.hs
+OUTPUT=$MODULE.hs
+(
+    set -e
+    LINE=`awk '/^# begin payload / { print NR + 1; exit 0; }' "$0"`
+    tail >"$SCRIPT" -n+$LINE "$0"
+    runhaskell <<"_EOF" >"$OUTPUT" "$SCRIPT" $MODULE
+
+# GHC boot libraries
+# ------------------
+# array
+# binary
+# bytestring
+# Cabal
+# containers
+# deepseq
+# directory
+# filepath
+# haddock
+# haskeline
+# haskell2010
+# haskell98
+# hoopl
+# hpc
+# hsc2hs
+# libffi-tarballs
+# old-locale
+# old-time
+# pretty
+# process
+# terminfo
+# time
+# transformers
+# unix
+# Win32
+# xhtml
+
+# don't import `const`; use `pure` instead
+Prelude:
+  Bool:
+    False
+    True
+  (&&)
+  (||)
+  not
+  otherwise
+  Either:
+    Left
+    Right
+  either
+  Ordering:
+    LT
+    EQ
+    GT
+  String
+  Eq
+    (==)
+    (/=)
+  Ord
+    compare
+    (<)
+    (>=)
+    (>)
+    (<=)
+    max
+    min
+  Enum
+    succ
+    pred
+    toEnum
+    fromEnum
+    enumFrom
+    enumFromThen
+    enumFromTo
+    enumFromThenTo
+  Bounded
+    minBound
+    maxBound
+  Int
+  Integer
+  Float
+  Double
+  Rational
+  Num:
+    (+)
+    (*)
+    (-)
+    negate
+    abs
+    signum
+    fromInteger
+  Real
+    toRational
+  Integral
+    quot
+    rem
+    div
+    mod
+    quotRem
+    divMod
+    toInteger
+  Fractional
+    (/)
+    recip
+    fromRational
+  Floating
+    pi
+    exp
+    sqrt
+    log
+    (**)
+    logBase
+    sin
+    tan
+    cos
+    asin
+    atan
+    acos
+    sinh
+    tanh
+    cosh
+    asinh
+    atanh
+    acosh
+  RealFrac
+    properFraction
+    truncate
+    round
+    ceiling
+    floor
+  RealFloat
+    floatRadix
+    floatDigits
+    floatRange
+    decodeFloat
+    encodeFloat
+    exponent
+    significand
+    scaleFloat
+    isNaN
+    isInfinite
+    isDenormalized
+    isNegativeZero
+    isIEEE
+    atan2
+  subtract
+  even
+  odd
+  gcd
+  lcm
+  (^)
+  (^^)
+  fromIntegral
+  realToFrac
+  id
+  (.)
+  flip
+  ($)
+  until
+  asTypeOf
+  error
+  undefined
+  seq
+  ($!)
+  (++)
+  (!!)
+  ShowS
+  Show(show)
+  shows
+  showChar
+  showString
+  showParen
+  ReadS
+  Read
+    readsPrec
+    readList
+  reads
+  readParen
+  read
+  lex
+
+Control.Applicative:
+  Applicative
+    pure
+    (<*>)
+    (*>)
+    (<*)
+  Alternative
+    empty
+    (<|>)
+    some
+    many
+  (<$>)
+  (<**>)
+  liftA
+  liftA2
+  liftA3
+  optional
+
+Control.Arrow:
+  Arrow
+    arr
+    first
+    second
+    (***)
+    (&&&)
+  returnA
+  (^>>)
+  (>>^)
+  (>>>)
+  (<<<)
+  (<<^)
+  (^<<)
+  ArrowZero
+    zeroArrow
+  ArrowChoice
+    left
+    right
+    (+++)
+    (|||)
+  ArrowApply
+    app
+  ArrowLoop
+    loop
+
+Control.Monad:
+  Monad
+    (>>=)
+    (>>)
+    return
+    fail
+  MonadPlus
+    mzero
+    mplus
+  (=<<)
+  (<=<)
+  (>=>)
+  ap
+  filterM
+  foldM
+  forever
+  guard
+  join
+  liftM
+  liftM2
+  liftM3
+  liftM4
+  liftM5
+  mapAndUnzipM
+  mfilter
+  replicateM
+  replicateM_
+  unless
+  void
+  when
+  zipWithM
+  zipWithM_
+
+Control.Monad.Fix:
+  MonadFix
+    mfix
+
+Data.Char:
+  Char
+  isControl
+  isSpace
+  isLower
+  isUpper
+  isAlpha
+  isAlphaNum
+  isPrint
+  isDigit
+  isOctDigit
+  isHexDigit
+  isLetter
+  isMark
+  isNumber
+  isPunctuation
+  isSymbol
+  isSeparator
+  isAscii
+  isLatin1
+  isAsciiUpper
+  isAsciiLower
+  GeneralCategory:
+    UppercaseLetter
+    LowercaseLetter
+    TitlecaseLetter
+    ModifierLetter
+    OtherLetter
+    NonSpacingMark
+    SpacingCombiningMark
+    EnclosingMark
+    DecimalNumber
+    LetterNumber
+    OtherNumber
+    ConnectorPunctuation
+    DashPunctuation
+    OpenPunctuation
+    ClosePunctuation
+    InitialQuote
+    FinalQuote
+    OtherPunctuation
+    MathSymbol
+    CurrencySymbol
+    ModifierSymbol
+    OtherSymbol
+    Space
+    LineSeparator
+    ParagraphSeparator
+    Control
+    Format
+    Surrogate
+    PrivateUse
+    NotAssigned
+  generalCategory
+  toUpper
+  toLower
+  toTitle
+  digitToInt
+  intToDigit
+  ord
+  chr
+  showLitChar
+  lexLitChar
+  readLitChar
+
+Data.Complex:
+  Complex:
+    (:+)
+  cis
+  conjugate
+  imagPart
+  magnitude
+  mkPolar
+  polar
+  phase
+  realPart
+
+Data.Foldable:
+  Foldable
+    fold
+    foldMap
+    foldr
+    foldr'
+    foldl
+    foldl'
+    foldr1
+    foldl1
+  all
+  and
+  any
+  asum
+  concat
+  concatMap
+  elem
+  find
+  foldlM
+  foldrM
+  forM_
+  for_
+  mapM_
+  maximum
+  maximumBy
+  minimum
+  minimumBy
+  msum
+  notElem
+  or
+  product
+  sequenceA_
+  sequence_
+  sum
+  traverse_
+
+Data.Functor:
+  Functor
+    fmap
+    (<$)
+
+Data.Function:
+  fix
+  on
+
+# (incomplete)
+Data.List:
+  intercalate
+  permutations
+
+Data.Maybe:
+  Maybe:
+    Nothing
+    Just
+  catMaybes
+  fromJust
+  fromMaybe
+  isJust
+  isNothing
+  listToMaybe
+  mapMaybe
+  maybe
+  maybeToList
+
+# (intentionally incomplete)
+Data.Monoid:
+  Monoid
+    mempty
+    mappend
+    mconcat
+  (<>)
+
+Data.Ratio:
+  Ratio
+  (%)
+  numerator
+  denominator
+  approxRational
+
+Data.Traversable:
+  Traversable
+    traverse
+    sequenceA
+    mapM
+    sequence
+  for
+  forM
+  mapAccumL
+  mapAccumR
+  fmapDefault
+  foldMapDefault
+
+Data.Word:
+  Word
+  Word8
+  Word16
+  Word32
+  Word64
+
+Debug.Trace:
+  trace
+  traceIO
+  traceShow
+  traceStack
+
+Data.Tuple:
+  fst
+  snd
+  curry
+  uncurry
+  swap
+
+# TODO move this into a separate wrapper library
+Data.ListLike:
+  zip
+  zipWith
+  unzip
+  ListLikeIO
+    hGetLine
+    hGetContents
+    hGet
+    hGetNonBlocking
+    hPutStr
+    hPutStrLn
+    getLine
+    getContents
+    putStr
+    putStrLn
+    interact
+    readFile
+    writeFile
+    appendFile
+  ListLike
+    singleton
+    cons
+    snoc
+    append
+    head
+    last
+    tail
+    init
+    null
+    length
+    rigidMap
+    reverse
+    intersperse
+    rigidConcatMap
+    replicate
+    take
+    drop
+    splitAt
+    takeWhile
+    dropWhile
+    span
+    break
+    group
+    inits
+    tails
+    isPrefixOf
+    isSuffixOf
+    isInfixOf
+    filter
+    partition
+    index
+    elemIndex
+    elemIndices
+    findIndex
+    findIndices
+    rigidMapM
+    nub
+    delete
+    deleteFirsts
+    union
+    intersect
+    sort
+    insert
+    toList
+    fromList
+    fromListLike
+    nubBy
+    deleteBy
+    deleteFirstsBy
+    unionBy
+    intersectBy
+    groupBy
+    sortBy
+    insertBy
+    genericLength
+    genericTake
+    genericDrop
+    genericSplitAt
+    genericReplicate
+  StringLike
+    toString
+    fromString
+    lines
+    words
+  InfiniteListLike
+    iterate
+    repeat
+    cycle
+
+System.Environment:
+  getArgs
+  getProgName
+  getEnv
+  withArgs
+  withProgName
+  getEnvironment
+
+System.Exit:
+  ExitCode:
+    ExitSuccess
+    ExitFailure
+  exitWith
+  exitFailure
+  exitSuccess
+
+System.IO:
+  IO
+  FilePath
+  Handle
+  stdin
+  stdout
+  stderr
+  withFile
+  openFile
+  IOMode:
+    ReadMode
+    WriteMode
+    AppendMode
+    ReadWriteMode
+  hClose
+  hFileSize
+  hSetFileSize
+  hIsEOF
+  isEOF
+  BufferMode:
+    NoBuffering
+    LineBuffering
+    BlockBuffering
+  hGetBuffering
+  hSetBuffering
+  hFlush
+  hGetPosn
+  hSetPosn
+  HandlePosn
+  hSeek
+  SeekMode:
+    AbsoluteSeek
+    RelativeSeek
+    SeekFromEnd
+  hTell
+  hIsOpen
+  hIsClosed
+  hIsReadable
+  hIsWritable
+  hIsSeekable
+  hIsTerminalDevice
+  hSetEcho
+  hGetEcho
+  hShow
+  hWaitForInput
+  hReady
+  hGetChar
+  hLookAhead
+  hPrint
+  putChar
+  print
+  getChar
+  readIO
+  readLn
+  withBinaryFile
+  openBinaryFile
+  hSetBinaryMode
+  hPutBuf
+  hGetBuf
+  hGetBufSome
+  hPutBufNonBlocking
+  hGetBufNonBlocking
+  openTempFile
+  openBinaryTempFile
+  openTempFileWithDefaultPermissions
+  openBinaryTempFileWithDefaultPermissions
+  hSetEncoding
+  hGetEncoding
+  TextEncoding
+  latin1
+  utf8
+  utf8_bom
+  utf16
+  utf16le
+  utf16be
+  utf32
+  utf32le
+  utf32be
+  localeEncoding
+  char8
+  mkTextEncoding
+  hSetNewlineMode
+  Newline:
+    LF
+    CRLF
+  nativeNewline
+  NewlineMode:
+    NewlineMode
+  inputNL
+  outputNL
+  noNewlineTranslation
+  universalNewlineMode
+  nativeNewlineMode
+
+System.IO.Error:
+  IOError
+  mkIOError
+  annotateIOError
+  isAlreadyExistsError
+  isDoesNotExistError
+  isAlreadyInUseError
+  isFullError
+  isEOFError
+  isIllegalOperation
+  isPermissionError
+  isUserError
+  ioeGetErrorType
+  ioeGetLocation
+  ioeGetErrorString
+  ioeGetHandle
+  ioeGetFileName
+  ioeSetErrorType
+  ioeSetErrorString
+  ioeSetLocation
+  ioeSetHandle
+  ioeSetFileName
+  IOErrorType
+  alreadyExistsErrorType
+  doesNotExistErrorType
+  alreadyInUseErrorType
+  fullErrorType
+  eofErrorType
+  illegalOperationErrorType
+  permissionErrorType
+  userErrorType
+  isAlreadyExistsErrorType
+  isDoesNotExistErrorType
+  isAlreadyInUseErrorType
+  isFullErrorType
+  isEOFErrorType
+  isIllegalOperationErrorType
+  isPermissionErrorType
+  isUserErrorType
+  ioError
+  catchIOError
+  tryIOError
+  modifyIOError
+
+Text.Printf:
+  printf
+  hPrintf
+  PrintfType
+  HPrintfType
+  PrintfArg
+  IsChar
+
+_EOF
+)
+EXIT=$?
+rm -f "$SCRIPT"
+exit $EXIT
+# begin payload -}
+{-# LANGUAGE OverloadedStrings #-}
+import Prelude hiding (getContents, lines, putStr)
+import Control.Applicative (Applicative((<*>), (<*), pure),
+                            Alternative((<|>), empty, many))
+import Data.Maybe (catMaybes)
+import Data.Monoid ((<>))
+import Data.Text.Lazy (Text, intercalate, lines, pack,
+                       strip, stripSuffix, unpack)
+import Data.Text.Lazy.IO (getContents, putStr)
+import System.Environment (getArgs)
+
+data Tree a = a :@ [Tree a] deriving (Eq, Ord, Read, Show)
+
+treeData :: Tree a -> a
+treeData (x :@ _)  = x
+
+treeChildren :: Tree a -> [Tree a]
+treeChildren (_ :@ ts) = ts
+
+newtype Parser t a = Parser { runParser :: [t] -> Maybe (a, [t]) }
+
+instance Functor (Parser t) where
+  fmap f p = pure f <*> p
+
+instance Applicative (Parser t) where
+  pure x = Parser $ \ s -> return (x, s)
+  Parser p <*> Parser q = Parser $ \ s -> do
+    (f, s')  <- p s
+    (x, s'') <- q s'
+    return (f x, s'')
+
+instance Alternative (Parser t) where
+  empty = Parser $ pure Nothing
+  Parser p <|> Parser q = Parser $ \ s ->
+    let r = p s in
+    case r of
+      Just _  -> r
+      Nothing -> q s
+
+instance Monad (Parser t) where
+  return = pure
+  Parser p >>= f = Parser $ \ s -> do
+    (x, s') <- p s
+    runParser (f x) s'
+
+get :: Parser t t
+get = Parser $ \ s -> case s of
+  t : s' -> return (t, s')
+  []     -> Nothing
+
+eof :: Parser t ()
+eof = Parser $ \ s -> case s of
+  [] -> return ((), s)
+  _  -> Nothing
+
+parseAll :: Parser (Int, Text) [Tree Text]
+parseAll = many (parseTree (-1)) <* eof
+
+parseTree :: Int -> Parser (Int, Text) (Tree Text)
+parseTree currentIndent = do
+  (indent, line) <- get
+  if currentIndent >= indent
+    then empty
+    else case stripSuffix ":" line of
+      Nothing    -> return $ line :@ []
+      Just line' -> fmap (strip line' :@) $ many (parseTree indent)
+
+showSymbol :: Tree Text -> Text
+showSymbol (symbol :@ subsymbols) = case subsymbols of
+  [] -> symbol
+  _  -> symbol <> " (" <> intercalate ", " (fmap treeData subsymbols) <> ")"
+
+main :: IO ()
+main = do
+  [moduleName] <- getArgs
+  input        <- getContents
+  let procLine _      []           = Nothing
+      procLine _      ('#' : _)    = Nothing
+      procLine indent (' ' : line) = procLine (indent + 1) line
+      procLine indent line         = Just (indent, strip $ pack line)
+      lines' = catMaybes . fmap (procLine 0 . unpack) $ lines input
+  case runParser parseAll lines' of
+    Nothing           -> error "parsing failed"
+    Just (modules, _) -> do
+      putStr "-- autogenerated --\n"
+      putStr "module "
+      putStr $ pack moduleName
+      putStr " ("
+      putStr . intercalate ", " .
+        fmap showSymbol . concat $ fmap treeChildren modules
+      putStr ") where\n"
+      (`mapM_` modules) $ \ (name :@ symbols) -> do
+        putStr "import "
+        putStr name
+        putStr " ("
+        putStr . intercalate ", " $ fmap showSymbol symbols
+        putStr ")\n"
