@@ -1,7 +1,10 @@
 #!/usr/bin/env python
-
+#
+# Calculates Bernoulli numbers using Euler zigzag (up/down) numbers via the
+# Seidel algorithm.
+#
 # By Rufflewind.  No rights reserved (public domain / CC0).
-# https://gist.github.com/Rufflewind/10a821800dd32d50d723
+# https://github.com/Rufflewind/_urandom/blob/master/bernoulli-numbers
 
 from fractions import Fraction
 

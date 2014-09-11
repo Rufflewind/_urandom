@@ -1,5 +1,5 @@
 /* By Rufflewind.  No rights reserved (public domain / CC0).
-   https://gist.github.com/Rufflewind/c5bf35263f034dbeb9c0 */
+   https://github.com/Rufflewind/_urandom/tree/master/bernoulli-numbers */
 
 #include <math.h>
 #include <stdlib.h>

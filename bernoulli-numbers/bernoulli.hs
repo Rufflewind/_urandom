@@ -1,5 +1,8 @@
+-- Calculates Bernoulli numbers using Euler zigzag (up/down) numbers via the
+-- Seidel algorithm.
+--
 -- By Rufflewind.  No rights reserved (public domain / CC0).
--- https://gist.github.com/Rufflewind/6ac5903d0a26a74e2818
+-- https://github.com/Rufflewind/_urandom/blob/master/bernoulli-numbers
 
 import Data.Foldable (foldl')
 

@@ -1,8 +1,10 @@
 #ifndef KVBBDRCQRWSNNMYUWPQXSZJMZFWPLGYMEPLZRIST
 #define KVBBDRCQRWSNNMYUWPQXSZJMZFWPLGYMEPLZRIST
+/* Calculates Bernoulli numbers using Euler zigzag (up/down) numbers via the
+   Seidel algorithm. */
 
 /* By Rufflewind.  No rights reserved (public domain / CC0).
-   https://gist.github.com/Rufflewind/c5bf35263f034dbeb9c0 */
+   https://github.com/Rufflewind/_urandom/tree/master/bernoulli-numbers */
 
 #ifdef __cplusplus
 extern "C" {
