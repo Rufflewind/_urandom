@@ -4,6 +4,19 @@ import qualified Data.IORef
 import Data.IORef (newIORef, readIORef)
 import Control.Concurrent (threadDelay)
 
+{-
+
+#ifndef MIN_VERSION_base
+#define MIN_VERSION_base(x, y, z) 0
+#endif
+#if MIN_VERSION_base(4, 7, 0)
+import System.Environment (setEnv, unsetEnv)
+#else
+import System.SetEnv (setEnv, unsetEnv)
+#endif
+
+-}
+
 -- | Make a monadic action more strict by forcing the result with a given function.
 mseq :: Monad m => (a -> b) -> m a -> m a
 mseq force m = do
