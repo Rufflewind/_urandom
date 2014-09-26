@@ -5,6 +5,8 @@ a direct way to compute the expansion, so here is a more specialized version
 of the theorem that produces a direct expansion for certain kinds of
 meromorphic functions.
 
+[thm]: https://en.wikipedia.org/wiki/Mittag-Leffler%27s_theorem
+
 > Let `Γ[n]` be an infinite sequence of contours, each fully embedded in the
 > next and all of them enclosing zero.  Let `s[n]` denote the length of
 > contour `Γ[n]`, and let `d[n]` denote the maximum distance of any point on
@@ -12,7 +14,7 @@ meromorphic functions.
 > satisfied:
 >
 >   - `∃ C ∈ ℝ . ∀ n ∈ ℕ .             |s[n] / d[n]| < C`;
->   - `∃ M ∈ ℝ . ∀ n ∈ ℕ; z ∈ Γ[n] .   |f(z)| ≤ M`;
+>   - `∃ M ∈ ℝ . ∀ n ∈ ℕ, z ∈ Γ[n] .   |f(z)| ≤ M`;
 >   - `f` is a meromorphic function that is not singular at zero;
 >
 > then:
@@ -23,9 +25,13 @@ meromorphic functions.
 > nearest to the origin.  The order important as the series may diverge if
 > summed in the wrong order.
 
-Note: If the function is singular at zero, one can either shift the origin or
+*Note:* If the function is singular at zero, one can either shift the origin or
 turn the singularity into a removable singular by adding another meromorphic
 function.
+
+*Remark:* The second condition can be weakened to
+
+  - `∃ M ∈ ℝ, ∀ p ∈ ℕ . ∀ n ∈ ℕ, z ∈ Γ[n] . |f(z)| ≤ M z^p`;
 
 ## Proof
 
@@ -55,4 +61,9 @@ limit
       ≤ (|z| C M)/(2 ℼ) lim[n → ∞] 1/(d[n] - R)
       = 0
 
-[thm]: https://en.wikipedia.org/wiki/Mittag-Leffler%27s_theorem
+## Logarithmic version (infinite product expansion)
+
+If the meromorphic function `f` has infinite number of zeros and satisfies the
+same conditions as before, then:
+
+    f(z) = f(0) ⅇ^(f′(0) z / f(0)) ∏[w] (1 - z/w) ⅇ^(z / w)
