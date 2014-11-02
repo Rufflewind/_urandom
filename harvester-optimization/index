@@ -1,0 +1,6 @@
+  - initially `./test.py` uses 4.3GB (!)
+  - try chunking the `compile` step
+    (but still store everything as a complete list)
+  - then 300MB but does not work
+  - then 900MB after bugfix
+  - using chunked iterators: now down to 150MB
