@@ -7,5 +7,24 @@
 \rhead{}
 \marginparsep=2cm
 \begin{document}
-Hi
+
+% G : [R&, R&, T&] -> C&
+\[ G : [\mathcal R, \mathcal R, \mathcal T] \to \mathcal C \]
+
+% G[r#, r#', t] =- 1/(i hbar) <r#| exp (H t)/(i h-)
+\[ G[\vc r, \vc r', t]
+\equiv
+\frac{1}{\I \hbar}
+\brakket{\vc r}{\exp \frac{\op H t}{\I \hbar}}{\vc r'}
+=
+\frac{1}{\I \hbar}
+\sum_{n} (\phi_n \vc r) \exp \frac{E_n t}{\I \hbar} (\phi_n^* \vc r')
+\]
+
+\[ \thetaup \tau \equiv \frac{1}{2 \PI \I}
+\int_{\Real} \frac{\E^{\I x \tau} \D x}{x - 0^+ \I} \]
+
+\[ \dot \thetaup \tau = \deltaf \tau \equiv \frac{1}{2 \PI}
+\fint_{\Real} \E^{\I x \tau} \D x \]
+
 \end{document}
