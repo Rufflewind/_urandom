@@ -2,18 +2,18 @@
 set -e
 
 DOCDIR=???
-REMOTE=git@github.com:???
 doc_cmd() { ???; }
 
 [ -d "$DOCDIR/.git" ] || (
 
     mkdir -p "$DOCDIR"
+    url=`git remote -v | grep origin | awk '{ printf "%s", $2; exit }'
     cd "$DOCDIR"
     git init
     git config user.name Bot
     git config user.email "<>"
     git commit -m _ --allow-empty
-    git remote add origin "$REMOTE"
+    git remote add origin $url
 
 )
 
