@@ -1,5 +1,4 @@
 DOCDIR=???
-REMOTE=git@github.com:???
 
 doc:
 	???
@@ -12,9 +11,10 @@ doc-upload: doc $(DOCDIR)/.git/config
 
 $(DOCDIR)/.git/config:
 	mkdir -p $(DOCDIR)
-	cd $(DOCDIR) \
+	@url=`git remote -v | grep origin | awk '{ printf "%s", $$2; exit }'` \
+	  && cd $(DOCDIR) \
 	  && git init \
 	  && git config user.name Bot \
 	  && git config user.email "<>" \
 	  && git commit -m _ --allow-empty \
-	  && git remote add origin $(REMOTE)
+	  && git remote add origin $$url
