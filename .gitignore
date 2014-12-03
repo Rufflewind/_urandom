@@ -1,5 +1,4 @@
 # generic
-dist/
 .\#*
 *~
 *.log
@@ -26,6 +25,7 @@ a.out
 # Haskell
 .cabal-sandbox/
 cabal.sandbox.config
+dist/
 *.chi
 *.hcr
 *.hi
@@ -39,3 +39,8 @@ cabal.sandbox.config
 *.blg
 *.thm
 *.toc
+
+# web
+.sass-cache
+*.css.map
+*.js.map
