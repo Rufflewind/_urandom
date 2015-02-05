@@ -1,0 +1,82 @@
+--- Doxyfile
++++ Doxyfile
+@@ -4,11 +4,11 @@
+ # Project related configuration options
+ #---------------------------------------------------------------------------
+ DOXYFILE_ENCODING      = UTF-8
+-PROJECT_NAME           = "My Project"
++PROJECT_NAME           = "???"
+ PROJECT_NUMBER         =
+ PROJECT_BRIEF          =
+ PROJECT_LOGO           =
+-OUTPUT_DIRECTORY       =
++OUTPUT_DIRECTORY       = dist/share/doc/???
+ CREATE_SUBDIRS         = NO
+ ALLOW_UNICODE_NAMES    = NO
+ OUTPUT_LANGUAGE        = English
+@@ -21,7 +21,7 @@
+ STRIP_FROM_PATH        =
+ STRIP_FROM_INC_PATH    =
+ SHORT_NAMES            = NO
+-JAVADOC_AUTOBRIEF      = NO
++JAVADOC_AUTOBRIEF      = YES
+ QT_AUTOBRIEF           = NO
+ MULTILINE_CPP_IS_BRIEF = NO
+ INHERIT_DOCS           = YES
+@@ -29,7 +29,7 @@
+ TAB_SIZE               = 4
+ ALIASES                =
+ TCL_SUBST              =
+-OPTIMIZE_OUTPUT_FOR_C  = NO
++OPTIMIZE_OUTPUT_FOR_C  = YES
+ OPTIMIZE_OUTPUT_JAVA   = NO
+ OPTIMIZE_FOR_FORTRAN   = NO
+ OPTIMIZE_OUTPUT_VHDL   = NO
+@@ -89,9 +89,9 @@
+ #---------------------------------------------------------------------------
+ # Configuration options related to warning and progress messages
+ #---------------------------------------------------------------------------
+-QUIET                  = NO
++QUIET                  = YES
+ WARNINGS               = YES
+-WARN_IF_UNDOCUMENTED   = YES
++WARN_IF_UNDOCUMENTED   = NO
+ WARN_IF_DOC_ERROR      = YES
+ WARN_NO_PARAMDOC       = NO
+ WARN_FORMAT            = "$file:$line: $text"
+@@ -99,7 +99,7 @@
+ #---------------------------------------------------------------------------
+ # Configuration options related to the input files
+ #---------------------------------------------------------------------------
+-INPUT                  =
++INPUT                  = ???
+ INPUT_ENCODING         = UTF-8
+ FILE_PATTERNS          =
+ RECURSIVE              = NO
+@@ -138,7 +138,7 @@
+ # Configuration options related to the HTML output
+ #---------------------------------------------------------------------------
+ GENERATE_HTML          = YES
+-HTML_OUTPUT            = html
++HTML_OUTPUT            = .
+ HTML_FILE_EXTENSION    = .html
+ HTML_HEADER            =
+ HTML_FOOTER            =
+@@ -174,7 +174,7 @@
+ GENERATE_ECLIPSEHELP   = NO
+ ECLIPSE_DOC_ID         = org.doxygen.Project
+ DISABLE_INDEX          = NO
+-GENERATE_TREEVIEW      = NO
++GENERATE_TREEVIEW      = YES
+ ENUM_VALUES_PER_LINE   = 4
+ TREEVIEW_WIDTH         = 250
+ EXT_LINKS_IN_WINDOW    = NO
+@@ -195,7 +195,7 @@
+ #---------------------------------------------------------------------------
+ # Configuration options related to the LaTeX output
+ #---------------------------------------------------------------------------
+-GENERATE_LATEX         = YES
++GENERATE_LATEX         = NO
+ LATEX_OUTPUT           = latex
+ LATEX_CMD_NAME         = latex
+ MAKEINDEX_CMD_NAME     = makeindex
