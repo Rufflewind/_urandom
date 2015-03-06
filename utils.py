@@ -3,47 +3,75 @@ import os
 '''A file object to `/dev/null`.'''
 DEV_NULL = open(os.devnull, "r+")
 
-def read_file(filename):
-    '''Read a file and return its contents as a string.'''
-    with open(filename) as f:
-        return f.read()
+ensure_str_encoding = []
+def ensure_str(string):
+    '''Ensure that the argument is in fact a Unicode string.  If it isn't,
+    then:
 
-def write_file(filename, contents, only_if_different=False, safe=True):
-    '''Write a file with the given string as contents.
+      - on Python 2, it will be decoded using the preferred encoding;
+      - on Python 3, it will trigger a `TypeError`.
+    '''
+    # Python 2
+    if getattr(str, "decode", None) and getattr(str, "encode", None):
+        if isinstance(string, unicode):
+            return string
+        if not ensure_str_encoding:
+            import locale
+            ensure_str_encoding.append(locale.getpreferredencoding(False))
+        return string.decode(ensure_str_encoding[0])
+    # Python 3
+    if isinstance(string, str):
+        return string
+    raise TypeError("not an instance of 'str': " + repr(string))
 
-    If `safe` is `True`, the operation is done "as atomically as possible": if
-    the filesystem supports atomic rename then it will be performed
-    atomically; if the filesystem does not, it will, in the worst case, leave
-    behind a temporary file with a similar name that contains the new
-    contents.'''
+def rename(src_filename, dest_filename):
+    '''Rename a file (allows overwrites on Windows).'''
+    import os
+    if os.name == "nt":
+        import ctypes
+        success = ctypes.windll.kernel32.MoveFileExW(
+            ensure_str(src_filename),
+            ensure_str(dest_filename),
+            ctypes.c_ulong(0x1),
+        )
+        if not success:
+            raise ctypes.WinError()
+        return
+    os.rename(src_filename, dest_filename)
 
-    # encode `contents` into bytes, but only on Python 3
-    contents_encode = getattr(contents, "encode", None)
-    if contents_encode and getattr(contents, "decode", None):
-        import locale
-        contents = contents_encode(locale.getpreferredencoding(False))
+def read_file(filename, binary=False):
+    '''Read the contents of a file.'''
+    with open(filename, "rb" if binary else "rt") as file:
+        contents = file.read()
+    if not binary:
+        contents = ensure_str(contents)
+    return contents
 
-    # write to temporary file first
-    import os, tempfile
-    name, ext = os.path.splitext(os.path.basename(filename))
-    with tempfile.NamedTemporaryFile(dir=os.path.dirname(filename),
-                                     prefix=name + ".",
-                                     suffix=ext + ".tmp",
-                                     delete=False) as tmp:
-        tmp_fn = tmp.name
-        try:
-            tmp.file.write(contents)
-        except:
-            os.remove(tmp_fn)
-            raise
-
-    # overwrite target file with temporary file
+def write_file(filename, contents, binary=False, safe=True):
+    '''Write the contents to a file.  Unless `safe` is false, it is performed
+    as atomically as possible.  A temporary directory is used to store the
+    file while it is being written.'''
+    if not safe:
+        if not binary:
+            contents = ensure_str(contents)
+        with open(filename, "wb" if binary else "wt") as file:
+            file.write(contents)
+        return
+    import os, shutil, tempfile
     try:
-        os.rename(tmp_fn, filename)
-    except OSError:
-        import shutil
-        os.remove(filename)
-        os.rename(tmp_fn, filename)
+        tmp_dir = tempfile.mkdtemp(
+            suffix=".tmp",
+            prefix="." + os.path.basename(filename) + ".",
+            dir=os.path.dirname(filename),
+        )
+        tmp_filename = os.path.join(tmp_dir, "file.tmp")
+        write_file(tmp_filename, contents, binary, safe=False)
+        rename(tmp_filename, filename)
+    finally:
+        try:
+            shutil.rmtree(tmp_dir)
+        except Exception:
+            pass
 
 class WorkDir(object):
     '''A context for changing to a different working directory.  The original
