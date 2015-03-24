@@ -3,12 +3,13 @@
 
 prefix=/usr/local
 arch=x86_64
+tmp=get-ghc.sh.tmp
 
 ghc_ver=7.8.4
 #ghc_dist=unknown-linux-centos65 # requires GMP4 (libgmp.so.3)
 ghc_dist=unknown-linux-deb7 # requires GMP5 (libgmp.so.10)
 
-cabal_ver=1.22.0.0
+cabal_ver=1.20.0.1
 cabal_dist=unknown-linux
 
 # ----------------------------------------------------------------------------
@@ -52,11 +53,14 @@ download() {
     esac
 }
 
+touch "$prefix"
+mkdir "$tmp"
+
 url=http://haskell.org/ghc/dist
 url=$url/$ghc_ver/ghc-$ghc_ver-$arch-$ghc_dist.tar.xz
-download "$url" | tar xJf -
+download "$url" | { cd "$tmp"; tar xJf -; }
 (
-    cd "ghc-$ghc_ver"
+    cd "$tmp/ghc-$ghc_ver"
     ./configure --prefix="$prefix"
     make install
 )
