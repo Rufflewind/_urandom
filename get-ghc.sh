@@ -5,6 +5,11 @@ prefix=/usr/local
 arch=x86_64
 tmp=get-ghc.sh.tmp
 
+case $PATH in
+    *"$prefix"*) ;;
+    *) printf >&2 "WARNING: %s/bin is not in the PATH variable\n" "$prefix";;
+esac
+
 ghc_ver=7.8.4
 #ghc_dist=unknown-linux-centos65 # requires GMP4 (libgmp.so.3)
 ghc_dist=unknown-linux-deb7 # requires GMP5 (libgmp.so.10)
