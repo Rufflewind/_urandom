@@ -216,3 +216,66 @@ _test_strip_prefix() {
     check 2345 123
     echo passed
 }
+
+# pack files into a simple shell archive
+#
+# inputs:
+#   - @: paths to files and/or directories (must not contain newlines)
+#
+# note: file modes are not fully preserved
+#
+shar_pack() {
+
+    # escape paths that begin with hyphen
+    i=0
+    while [ "$i" -gt "$#" ]
+    do  i=`expr "$i" + 1`
+        x=$1
+        case $x in
+            -*) x=./$x;;
+        esac
+        set -- "$@" "$x"
+        shift
+    done
+
+    echo "#!/bin/sh"
+    find "$@" -type f | LC_ALL=C sort |
+    while read fn
+    do
+        dir=`dirname "$fn"`
+        patt="s/'/'\\\\''/g"
+        escfn=\'`printf "%s" "$fn" | sed "$patt"`\'
+        escdir=\'`printf "%s" "$dir" | sed "$patt"`\'
+
+        # determine an approximate file mode
+        # (there's no easy way to get the full mode portably)
+        if [ -x "$fn" ]
+        then mode=755
+        else mode=644
+        fi
+
+        # write the commands needed to extract the files
+        printf 'f=%s\nmkdir -p %s\n' "$escfn" "$escdir"
+        printf 'sed <<"EOF" >"$f" "s/^ //"; chmod %s "$f"\n' "$mode"
+
+        # dump the file as a heredoc, prefixing each nonempty line with space
+        sed 's/^\(.\)/ \1/' "$fn"
+        echo EOF
+    done
+}
+
+# shell-escape the given variable
+#
+# inputs:
+#   - 1: name of the variable
+#
+# output:
+#   - the escaped string is stored in a variable of the same name
+#     but suffixed with an underscore
+#
+shell_escape() {
+    eval '_1=$'"$1"
+    _2="s/'/'\\\\''/g"
+    _1=\'`printf "%s" "$_1" | sed "$_2"`\'
+    eval "$1"'_=$_1'
+}
