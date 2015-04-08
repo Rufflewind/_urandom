@@ -221,6 +221,7 @@ _test_strip_prefix() {
 #
 # inputs:
 #   - @: paths to files and/or directories (must not contain newlines)
+#   - PACK_COMMENT: extra text to be inserted just after first line
 #
 # note: file modes are not fully preserved
 #
@@ -228,7 +229,7 @@ shar_pack() {
 
     # escape paths that begin with hyphen
     i=0
-    while [ "$i" -gt "$#" ]
+    while [ "$i" -lt "$#" ]
     do  i=`expr "$i" + 1`
         x=$1
         case $x in
@@ -238,7 +239,8 @@ shar_pack() {
         shift
     done
 
-    echo "#!/bin/sh"
+    echo '#!/bin/sh'
+    printf "%s" "$PACK_COMMENT"
     find "$@" -type f | LC_ALL=C sort |
     while read fn
     do
@@ -255,12 +257,12 @@ shar_pack() {
         fi
 
         # write the commands needed to extract the files
-        printf 'f=%s\nmkdir -p %s\n' "$escfn" "$escdir"
-        printf 'sed <<"EOF" >"$f" "s/^ //"; chmod %s "$f"\n' "$mode"
+        printf '\nmkdir -p %s\n' "$escdir"
+        printf 'sed "s/^ //" <<"EOF" >%s\n' "$escfn"
 
         # dump the file as a heredoc, prefixing each nonempty line with space
         sed 's/^\(.\)/ \1/' "$fn"
-        echo EOF
+        printf 'EOF\nchmod %s %s\n' "$mode" "$escfn"
     done
 }
 
