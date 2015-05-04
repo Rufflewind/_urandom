@@ -1,6 +1,9 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void *xmalloc(size_t size)
 {
@@ -26,3 +29,7 @@ void *xmalloc(size_t size)
     }
     return ptr;
 }
+
+#ifdef __cplusplus
+}
+#endif
