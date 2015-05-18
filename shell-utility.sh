@@ -249,6 +249,10 @@ shar_pack() {
         escfn=\'`printf "%s" "$fn" | sed "$patt"`\'
         escdir=\'`printf "%s" "$dir" | sed "$patt"`\'
 
+        # find out if there is a trailing newline
+        nl=`echo; echo x`
+        eofchar=`tail -c 1 "$fn"; echo x`
+
         # determine an approximate file mode
         # (there's no easy way to get the full mode portably)
         if [ -x "$fn" ]
@@ -256,12 +260,24 @@ shar_pack() {
         else mode=644
         fi
 
-        # write the commands needed to extract the files
+        # create the directory if necessary
         printf '\nmkdir -p %s\n' "$escdir"
-        printf 'sed "s/^ //" <<"EOF" >%s\n' "$escfn"
 
-        # dump the file as a heredoc, prefixing each nonempty line with space
+        # dump the file as a heredoc, prefixing each nonempty line with space;
+        # if there is no trailing newline, we add one and remove it later
+        printf 'sed "s/^ //" <<"EOF"'
+        if [ "$eofchar" != "$nl" ]
+        then
+            len=`wc -c <"$fn"`
+            printf ' | dd ibs=1 count=%s 2>/dev/null' "$len"
+        fi
+        printf ' >%s\n' "$escfn"
         sed 's/^\(.\)/ \1/' "$fn"
+        if [ "$eofchar" != "$nl" ]
+        then echo
+        fi
+
+        # set the file mode
         printf 'EOF\nchmod %s %s\n' "$mode" "$escfn"
     done
 }
