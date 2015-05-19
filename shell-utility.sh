@@ -272,7 +272,7 @@ shar_pack() {
             printf ' | dd ibs=1 count=%s 2>/dev/null' "$len"
         fi
         printf ' >%s\n' "$escfn"
-        sed 's/^\(.\)/ \1/' "$fn"
+        LC_ALL=C sed 's/^\(.\)/ \1/' "$fn"
         if [ "$eofchar" != "$nl" ]
         then echo
         fi
