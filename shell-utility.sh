@@ -265,7 +265,7 @@ shar_pack() {
 
         # dump the file as a heredoc, prefixing each nonempty line with space;
         # if there is no trailing newline, we add one and remove it later
-        printf 'sed "s/^ //" <<"EOF"'
+        printf 'LC_ALL=C sed "s/^ //" <<"EOF"'
         if [ "$eofchar" != "$nl" ]
         then
             len=`wc -c <"$fn"`
