@@ -52,8 +52,8 @@ args = {
     "force": force,
     "energy": energy,
 }
-lts, lxs, lys, lEs = forward_euler(**args)
-fts, fxs, fys, fEs = leapfrog(**args)
+fts, fxs, fys, fEs = forward_euler(**args)
+lts, lxs, lys, lEs = leapfrog(**args)
 fig1, [ax1] = create_figure()
 fig2, [ax2] = create_figure()
 ax1.plot(fxs, fys, label="forward Euler")
