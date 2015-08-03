@@ -1,6 +1,7 @@
 # generic
 .\#*
 .nfs????
+dist/
 *~
 *.log
 *.tmp
@@ -26,7 +27,6 @@ a.out
 # Haskell
 .cabal-sandbox/
 cabal.sandbox.config
-dist/
 *.chi
 *.hcr
 *.hi
@@ -35,6 +35,7 @@ dist/
 node_modules/
 
 # Python
+MANIFEST
 *.pyc
 
 # TeX
