@@ -3,9 +3,10 @@ from __future__ import print_function, unicode_literals
 import io, json, datetime
 open = io.open
 
-def dict_update(d1, d2):
+def dict_merge(d1, d2):
     '''Merge two dicts and returns the result.  The original dicts are
-    unchanged.'''
+    unchanged.  Note that this operation is biased: if a key exists in both
+    dicts, the one in the right dict is chosen.'''
     d = dict(d1)
     d.update(d2)
     return d
@@ -18,7 +19,8 @@ def json_load_file(filename, json_args={}, **open_args):
 def json_dump_file(filename, data, json_args={}, **open_args):
     import json
     with open(filename, "w", **open_args) as f:
-        json.dump(data, f, **dict_update(JSON_FORMAT, json_args))
+        json.dump(data, f, **dict_merge(JSON_FORMAT, json_args))
+        f.write("\n")
 
 def search_json(pred, data):
     '''Search a JSON object for data that matches the given predicate:
