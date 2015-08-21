@@ -1,0 +1,10 @@
+Example: 1.2e-12.m/(s^2.kg)^(1/2)
+
+quantity  ::= number units
+dec_point ::= "."
+exp_sep   ::= [eE]
+digit     ::= [0-9]
+decimal   ::= sign digit* (dec_point digit*)?
+natural   ::= digit+
+integer   ::= sign natural (exp_sep integer)
+units     ::= unit_symb*
