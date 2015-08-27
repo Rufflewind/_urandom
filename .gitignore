@@ -36,6 +36,7 @@ node_modules/
 
 # Python
 MANIFEST
+__pycache__
 *.pyc
 
 # TeX
