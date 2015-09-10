@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+#
+# A Pandoc filter script for converting LaTeX math in a document into images.
+#
+# Typical usage:
+#
+#     pandoc --filter=./pandoc-filter-imgmath \
+#         -f markdown_strict+fenced_code_blocks+tex_math_dollars \
+#         -t markdown -o OUTPUT.md INPUT.md
+#
+# To recover the LaTeX code for a given image URL such as:
+#
+#     https://www.google.com/chart?cht=tx&chl=x%5E2%2By%5E2
+#
+# you can simply run:
+#
+#     ./pandoc-filter-imgmath unquote "x%5E2%2By%5E2"
+#
+try:
+    from urllib.parse import quote, unquote
+except ImportError:
+    from urllib import quote, unquote
+
+# ----------------------------------------------------------------------------
+# Pandoc utilities
+# ----------------------------------------------------------------------------
+
+def target(url, title):
+    return [url, title]
+
+def image(inlines, target):
+    return {"t": "Image", "c": [inlines, target]}
+
+def match_math(inline):
+    if isinstance(inline, dict) and inline.get("t", None) == "Math":
+        return inline["c"]
+
+# ----------------------------------------------------------------------------
+# Math conversion
+# ----------------------------------------------------------------------------
+
+def make_math_url(mathtype, math):
+    return IMAGE_PROVIDER_URL.replace("???", quote(
+        ("\\textstyle " if mathtype["t"] == "InlineMath" else "") +
+        math
+    ))
+
+def process_math(node):
+    if isinstance(node, list):
+        return [process_math(subnode) for subnode in node]
+    elif isinstance(node, dict):
+        if "t" not in node:
+            return node
+        c = match_math(node)
+        if not c:
+            return {"t": node["t"], "c": process_math(node["c"])}
+        return image([], target(make_math_url(*c), ""))
+    else:
+        return node
+
+def main():
+    import json, sys
+    if len(sys.argv) == 1:
+        json.dump(process_math(json.load(sys.stdin)), sys.stdout)
+        return
+    if len(sys.argv) == 3:
+        if sys.argv[1] == "quote":
+            print(quote(sys.argv[2]))
+            return
+        if sys.argv[1] == "unquote":
+            print(unquote(sys.argv[2]))
+            return
+    raise Exception("Invalid command-line arguments")
+
+IMAGE_PROVIDER_URL = "https://www.google.com/chart?cht=tx&chl=???"
+
+if __name__ == "__main__":
+    main()
