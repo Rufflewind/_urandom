@@ -68,7 +68,7 @@ void el_swap(size_t n, num *equation, size_t r2, size_t r1)
     swap(n + 1, equation + r1 * (n + 1), equation + r2 * (n + 1));
 }
 
-void print_equation(size_t n, const num *equation)
+void print_augmatrix(size_t n, const num *equation)
 {
     size_t i, j;
     for (i = 0; i != n; ++i) {
@@ -138,6 +138,7 @@ void simplify_row(size_t n, num *equation, size_t i)
     remove_common_factors(n + 1, equation + (n + 1) * i);
 }
 
+/* eliminate cell (j, k) using row i */
 void eliminate(size_t n, num *equation, size_t i, size_t j, size_t k)
 {
     num c[] = {
@@ -146,18 +147,16 @@ void eliminate(size_t n, num *equation, size_t i, size_t j, size_t k)
     };
 
     remove_common_factors(sizeof(c) / sizeof(*c), c);
-    if (c[0]) {
-        el_scale(n, equation, j, c[0]);
-        el_add(n, equation, j, i, -c[1]);
-    }
+    el_scale(n, equation, j, c[0]);
+    el_add(n, equation, j, i, -c[1]);
     simplify_row(n, equation, j);
 
 #ifndef NDEBUG
-    print_equation(n, equation);
+    print_augmatrix(n, equation);
 #endif
 }
 
-size_t find_first_nonzero(size_t n, const num *x, size_t incx)
+size_t find_first_nonzero(size_t n, const num *x, ptrdiff_t incx)
 {
     size_t i, j = (size_t)(-1);
     for (i = 0; i != n; ++i) {
@@ -172,98 +171,171 @@ size_t find_first_nonzero(size_t n, const num *x, size_t incx)
 /* reduce to row echelon form */
 void row_echelon(size_t n, num *equation)
 {
-    size_t i, j;
-    for (i = 0; i != n; ++i) {
-        const size_t k = find_first_nonzero(
+    size_t i = 0, k;
+    for (k = 0; k != n; ++k) {
+        const size_t h = find_first_nonzero(
             n - i,
-            equation + i * (n + 1) + i,
-            n + 1
+            equation + i * (n + 1) + k,
+            (ptrdiff_t)(n + 1)
         );
-        if (k == (size_t)(-1)) {
-            continue;
-        }
-        el_swap(n, equation, i, i + k);
-        for (j = i + 1; j < n; ++j) {
-            eliminate(n, equation, i, j, i);
+        if (h != (size_t)(-1)) {
+            size_t j;
+            el_swap(n, equation, i, i + h);
+            for (j = i + 1; j < n; ++j) {
+                eliminate(n, equation, i, j, k);
+            }
+            ++i;
         }
     }
 }
 
-/* solve a linear equation whose coefficient matrix is upper triangular */
+/* solve a linear system whose coefficient matrix is upper triangular */
 void solve_triangular(size_t n, num *equation)
 {
-    size_t i, j;
-    for (i = n - 1; i < n; --i) {
-        for (j = i - 1; j < i; --j) {
-            eliminate(n, equation, i, j, i);
+    size_t k;
+    for (k = n - 1; k < n; --k) {
+        const size_t h = find_first_nonzero(
+            k + 1,
+            equation + k * (n + 1) + k,
+            -(ptrdiff_t)(n + 1)
+        );
+        if (h != (size_t)(-1)) {
+            size_t j;
+            const size_t i = k - h;
+            for (j = i - 1; j < k; --j) {
+                eliminate(n, equation, i, j, k);
+            }
         }
     }
 }
 
-/* Solve a linear system of equations defined by an augmented matrix;
+/* solve a linear system of equations defined by an augmented matrix;
+   the matrix is tranformed into reduced row echelon form,
+   although the leading coefficients need not be 1
+   (since we are working with only integers)
    `equation` is a row-major augmented matrix with dimensions `n * (n + 1)`;
    The final solution is returned as diagonal augmented matrix. */
 void gauss_elim(size_t n, num *equation)
 {
 #ifndef NDEBUG
-    printf("initial:\n");
-    print_equation(n, equation);
+    print_augmatrix(n, equation);
 #endif
     row_echelon(n, equation);
     solve_triangular(n, equation);
-#ifndef NDEBUG
-    printf("final:\n");
-    print_equation(n, equation);
-#endif
 }
 
-void get_solution(num *numer, num *denom,
-                  size_t n, const num *equation, size_t i)
+/* extract solutions from a matrix in reduced row echeleon form
+   (leading coefficients do not need to be 1, however);
+   returns 0 if there is at least one solution;
+   returns 1 if there are no solutions;
+   `solutions` is an `n * 2` matrix containing numerators and denominators;
+   1/0 == no solution (in which case every variable will be so);
+   0/0 == multiple solutions for this variable */
+int get_solutions(num *solutions, size_t n, const num *equation)
 {
-    *numer = equation[i * (n + 1) + n];
-    *denom = equation[i * (n + 1) + i];
+    size_t i, j;
+
+    /* see if there is at least one solution */
+    for (i = n - 1; i < n; --i) {
+        const num *row = equation + i * (n + 1);
+        /* if LHS is entirely zero ... */
+        if (find_first_nonzero(n, row, 1) == (size_t)(-1)) {
+            /* ... but RHS is not */
+            if (row[n]) {
+                for (i = 0; i != n; ++i) {
+                    solutions[i * 2]     = 1;
+                    solutions[i * 2 + 1] = 0;
+                }
+                return 1;
+            }
+        } else {
+            break;
+        }
+    }
+
+    /* default each solution to 0/0 */
+    for (i = 0; i != n; ++i) {
+        solutions[i * 2]     = 0;
+        solutions[i * 2 + 1] = 0;
+    }
+
+    /* find the parts of the solution vector that's unique */
+    j = 0;
+    for (i = 0; i != n; ++i) {
+        size_t h;
+        const num *diag = equation + i * (n + 1) + j;
+
+        /* find the leading coefficient */
+        const size_t k = find_first_nonzero(n - j, diag, 1);
+        if (k == (size_t)(-1)) {
+            break;
+        }
+
+        /* check if this solution is unique */
+        h = find_first_nonzero(n - j - k - 1, diag + k + 1, 1);
+        if (h == (size_t)(-1)) {
+            solutions[(j + k) * 2]     = diag[n - j];
+            solutions[(j + k) * 2 + 1] = diag[k];
+        }
+        j += k + 1;
+    }
+    return 0;
 }
 
 /* for compatibilty with Treeki's code */
 int solve(const num *equation, num *solutions, int n)
 {
-    const size_t size = n * (n + 1) * sizeof(*equation);
+    const size_t eqlen = n * (n + 1);
+    const size_t size = (eqlen + n * 2) * sizeof(*equation);
     size_t i;
     int is_unique = 1;
-    num *equation2 = (num *)malloc(size);
+
+    num *buf = (num *)malloc(size);
+    num *equation2 = buf;
+    num *solutions2 = buf + eqlen;
     memcpy(equation2, equation, size);
+
+    /* do the magic */
     gauss_elim((size_t)n, equation2);
+
+    if (get_solutions(solutions2, n, equation2) == 1) {
+        fprintf(stderr, "warning: solution does not exist\n");
+        is_unique = 0;
+    }
+
     for (i = 0; i != n; ++i) {
-        num numer, denom;
-        get_solution(&numer, &denom, n, equation2, i);
+        const num numer = solutions2[i * 2];
+        const num denom = solutions2[i * 2 + 1];
         if (denom) {
             solutions[i] = numer / denom;
-        } else {
-            solutions[i] = 0;
-            fprintf(stderr, "warning: ");
-            if (numer) {
-                fprintf(stderr,
-                        "solution for variable #%zu does not exist\n", i);
-            } else {
-                fprintf(stderr,
-                        "multiple solutions exist for #%zu\n", i);
-            }
-            is_unique = 0;
+            continue;
         }
+        solutions[i] = 0;
+        is_unique = 0;
+        if (numer) {
+            continue;
+        }
+        fprintf(stderr, "warning: multiple solutions "
+                "exist for variable #%zu\n", i);
     }
-    free(equation2);
+
+    free(buf);
     return is_unique;
 }
 
 void print_solutions(size_t n, const num *equation)
 {
     size_t i;
+    num *solutions = (num *)malloc(2 * n * sizeof(*solutions));
+    get_solutions(solutions, n, equation);
     printf("solutions:\n");
     for (i = 0; i != n; ++i) {
-        num numer, denom;
-        get_solution(&numer, &denom, n, equation, i);
-        printf("%15f\n", (double)numer / denom);
+        const num numer = solutions[i * 2];
+        const num denom = solutions[i * 2 + 1];
+        printf("%8" PRI_num " / %8" PRI_num " = %10g\n",
+               numer, denom, denom ? (double)numer / denom : NAN);
     }
+    free(solutions);
 }
 
 void example(void)
