@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+if [ -z "$1" ] || [ -z "$2" ]
+then
+    prog=`basename "$0"`
+    printf >&2 "usage: %s NAME VER\n" "$prog"
+    exit 1
+fi
+pkgname=$1
+pkgver=$2
+echo $pkgname
+echo $pkgver
+mkdir -p DEBIAN
+[ -f DEBIAN/control ] || cat >DEBIAN/control <<EOF
+Package: $pkgname
+Version: $pkgver
+Section: misc
+Priority: optional
+Architecture: amd64
+Depends:
+Maintainer: <>
+Description:
+ No description
+EOF
+editor=${EDITOR:-emacs -nw}
+echo $editor
+$editor DEBIAN/control
+dpkg-deb --build .
+mv ..deb $pkgname-$pkgver.deb
