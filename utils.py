@@ -120,3 +120,8 @@ class FileLock(object):
     def __exit__(self, type, value, traceback):
         '''Release the lock.'''
         self.lockfile.close()
+
+def combine_surrogate_pair(l, r):
+    '''Example: chr(combine_surrogate_pair(55357, 56832))
+    (use 'unichr' on Python 2)'''
+    return ((l - 0xd800) << 10) + r - 0xdc00 + 0x010000
