@@ -6,6 +6,7 @@ set -eu
     printf >&2 "this script should be run under the 'easy-rsa' dir\n"
     exit 2
 }
+umask 077
 {
 cat <<EOF
 ca       [inline]
