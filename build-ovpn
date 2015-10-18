@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+[ $# -eq 1 ] || {
+    prog=`basename "$0"`
+    printf >&2 "usage: %s CLIENT_NAME \n" "$prog"
+    printf >&2 "this script should be run under the 'easy-rsa' dir\n"
+    exit 2
+}
+{
+cat <<EOF
+ca       [inline]
+cert     [inline]
+key      [inline]
+tls-auth [inline] 1
+
+<ca>
+EOF
+cat keys/ca.crt
+cat <<EOF
+</ca>
+
+<cert>
+EOF
+cat "keys/$1.crt"
+cat <<EOF
+</cert>
+
+<key>
+EOF
+cat "keys/$1.key"
+cat <<EOF
+</key>
+
+<tls-auth>
+EOF
+cat keys/ta.key
+cat <<EOF
+</tls-auth>
+EOF
+} >"keys/$1.ovpn"
