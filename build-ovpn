@@ -9,10 +9,7 @@ set -eu
 umask 077
 {
 cat <<EOF
-ca       [inline]
-cert     [inline]
-key      [inline]
-tls-auth [inline] 1
+key-direction 1
 
 <ca>
 EOF
