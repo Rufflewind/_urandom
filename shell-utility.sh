@@ -115,6 +115,22 @@ _test_exp_search() {
     echo passed
 }
 
+# clone `repo` into `dir`, additionally setting `myrepo` as the `source`
+# remote if provided
+#
+#     git_clone <repo> <dir> <myrepo>
+#
+git_clone() {
+    [ -d "$2" ] ||
+        git clone -- "$1" "$2"
+    [ -z "${3-}" ] ||
+        git -C "$2" remote add source "${3-}" || :
+    git -C "$2" fetch --all --prune || :
+    git -C "$2" submodule update --init --recursive
+    [ -z "${3-}" ] ||
+        git -C "$2" checkout local || :
+}
+
 # check whether `stringB` is a prefix of `stringA` and
 # obtain the length of `stringB`
 #
