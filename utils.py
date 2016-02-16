@@ -1,11 +1,19 @@
-import os
+#@slot/imports[
+import locale
+#@]
 
-'''A file object to `/dev/null`.'''
-DEV_NULL = open(os.devnull, "r+")
+#@slot/variables[
+#@snip/ensure_str[
+#@requires: mod:locale
+PREFERREDENCODING = locale.getpreferredencoding(True)
+#@]
+#@]
 
 # The use of this function is questionable.
 # It might be deprecated in the future.
-ensure_str_encoding = []
+#@slot/functions[
+#@snip/ensure_str[
+#@requires: PREFERREDENCODING
 def ensure_str(string):
     '''Ensure that the argument is in fact a Unicode string.  If it isn't,
     then:
@@ -17,14 +25,12 @@ def ensure_str(string):
     if getattr(str, "decode", None) and getattr(str, "encode", None):
         if isinstance(string, unicode):
             return string
-        if not ensure_str_encoding:
-            import locale
-            ensure_str_encoding.append(locale.getpreferredencoding(False))
-        return string.decode(ensure_str_encoding[0])
+        return string.decode(PREFERREDENCODING)
     # Python 3
     if isinstance(string, str):
         return string
     raise TypeError("not an instance of 'str': " + repr(string))
+#@]
 
 #@snip/TemporarySaveFile[
 #@requires: rename try_remove wrapped_open
@@ -55,13 +61,15 @@ class TemporarySaveFile(object):
             raise ValueError("attempted to __enter__ twice")
         stream = wrapped_open(tempfile.NamedTemporaryFile, **self._kwargs)
         try:
-            shutil.copystat(self._fn, stream.name)
-        except:
-            try:
-                stream.close()
-            finally:
-                try_remove(stream.name)
-            raise
+            shutil.copymode(self._fn, stream.name)
+        except BaseException as e:
+            import errno
+            if not (isinstance(e, OSError) and e.errno == errno.ENOENT):
+                try:
+                    stream.close()
+                finally:
+                    try_remove(stream.name)
+                raise
         self._stream = stream
         return stream
 
@@ -324,6 +332,20 @@ def LookaheadIterator_test():
 #@snip/combine_surrogate_pair[
 def combine_surrogate_pair(l, r):
     '''Example: chr(combine_surrogate_pair(55357, 56832))
-    (use 'unichr' on Python 2)'''
+    (use `unichr` on Python 2)'''
     return ((l - 0xd800) << 10) + r - 0xdc00 + 0x010000
+#@]
+
+#@snip/snormpath[
+def snormpath(path):
+    import re
+    sep = "/"
+    m = re.match(re.escape(sep) + "*", path)
+    num_leading_slashes = len(m.group(0))
+    if num_leading_slashes > 2:
+        num_leading_slashes = 1
+    return (sep * num_leading_slashes +
+            sep.join(s for s in path.split(sep)
+                     if not re.match(r"\.?$", s))) or "."
+#@]
 #@]
