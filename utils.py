@@ -183,11 +183,14 @@ def save_file(filename, contents, binary=False, encoding=None,
 #@snip/save_json_file[
 #@requires: safe_open
 def save_json_file(filename, contents, encoding=None,
-                   errors=None, newline=None, safe=True):
+                   errors=None, newline=None, safe=True, json_args={}):
     import json
+    json_args = dict(json_args)
     with safe_open(filename, "wt", encoding=encoding,
                    errors=errors, newline=newline, safe=safe) as stream:
-        json.dump(contents, stream)
+        json.dump(contents, stream, **json_args)
+        if json_args.get("indent", None) is not None:
+            stream.write("\n")
 #@]
 
 #@snip/load_json_file[
