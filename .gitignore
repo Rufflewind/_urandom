@@ -1,7 +1,9 @@
 # generic
-.\#*
+.#*
+\#*#
 .nfs????
 dist/
+[tT]humbs.db
 *~
 *.log
 *.tmp
@@ -9,17 +11,23 @@ dist/
 # native
 a.out
 *.a
+*.aps
 *.dll
 *.dylib
 *.exe
 *.gch
 *.ipch
 *.lib
+*.ncb
 *.o
 *.obj
+*.opensdf
+*.pch
 *.so
 *.sdf
 *.stackdump
+*.suo
+*.user
 
 # Fortran
 *.mod
