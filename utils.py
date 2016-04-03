@@ -1,5 +1,6 @@
 #@slot/imports[
-import ctypes, errno, io, json, locale, os, shutil, subprocess, tempfile
+import ctypes, errno, io, json, locale, os, re, \
+       shutil, signal, subprocess, tempfile
 if os.name == "nt":
     import ctypes.wintypes
 #@]
@@ -423,7 +424,7 @@ class CompletedProcess(object):
         CalledProcessError = subprocess.CalledProcessError
         if not self.returncode:
             return
-        # older versions of Python did not support output and/or stderr arguments
+        # older versions of Python didn't support `output` and/or `stderr`
         try:
             raise CalledProcessError(
                 self.returncode,
@@ -455,4 +456,124 @@ class CompletedProcess(object):
             s += ", stderr=" + repr(self.stderr)
         s += ")"
         return s
+#@]
+
+#@snip/SIGNAL_NAME[
+#@requires: mod:re, mod:signal
+SIGNAL_NAME = dict(
+    (sig, name)
+    for name, sig in signal.__dict__.items()
+    if re.match("SIG[A-Z]+$", name)
+)
+#@]
+
+#@snip/signal_name[
+#@optional_requires: signal_name
+def signal_name(sig):
+    try:
+        return "{0} ({1})".format(SIGNAL_NAME[sig], sig)
+    except KeyError:
+        return "signal {0}".format(sig)
+#@]
+
+#@snip/Signal[
+#@optional_requires: signal_name
+class Signal(BaseException):
+    def __init__(self, signal, *args):
+        self.signal = signal
+        super(Signal, self).__init__(signal, *args)
+    def __str__(self):
+        try:
+            get_name = signal_name
+        except NameError:
+            def get_name(sig):
+                return "signal {0}".format(sig)
+        return get_name(self.signal)
+#@]
+
+#@snip/SignalsToExceptions[
+#@requires: mod:os mod:signal Signal
+class SignalsToExceptions(object):
+
+    def __init__(self, signals=["SIGHUP", "SIGINT", "SIGTERM"]):
+        '''The `signals` argument can be an iterable of either strings or
+        signal values (or a mixture of them).  When specified as a string,
+        a signal that isn't supported is ignored.'''
+        self._signals = signals
+
+    def __enter__(self):
+        if not is_main_thread():
+            return
+        self._prev_handlers = {}
+        for sig in self._signals:
+            try:
+                sig = getattr(signal, sig)
+            except AttributeError:      # signal not supported
+                continue
+            except TypeError:           # not a string; try using it directly
+                pass
+            prev_handler = signal.signal(sig, self._handle)
+            self._prev_handlers[sig] = prev_handler
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not is_main_thread():
+            return
+        for sig, handler in self._prev_handlers.items():
+            signal.signal(sig, handler)
+        sig = getattr(exc_val, "signal", None)
+        if sig is not None:
+            os.kill(os.getpid(), sig)
+            return True
+
+    def _handle(self, sig, frame):
+        raise Signal(sig)
+#@]
+
+#@snip/exception_to_signal[
+#@requires: mod:signal
+def exception_to_signal(exception):
+    '''Obtains the signal associated with the given exception, if any.  If the
+    exception is `KeyboardInterrupt`, then it returns `signal.SIGINT`.
+    Otherwise, it returns the value of the `signal` attribute of the
+    exception, if any.  If the attribute is not found, `None` is returned,
+    indicating that there is no signal associated with the exception.'''
+    if isinstance(exception, KeyboardInterrupt):
+        return signal.SIGINT
+    return getattr(exception, "signal", None)
+#@]
+
+#@snip/ChildProcess[
+#@requires: mod:signal exception_to_signal
+class ChildProcess(object):
+
+    def __init__(self, proc, default_signal=signal.SIGTERM):
+        '''The `default_signal` specifies the signal that is sent to the child
+        process if the context exits due to something else other than an
+        exception with an associated signal (see: `exception_to_signal`).  In
+        this case, if the `default_signal` is `None`, the process is killed.
+        Otherwise, it will receive the given signal.'''
+        self._proc = proc
+        self._default_signal = default_signal
+
+    def __enter__(self):
+        return self._proc
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sig = exception_to_signal(exc_val)
+        if self._proc.stdout:
+            self._proc.stdout.close()
+        if self._proc.stderr:
+            self._proc.stderr.close()
+        try:
+            if self._proc.stdin:
+                self._proc.stdin.close()
+        finally:
+            if sig is None:
+                sig = self._default_signal
+            if sig is None:
+                self._proc.kill()
+            else:
+                self._proc.send_signal(sig)
+            # must wait to avoid zombies
+            self._proc.wait()
 #@]
