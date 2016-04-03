@@ -1,6 +1,14 @@
 #@slot/imports[
-import locale
+import ctypes, errno, io, json, locale, os, shutil, subprocess, tempfile
+if os.name == "nt":
+    import ctypes.wintypes
 #@]
+
+JSON_ARGS = {
+    "indent": 4,
+    "separators": (",", ": "),
+    "sort_keys": True,
+}
 
 #@slot/variables[
 #@snip/ensure_str[
@@ -33,7 +41,7 @@ def ensure_str(string):
 #@]
 
 #@snip/TemporarySaveFile[
-#@requires: rename try_remove wrapped_open
+#@requires: mod:errno mod:os mod:shutil mod:tempfile rename try_remove wrapped_open
 class TemporarySaveFile(object):
     '''A context manager for a saving files atomically.  The context manager
     creates a temporary file to which data may be written.  If the body of the
@@ -42,7 +50,6 @@ class TemporarySaveFile(object):
     deleted.'''
 
     def __init__(self, filename, mode="w", suffix=None, prefix=None, **kwargs):
-        import os
         self._fn = filename
         kwargs = dict(kwargs)
         kwargs.update({
@@ -56,14 +63,12 @@ class TemporarySaveFile(object):
         self._kwargs = kwargs
 
     def __enter__(self):
-        import shutil, tempfile
         if hasattr(self, "_stream"):
             raise ValueError("attempted to __enter__ twice")
         stream = wrapped_open(tempfile.NamedTemporaryFile, **self._kwargs)
         try:
             shutil.copymode(self._fn, stream.name)
         except BaseException as e:
-            import errno
             if not (isinstance(e, OSError) and e.errno == errno.ENOENT):
                 try:
                     stream.close()
@@ -88,11 +93,10 @@ class TemporarySaveFile(object):
 #@]
 
 #@snip/rename[
+#@requires: mod:os mod:ctypes mod:ctypes.wintypes
 def rename(src, dest):
     '''Rename a file (allows overwrites on Windows).'''
-    import os
     if os.name == "nt":
-        import ctypes, ctypes.wintypes
         MoveFileExW = ctypes.windll.kernel32.MoveFileExW
         MoveFileExW.restype = ctypes.wintypes.BOOL
         MOVEFILE_REPLACE_EXISTING = ctypes.wintypes.DWORD(0x1)
@@ -106,8 +110,8 @@ def rename(src, dest):
 #@]
 
 #@snip/try_remove[
+#@requires: mod:os
 def try_remove(path):
-    import os
     try:
         os.remove(path)
     except OSError:
@@ -116,6 +120,7 @@ def try_remove(path):
 #@]
 
 #@snip/wrapped_open[
+#@requires: mod:io
 def wrapped_open(open, mode="r", encoding=None,
                  errors=None, newline=None, **kwargs):
     '''Enhance an `open`-like function to accept some additional arguments for
@@ -130,7 +135,6 @@ def wrapped_open(open, mode="r", encoding=None,
             raise Exception("'newline' argument not supported in binary mode")
         return open(mode=mode, **kwargs)
     else:
-        import io
         mode = mode.replace("t", "") + "b"
         stream = open(mode=mode, **kwargs)
         try:
@@ -142,26 +146,26 @@ def wrapped_open(open, mode="r", encoding=None,
 #@]
 
 #@snip/safe_open[
-#@requires: TemporarySaveFile
+#@requires: mod:io TemporarySaveFile
 def safe_open(filename, mode="rt", encoding=None,
               errors=None, newline=None, safe=True):
     truncated_write = "w" in mode and "+" not in mode
     if safe and truncated_write and not isinstance(filename, int):
         open_file = TemporarySaveFile
     else:
-        from io import open as open_file
+        open_file = io.open
     return open_file(filename, mode, encoding=encoding,
                      errors=errors, newline=newline)
 #@]
 
 #@snip/load_file[
+#@requires: mod:io
 def load_file(filename, binary=False, encoding=None,
               errors=None, newline=None):
     '''Read the contents of a file.'''
-    from io import open
     mode = "r" + ("b" if binary else "")
-    with open(filename, mode, encoding=encoding,
-              errors=errors, newline=newline) as stream:
+    with io.open(filename, mode, encoding=encoding,
+                 errors=errors, newline=newline) as stream:
         return stream.read()
 #@]
 
@@ -181,10 +185,9 @@ def save_file(filename, contents, binary=False, encoding=None,
 #@]
 
 #@snip/save_json_file[
-#@requires: safe_open
+#@requires: mod:json safe_open
 def save_json_file(filename, contents, encoding=None,
                    errors=None, newline=None, safe=True, json_args={}):
-    import json
     json_args = dict(json_args)
     with safe_open(filename, "wt", encoding=encoding,
                    errors=errors, newline=newline, safe=safe) as stream:
@@ -194,15 +197,15 @@ def save_json_file(filename, contents, encoding=None,
 #@]
 
 #@snip/load_json_file[
+#@requires: mod:io mod:json
 def load_json_file(filename, encoding=None, errors=None, newline=None):
-    import json
-    from io import open
-    with open(filename, "rt", encoding=encoding,
-              errors=errors, newline=newline) as stream:
+    with io.open(filename, "rt", encoding=encoding,
+                 errors=errors, newline=newline) as stream:
         return json.load(stream)
 #@]
 
 #@snip/WorkDir[
+#@requires: mod:os
 class WorkDir(object):
     '''A context manager for changing to a different working directory.  The
     original working directory is restored upon exiting the context.'''
@@ -214,18 +217,17 @@ class WorkDir(object):
     def __enter__(self):
         '''Change the working directory and return the path to the previous
         working directory.'''
-        import os
         self.prevdir = os.getcwd()
         os.chdir(self.path)
         return self.prevdir
 
     def __exit__(self, type, value, traceback):
         '''Restore the the temporary directory.'''
-        import os
         os.chdir(self.prevdir)
 #@]
 
 #@snip/FileLock[
+#@requires: mod:fcntl
 class FileLock(object):
     '''A context for holding an exclusive file lock, which is released upon
     exiting the context.  (Unix only.)'''
@@ -238,7 +240,6 @@ class FileLock(object):
     def __enter__(self):
         '''Acquire the lock.  Returns nothing.  If `block` was set to true,
         then an `IOError` is raised if the file is already locked.'''
-        import fcntl
         flags = fcntl.LOCK_EX
         if not self.block:
             flags |= fnctl.LOCK_NB
@@ -255,6 +256,7 @@ class FileLock(object):
 #@]
 
 #@snip/LookaheadIterator[
+#@requires: mod:itertools
 class LookaheadIterator(object):
     '''This serves a similar purpose to `itertools.tee` but is less prone to
     space leakage.  It acts much like the original iterator, except that you
@@ -281,7 +283,6 @@ class LookaheadIterator(object):
     def peek(self, n=1):
         '''Peek up to `n` elements.  The function may return fewer items if
         there aren't enough elements.'''
-        import itertools
         unbuffered = n - len(self.buffer)
         results = list(itertools.chain(
             reversed(self.buffer[max(0, -unbuffered):]),
@@ -340,8 +341,8 @@ def combine_surrogate_pair(l, r):
 #@]
 
 #@snip/snormpath[
+#@requires: mod:re
 def snormpath(path):
-    import re
     sep = "/"
     m = re.match(re.escape(sep) + "*", path)
     num_leading_slashes = len(m.group(0))
@@ -351,4 +352,107 @@ def snormpath(path):
             sep.join(s for s in path.split(sep)
                      if not re.match(r"\.?$", s))) or "."
 #@]
+#@]
+
+#@snip/null_context_manager[
+#@provides: null_context_manager
+class NullContextManager(object):
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+null_context_manager = NullContextManager()
+#@]
+
+#@snip/subprocess_shim[
+#@provides: CompletedProcess Popen check_output run
+#@requires: mod:os mod:subprocess null_context_manager
+DEVNULL = -3
+
+def run(*args, input=None, check=False, **kwargs):
+    '''Mimics the API of 'run' in Python 3.5 but does not support 'timeout'.'''
+    if input is not None:
+        if "stdin" in kwargs:
+            raise ValueError("stdin and input arguments may not both be used.")
+        kwargs["stdin"] = subprocess.PIPE
+    proc = Popen(*args, **kwargs)
+    try:
+        out, err = proc.communicate(input)
+    except:
+        proc.kill()
+        proc.wait()
+        raise
+    result = CompletedProcess(proc.args, proc.returncode,
+                              stdout=out, stderr=err)
+    if check:
+        result.check_returncode()
+    return result
+
+def check_output(*args, **kwargs):
+    return run(*args, check=True, stdout=subprocess.PIPE, **kwargs).stdout
+
+def Popen(args, stdin=None, stdout=None, stderr=None, **kwargs):
+    '''A variant of Popen that accepts 'DEVNULL' for standard streams.'''
+    devnull = None
+    open_devnull = lambda: devnull or open(os.devnull, "r+b")
+    if stdin == DEVNULL:
+        devnull = open_devnull()
+        stdin = devnull
+    if stdout == DEVNULL:
+        devnull = open_devnull()
+        stdout = devnull
+    if stderr == DEVNULL:
+        devnull = open_devnull()
+        stderr = devnull
+    with devnull or NullContextManager():
+        return subprocess.Popen(args, stdin=stdin, stdout=stdout,
+                                stderr=stderr, **kwargs)
+
+class CompletedProcess(object):
+
+    def __init__(self, args, returncode, stdout=None, stderr=None):
+        self.args = args
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def check_returncode(self):
+        CalledProcessError = subprocess.CalledProcessError
+        if not self.returncode:
+            return
+        # older versions of Python did not support output and/or stderr arguments
+        try:
+            raise CalledProcessError(
+                self.returncode,
+                self.args,
+                output=self.stdout,
+                stderr=self.stderr,
+            )
+        except TypeError:
+            pass
+        try:
+            raise CalledProcessError(
+                self.returncode,
+                self.args,
+                output=self.stdout,
+            )
+        except TypeError:
+            pass
+        raise CalledProcessError(
+            self.returncode,
+            self.args,
+        )
+
+    def __repr__(self):
+        s = "CompletedProcess(args=" + repr(self.args)
+        s += ", returncode=" + repr(self.returncode)
+        if self.stdout is not None:
+            s += ", stdout=" + repr(self.stdout)
+        if self.stderr is not None:
+            s += ", stderr=" + repr(self.stderr)
+        s += ")"
+        return s
 #@]
