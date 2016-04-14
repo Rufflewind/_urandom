@@ -1,6 +1,6 @@
 #@slot/imports[
-import ctypes, errno, io, json, locale, os, re, \
-       shutil, signal, subprocess, tempfile
+import ctypes, errno, hashlib, io, json, locale, os, re, \
+       shutil, signal, subprocess, tempfile, threading
 if os.name == "nt":
     import ctypes.wintypes
 #@]
@@ -458,6 +458,16 @@ class CompletedProcess(object):
         return s
 #@]
 
+#@snip/is_main_thread[
+#@requires: mod:threading
+def is_main_thread():
+    '''Return whether the current thread is the main thread.'''
+    get_main_thread = getattr(threading, "main_thread", None)
+    if not get_main_thread:             # for Python 2 compatibility
+        return isinstance(threading.current_thread(), threading._MainThread)
+    return threading.current_thread() == get_main_thread()
+#@]
+
 #@snip/SIGNAL_NAME[
 #@requires: mod:re, mod:signal
 SIGNAL_NAME = dict(
@@ -492,7 +502,7 @@ class Signal(BaseException):
 #@]
 
 #@snip/SignalsToExceptions[
-#@requires: mod:os mod:signal Signal
+#@requires: mod:os mod:signal Signal is_main_thread
 class SignalsToExceptions(object):
 
     def __init__(self, signals=["SIGHUP", "SIGINT", "SIGTERM"]):
@@ -576,4 +586,15 @@ class ChildProcess(object):
                 self._proc.send_signal(sig)
             # must wait to avoid zombies
             self._proc.wait()
+#@]
+
+#@snip/hash_file[
+def hash_file(hasher, file, block_size=(1 << 20)):
+    if isinstance(file, str):
+        with open(file, "rb") as f:
+            return hash_file(hasher, f, block_size=block_size)
+    h = hasher()
+    for block in iter(lambda: file.read(block_size), b""):
+        h.update(block)
+    return h
 #@]
