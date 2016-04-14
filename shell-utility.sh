@@ -131,27 +131,17 @@ git_clone() {
         git -C "$2" checkout local || :
 }
 
-# check whether `stringB` is a prefix of `stringA` and
-# obtain the length of `stringB`
+# check whether `stringB` is not a prefix of `stringA`
 #
 # inputs:
 #   - 1:    `stringA`
 #   - 2:    `stringB`
 #
-# output:
-#   - ret:  length of `stringB`
-#
 not_prefix_of() {
-    _1=`printf '%s' "$1" | wc -c`
-    ret=`printf '%s' "$2" | wc -c`
-    # if stringB is longer, return unchanged
-    if [ "$_1" -lt "$ret" ]
-    then
-        return
-    fi
-    # check whether stringB is a prefix of stringA
-    _1=`printf '%s' "$1" | dd 2>/dev/null bs=1 count="$ret"`
-    [ "$_1" != "$2" ]
+    case $1 in
+        "$2"*) return 1;;
+        *)     return 0;;
+    esac
 }
 
 # remove `stringB` from the beginning of `stringA`; if `stringB` is not a
@@ -171,13 +161,22 @@ strip_prefix() {
     # if the pattern is not a prefix of the original string, return unchanged
     if not_prefix_of "$1" "$2"
     then
-        ret="$1"
+        ret=$1
     else
         # obtain substring
+        ret=`printf "%s" "$1" | wc -c`
         ret=`expr "$ret" + 1`
         ret=`printf '%s' "$1" | tail -c +"$ret"`
     fi
 }
+
+# use more optimal form if supported
+if ( _1=abcd && [ ${_1#ab} = cd ] ) >/dev/null 2>&1
+then
+    strip_prefix() {
+        ret=${1#$2}
+    }
+fi
 
 _test_strip_prefix() {
     check() {
