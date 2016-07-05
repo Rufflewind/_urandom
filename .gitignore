@@ -5,6 +5,7 @@
 [tT]humbs.db
 *~
 *.log
+*.orig
 *.pid
 *.tmp
 
