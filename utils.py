@@ -16,6 +16,10 @@ import threading
 #@]
 
 #@snips[
+#@DEVNULL[
+DEVNULL = -3
+#@]
+
 #@JSON_ARGS[
 JSON_ARGS = {
     "indent": 4,
@@ -63,6 +67,21 @@ def merge_sets(*sets):
     for s in sets:
         s0.update(s)
     return s0
+#@]
+
+#@read_lines[
+def read_lines(stream):
+    '''Workaround for Python 2, which blocks until EOF when iterating over a
+    file object.'''
+    nl = None
+    while True:
+        l = stream.readline()
+        if l:
+            yield l
+        if not nl:
+            nl = b"\n" if isinstance(l, bytes) else "\n"
+        if not l.endswith(nl):
+            break
 #@]
 
 #@signal_name[
@@ -374,21 +393,6 @@ def snormpath(path):
                      if not re.match(r"\.?$", s))) or "."
 #@]
 
-#@read_lines[
-def read_lines(stream):
-    '''Workaround for Python 2, which blocks until EOF when iterating over a
-    file object.'''
-    nl = None
-    while True:
-        l = stream.readline()
-        if l:
-            yield l
-        if not nl:
-            nl = b"\n" if isinstance(l, bytes) else "\n"
-        if not l.endswith(nl):
-            break
-#@]
-
 #@exception_to_signal[
 #@requires: mod:signal
 def exception_to_signal(exception):
@@ -447,6 +451,121 @@ SIGNAL_NAME = dict(
 )
 #@]
 
+#@CompletedProcess[
+#@requires: subprocess
+class CompletedProcess(object):
+
+    def __init__(self, args, returncode, stdout=None, stderr=None):
+        self.args = args
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def check_returncode(self):
+        CalledProcessError = subprocess.CalledProcessError
+        if not self.returncode:
+            return
+        # older versions of Python didn't support `output` and/or `stderr`
+        try:
+            raise CalledProcessError(
+                self.returncode,
+                self.args,
+                output=self.stdout,
+                stderr=self.stderr,
+            )
+        except TypeError:
+            pass
+        try:
+            raise CalledProcessError(
+                self.returncode,
+                self.args,
+                output=self.stdout,
+            )
+        except TypeError:
+            pass
+        raise CalledProcessError(
+            self.returncode,
+            self.args,
+        )
+
+    def __repr__(self):
+        s = [
+            "CompletedProcess(args=",
+            repr(self.args),
+            ", returncode=",
+            repr(self.returncode),
+        ]
+        if self.stdout is not None:
+            s.extend([", stdout=", repr(self.stdout)])
+        if self.stderr is not None:
+            s.extend([", stderr=", repr(self.stderr)])
+        s.append(")")
+        return "".join(s)
+#@]
+
+#@NullContextManager[
+class NullContextManager(object):
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+#@]
+
+#@null_context_manager[
+#@requires: NullContextManager
+null_context_manager = NullContextManager()
+#@]
+
+#@Popen[
+#@requires: mod:os mod:subprocess null_context_manager
+def Popen(args, stdin=None, stdout=None, stderr=None, **kwargs):
+    '''A variant of Popen that accepts 'DEVNULL' for standard streams.'''
+    devnull = None
+    open_devnull = lambda: devnull or open(os.devnull, "r+b")
+    if stdin == DEVNULL:
+        devnull = open_devnull()
+        stdin = devnull
+    if stdout == DEVNULL:
+        devnull = open_devnull()
+        stdout = devnull
+    if stderr == DEVNULL:
+        devnull = open_devnull()
+        stderr = devnull
+    with devnull or null_context_manager:
+        return subprocess.Popen(args, stdin=stdin, stdout=stdout,
+                                stderr=stderr, **kwargs)
+#@]
+
+#@run[
+#@requires: mod:subprocess CompletedProcess Popen
+def run(*args, input=None, check=False, **kwargs):
+    '''Mimics the API of 'run' in Python 3.5 but does not support 'timeout'.'''
+    if input is not None:
+        if "stdin" in kwargs:
+            raise ValueError("stdin and input arguments may not both be used.")
+        kwargs["stdin"] = subprocess.PIPE
+    proc = Popen(*args, **kwargs)
+    try:
+        out, err = proc.communicate(input)
+    except:
+        proc.kill()
+        proc.wait()
+        raise
+    result = CompletedProcess(proc.args, proc.returncode,
+                              stdout=out, stderr=err)
+    if check:
+        result.check_returncode()
+    return result
+#@]
+
+#@check_output[
+#@requires: mod:subprocess run
+def check_output(*args, **kwargs):
+    return run(*args, check=True, stdout=subprocess.PIPE, **kwargs).stdout
+#@]
+
 #@load_json_file[
 #@requires: mod:io mod:json
 def load_json_file(filename, encoding=None, errors=None, newline=None):
@@ -500,125 +619,6 @@ def save_json_file(filename, contents, encoding=None,
         json.dump(contents, stream, **json_args)
         if json_args.get("indent", None) is not None:
             stream.write("\n")
-#@]
-
-#@NullContextManager[
-class NullContextManager(object):
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-#@]
-
-#@null_context_manager[
-#@requires: NullContextManager
-null_context_manager = NullContextManager()
-#@]
-
-#@DEVNULL[
-DEVNULL = -3
-#@]
-
-#@run[
-#@requires: mod:subprocess CompletedProcess Popen
-def run(*args, input=None, check=False, **kwargs):
-    '''Mimics the API of 'run' in Python 3.5 but does not support 'timeout'.'''
-    if input is not None:
-        if "stdin" in kwargs:
-            raise ValueError("stdin and input arguments may not both be used.")
-        kwargs["stdin"] = subprocess.PIPE
-    proc = Popen(*args, **kwargs)
-    try:
-        out, err = proc.communicate(input)
-    except:
-        proc.kill()
-        proc.wait()
-        raise
-    result = CompletedProcess(proc.args, proc.returncode,
-                              stdout=out, stderr=err)
-    if check:
-        result.check_returncode()
-    return result
-#@]
-
-#@check_output[
-#@requires: mod:subprocess run
-def check_output(*args, **kwargs):
-    return run(*args, check=True, stdout=subprocess.PIPE, **kwargs).stdout
-#@]
-
-#@Popen[
-#@requires: mod:os mod:subprocess null_context_manager
-def Popen(args, stdin=None, stdout=None, stderr=None, **kwargs):
-    '''A variant of Popen that accepts 'DEVNULL' for standard streams.'''
-    devnull = None
-    open_devnull = lambda: devnull or open(os.devnull, "r+b")
-    if stdin == DEVNULL:
-        devnull = open_devnull()
-        stdin = devnull
-    if stdout == DEVNULL:
-        devnull = open_devnull()
-        stdout = devnull
-    if stderr == DEVNULL:
-        devnull = open_devnull()
-        stderr = devnull
-    with devnull or null_context_manager:
-        return subprocess.Popen(args, stdin=stdin, stdout=stdout,
-                                stderr=stderr, **kwargs)
-#@]
-
-#@CompletedProcess[
-#@requires: subprocess
-class CompletedProcess(object):
-
-    def __init__(self, args, returncode, stdout=None, stderr=None):
-        self.args = args
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-
-    def check_returncode(self):
-        CalledProcessError = subprocess.CalledProcessError
-        if not self.returncode:
-            return
-        # older versions of Python didn't support `output` and/or `stderr`
-        try:
-            raise CalledProcessError(
-                self.returncode,
-                self.args,
-                output=self.stdout,
-                stderr=self.stderr,
-            )
-        except TypeError:
-            pass
-        try:
-            raise CalledProcessError(
-                self.returncode,
-                self.args,
-                output=self.stdout,
-            )
-        except TypeError:
-            pass
-        raise CalledProcessError(
-            self.returncode,
-            self.args,
-        )
-
-    def __repr__(self):
-        s = [
-            "CompletedProcess(args=",
-            repr(self.args),
-            ", returncode=",
-            repr(self.returncode),
-        ]
-        if self.stdout is not None:
-            s.extend([", stdout=", repr(self.stdout)])
-        if self.stderr is not None:
-            s.extend([", stderr=", repr(self.stderr)])
-        s.append(")")
-        return "".join(s)
 #@]
 
 #@Signal[
