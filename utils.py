@@ -374,6 +374,21 @@ def snormpath(path):
                      if not re.match(r"\.?$", s))) or "."
 #@]
 
+#@read_lines[
+def read_lines(stream):
+    '''Workaround for Python 2, which blocks until EOF when iterating over a
+    file object.'''
+    nl = None
+    while True:
+        l = stream.readline()
+        if l:
+            yield l
+        if not nl:
+            nl = b"\n" if isinstance(l, bytes) else "\n"
+        if not l.endswith(nl):
+            break
+#@]
+
 #@exception_to_signal[
 #@requires: mod:signal
 def exception_to_signal(exception):
@@ -487,8 +502,7 @@ def save_json_file(filename, contents, encoding=None,
             stream.write("\n")
 #@]
 
-#@null_context_manager[
-#@provides: null_context_manager
+#@NullContextManager[
 class NullContextManager(object):
 
     def __enter__(self):
@@ -496,15 +510,19 @@ class NullContextManager(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+#@]
 
+#@null_context_manager[
+#@requires: NullContextManager
 null_context_manager = NullContextManager()
 #@]
 
-#@subprocess_shim[
-#@provides: CompletedProcess Popen check_output run
-#@requires: mod:os mod:subprocess null_context_manager
+#@DEVNULL[
 DEVNULL = -3
+#@]
 
+#@run[
+#@requires: mod:subprocess CompletedProcess Popen
 def run(*args, input=None, check=False, **kwargs):
     '''Mimics the API of 'run' in Python 3.5 but does not support 'timeout'.'''
     if input is not None:
@@ -523,10 +541,16 @@ def run(*args, input=None, check=False, **kwargs):
     if check:
         result.check_returncode()
     return result
+#@]
 
+#@check_output[
+#@requires: mod:subprocess run
 def check_output(*args, **kwargs):
     return run(*args, check=True, stdout=subprocess.PIPE, **kwargs).stdout
+#@]
 
+#@Popen[
+#@requires: mod:os mod:subprocess null_context_manager
 def Popen(args, stdin=None, stdout=None, stderr=None, **kwargs):
     '''A variant of Popen that accepts 'DEVNULL' for standard streams.'''
     devnull = None
@@ -540,10 +564,13 @@ def Popen(args, stdin=None, stdout=None, stderr=None, **kwargs):
     if stderr == DEVNULL:
         devnull = open_devnull()
         stderr = devnull
-    with devnull or NullContextManager():
+    with devnull or null_context_manager:
         return subprocess.Popen(args, stdin=stdin, stdout=stdout,
                                 stderr=stderr, **kwargs)
+#@]
 
+#@CompletedProcess[
+#@requires: subprocess
 class CompletedProcess(object):
 
     def __init__(self, args, returncode, stdout=None, stderr=None):
@@ -580,14 +607,18 @@ class CompletedProcess(object):
         )
 
     def __repr__(self):
-        s = "CompletedProcess(args=" + repr(self.args)
-        s += ", returncode=" + repr(self.returncode)
+        s = [
+            "CompletedProcess(args=",
+            repr(self.args),
+            ", returncode=",
+            repr(self.returncode),
+        ]
         if self.stdout is not None:
-            s += ", stdout=" + repr(self.stdout)
+            s.extend([", stdout=", repr(self.stdout)])
         if self.stderr is not None:
-            s += ", stderr=" + repr(self.stderr)
-        s += ")"
-        return s
+            s.extend([", stderr=", repr(self.stderr)])
+        s.append(")")
+        return "".join(s)
 #@]
 
 #@Signal[
