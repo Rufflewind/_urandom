@@ -37,7 +37,9 @@ a.out
 .cabal-sandbox/
 .stack-work/
 dist/
+cabal.config
 cabal.sandbox.config
+stack.yaml
 *.chi
 *.hcr
 *.hi
