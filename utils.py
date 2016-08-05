@@ -85,7 +85,6 @@ def read_lines(stream):
 #@]
 
 #@signal_name[
-#@optional_requires: signal_name
 def signal_name(sig):
     try:
         return "{0} ({1})".format(SIGNAL_NAME[sig], sig)
@@ -622,18 +621,13 @@ def save_json_file(filename, contents, encoding=None,
 #@]
 
 #@Signal[
-#@optional_requires: signal_name
+#@requires: signal_name
 class Signal(BaseException):
     def __init__(self, signal, *args):
         self.signal = signal
         super(Signal, self).__init__(signal, *args)
     def __str__(self):
-        try:
-            get_name = signal_name
-        except NameError:
-            def get_name(sig):
-                return "signal {0}".format(sig)
-        return get_name(self.signal)
+        return signal_name(self.signal)
 #@]
 
 #@is_main_thread[
