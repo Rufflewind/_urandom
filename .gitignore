@@ -16,8 +16,11 @@ a.out
 *.dll
 *.dylib
 *.exe
+*.gcda
 *.gch
+*.gcno
 *.ipch
+*.lcov
 *.lib
 *.ncb
 *.o
