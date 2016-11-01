@@ -4,6 +4,7 @@
 .nfs????
 [tT]humbs.db
 *~
+*.dep
 *.log
 *.orig
 *.pid
