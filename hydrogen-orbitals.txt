@@ -1,0 +1,76 @@
+(*
+
+   3D visualization of hydrogen orbitals:
+   color = phase, opacity = amplitude.
+
+   Modified version of
+   http://mathematica.stackexchange.com/a/47336
+
+   We avoid DensityPlot3D because it's a very recent addition to Mathematica.
+
+ *)
+
+(* Tweak things here *)
+s = 20; (* maximum x, y, z *)
+c = 12; (* number of slices in x, y, z *)
+showN = 3;
+showL = 2;
+showML = 1;
+
+R[n_Integer?Positive, l_Integer?NonNegative, r_] :=
+  Block[{ρ = 2 r / n},
+    Sqrt[(2 / n)^3 (n - l - 1)! / (2 n (n + l)!)]
+    E^(-ρ / 2) ρ^l LaguerreL[n - l - 1, 2 l + 1, ρ]
+  ] /; l < n
+
+ψ[n_, l_, m_, r_, ϑ_, φ_] := ψ[n, l, m, r, ϑ, φ] =
+  FullSimplify[
+    R[n, l, r] SphericalHarmonicY[l, m, ϑ, φ],
+    {r >= 0, ϑ ∈ Reals, φ ∈ Reals}
+  ]
+
+CompileWaveFunction = Compile[{{x, _Real}, {y, _Real}, {z, _Real}},
+  Block[{ρ = x^2 + y^2, r, ϑ, φ},
+    If[ρ > 0,
+      r = Sqrt[ρ + z^2]; ϑ = ArcCos[z/r]; φ = ArcTan[x, y],
+      r = Abs[z]; ϑ = π/2 Sign[z]; φ = 0];
+      #
+    ],
+  CompilationTarget -> "C"
+] &;
+
+nψ = CompileWaveFunction[ψ[showN, showL, showML, r, ϑ, φ]];
+
+max = Max[Table[Abs[nψ[x, y, z]],
+  {z, -s, s, s / c},
+  {y, -s, s, s / c},
+  {x, -s, s, s / c}
+]];
+
+(* Workaround for the fact that the Rainbow theme is not cyclic
+   (it starts at violet and ends at red) *)
+colorFunction = Block[{c = Blend[{
+  {-π, ColorData["Rainbow"][1]},
+  {-0.8 π, ColorData["Rainbow"][0]},
+  {-0.6 π, ColorData["Rainbow"][0.15]},
+  {-0.4 π, ColorData["Rainbow"][0.32]},
+  {-0.2 π, ColorData["Rainbow"][0.4]},
+  {0, ColorData["Rainbow"][0.5]},
+  {0.2 π, ColorData["Rainbow"][0.6]},
+  {0.4 π, ColorData["Rainbow"][0.7]},
+  {0.6 π, ColorData["Rainbow"][0.8]},
+  {0.8 π, ColorData["Rainbow"][0.9]},
+  {π, ColorData["Rainbow"][1]}
+}, Arg[#]]}, {
+  Extract[c, 1],
+  Extract[c, 2],
+  Extract[c, 3],
+  Abs[#]^2 / max^2
+}] &;
+
+data = Table[colorFunction[nψ[x, y, z]],
+  {z, -s, s, s / c},
+  {y, -s, s, s / c},
+  {x, -s, s, s / c}
+];
+Image3D[data, Background -> Black, ColorSpace -> "RGB"]
