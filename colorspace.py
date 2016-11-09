@@ -172,7 +172,7 @@ class LabColorSpacePlot(object):
             flags.append("optimize_rgb={!r}".format(optimize_rgb))
         title_suffix = " ({})".format(", ".join(flags)) if flags else ""
 
-        ax = fig.add_axes([0.1, 0.25, 0.8, 0.65])
+        ax = fig.add_axes([0.10, 0.35, 0.80, 0.55])
 
         c = 0.25
         l = 0.25
@@ -198,7 +198,7 @@ class LabColorSpacePlot(object):
 
         widgets = []
 
-        ax = fig.add_axes([0.10, 0.15, 0.80, 0.05])
+        ax = fig.add_axes([0.10, 0.25, 0.80, 0.05])
         self.l_slider = matplotlib.widgets.Slider(
             ax,
             "L",
@@ -209,7 +209,7 @@ class LabColorSpacePlot(object):
         self.l_slider.on_changed(self.on_l_slider_changed)
         widgets.append(self.l_slider)
 
-        ax = fig.add_axes([0.30, 0.05, 0.60, 0.05])
+        ax = fig.add_axes([0.30, 0.15, 0.60, 0.05])
         self.c_slider = matplotlib.widgets.Slider(
             ax,
             "C",
@@ -220,19 +220,41 @@ class LabColorSpacePlot(object):
         self.c_slider.on_changed(self.on_c_slider_changed)
         widgets.append(self.c_slider)
 
-        ax = fig.add_axes([0.10, 0.05, 0.15, 0.05])
+        ax = fig.add_axes([0.10, 0.15, 0.15, 0.05])
         button = matplotlib.widgets.Button(ax, "Print rainbow")
         button.on_clicked(self.on_print_rainbow_button_clicked)
         widgets.append(button)
+
+        ax = fig.add_axes([0.10, 0.05, 0.80, 0.05])
+        h = numpy.linspace(0.0, 2.0 * numpy.pi, n)
+        self.cos_h = numpy.cos(h)
+        self.sin_h = numpy.sin(h)
+        self.bar_image = ax.imshow(
+            self.get_bar_data(l, c),
+            interpolation=interpolation,
+            aspect="auto",
+            extent=(0.0, 1.0, 0.0, 1.0),
+        )
+        ax.grid(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
 
         # need to keep a reference to widgets to avoid getting GC'ed
         fig.__widgets = widgets
 
     def on_l_slider_changed(self, value):
         self.image.set_data(self.get_data(self.l_slider.val))
+        self.bar_image.set_data(self.get_bar_data(
+            self.l_slider.val,
+            self.c_slider.val,
+        ))
 
     def on_c_slider_changed(self, value):
         self.circle.set_radius(self.c_slider.val)
+        self.bar_image.set_data(self.get_bar_data(
+            self.l_slider.val,
+            self.c_slider.val,
+        ))
 
     def on_print_rainbow_button_clicked(self, mouse_event):
         self.print_rainbow(self.l_slider.val, self.c_slider.val)
@@ -251,6 +273,13 @@ class LabColorSpacePlot(object):
         l = numpy.full(self.a.shape, l)
         lab = numpy.stack([l, self.a, self.b], axis=-1)
         return self.render_lab(lab)
+
+    def get_bar_data(self, l, c):
+        a = c * self.cos_h
+        b = c * self.sin_h
+        l = numpy.full(a.shape, l)
+        lab = numpy.stack([l, a, b], axis=-1)
+        return self.render_lab(lab)[numpy.newaxis, :, :]
 
     def render_lab(self, lab):
         if self.optimize_rgb:
