@@ -113,6 +113,7 @@ class TestColorConversions(unittest.TestCase):
 # ----------------------------------------------------------------------------
 # Demo
 
+import json
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy
@@ -171,42 +172,80 @@ class LabColorSpacePlot(object):
             flags.append("optimize_rgb={!r}".format(optimize_rgb))
         title_suffix = " ({})".format(", ".join(flags)) if flags else ""
 
-        ax_image = fig.add_axes([0.1, 0.25, 0.8, 0.65])
-        ax_slider = fig.add_axes([0.1, 0.1, 0.8, 0.05])
+        ax = fig.add_axes([0.1, 0.25, 0.8, 0.65])
 
-        l = 0.5
+        c = 0.25
+        l = 0.25
         a_max = 1.0
         b_max = a_max
         a_min = -a_max
         b_min = -b_max
+        self.circle = matplotlib.patches.Circle((0, 0), c, fill=False)
+        ax.add_artist(self.circle)
         self.a, self.b = numpy.meshgrid(
             numpy.linspace(a_min, a_max, n),
             numpy.linspace(b_min, b_max, n),
         )
-        self.image = ax_image.imshow(
+        self.image = ax.imshow(
             self.get_data(l),
             extent=(a_min, a_max, b_min, b_max),
             interpolation=interpolation,
             origin="lower",
         )
-        ax_image.set_title("CIELab color space" + title_suffix)
-        ax_image.set_xlabel("a")
-        ax_image.set_ylabel("b")
+        ax.set_title("CIELab color space" + title_suffix)
+        ax.set_xlabel("a")
+        ax.set_ylabel("b")
 
-        slider = matplotlib.widgets.Slider(
-            ax_slider,
+        widgets = []
+
+        ax = fig.add_axes([0.10, 0.15, 0.80, 0.05])
+        self.l_slider = matplotlib.widgets.Slider(
+            ax,
             "L",
             0.0,
             1.0,
             valinit=l,
         )
-        slider.on_changed(self.on_slider_changed)
+        self.l_slider.on_changed(self.on_l_slider_changed)
+        widgets.append(self.l_slider)
 
-        # need to keep a reference to slider to avoid getting GC'ed
-        fig.__l_slider = slider
+        ax = fig.add_axes([0.30, 0.05, 0.60, 0.05])
+        self.c_slider = matplotlib.widgets.Slider(
+            ax,
+            "C",
+            0.0,
+            1.0,
+            valinit=c,
+        )
+        self.c_slider.on_changed(self.on_c_slider_changed)
+        widgets.append(self.c_slider)
 
-    def on_slider_changed(self, value):
-        self.image.set_data(self.get_data(value))
+        ax = fig.add_axes([0.10, 0.05, 0.15, 0.05])
+        button = matplotlib.widgets.Button(ax, "Print rainbow")
+        button.on_clicked(self.on_print_rainbow_button_clicked)
+        widgets.append(button)
+
+        # need to keep a reference to widgets to avoid getting GC'ed
+        fig.__widgets = widgets
+
+    def on_l_slider_changed(self, value):
+        self.image.set_data(self.get_data(self.l_slider.val))
+
+    def on_c_slider_changed(self, value):
+        self.circle.set_radius(self.c_slider.val)
+
+    def on_print_rainbow_button_clicked(self, mouse_event):
+        self.print_rainbow(self.l_slider.val, self.c_slider.val)
+
+    def print_rainbow(self, l, c):
+        colors = []
+        for t in numpy.arange(0.0, 1.0, 0.05):
+            a = c * numpy.cos(t * numpy.pi * 2.0)
+            b = c * numpy.sin(t * numpy.pi * 2.0)
+            rgb = srgb_closest_from_lab([l, a, b]) * 256.0
+            rgb = "".join("{:02x}".format(min(int(x), 255)) for x in rgb)
+            colors.append((t, "#" + rgb))
+        print(json.dumps(colors, sort_keys=True, separators=(", ", ": ")))
 
     def get_data(self, l):
         l = numpy.full(self.a.shape, l)
@@ -227,9 +266,34 @@ class LabColorSpacePlot(object):
         # note: c = complement of alpha
         c = numpy.clip(err * self.transparency_factor, 0.0, 1.0)
         c = c[..., numpy.newaxis]
-
         lab3 = (1.0 - c) * lab + c * self.background_color
         return srgb_from_xyz(cielab_to_xyz(lab3))
+
+# ----------------------------------------------------------------------------
+# A perceptually uniform rainbow (L = 0.74, c = 0.38)
+
+RAINBOW = [
+    [0.00, "#f79ab7"],
+    [0.05, "#fa9ba1"],
+    [0.10, "#f79f8e"],
+    [0.15, "#eda57e"],
+    [0.20, "#dfac73"],
+    [0.25, "#ccb36f"],
+    [0.30, "#b7ba72"],
+    [0.35, "#a0bf7b"],
+    [0.40, "#87c48b"],
+    [0.45, "#6dc69e"],
+    [0.50, "#51c8b4"],
+    [0.55, "#36c8ca"],
+    [0.60, "#2ac6dd"],
+    [0.65, "#3dc3ed"],
+    [0.70, "#5fbff7"],
+    [0.75, "#83b9fb"],
+    [0.80, "#a5b1f8"],
+    [0.85, "#c3aaee"],
+    [0.90, "#dba2df"],
+    [0.95, "#ec9dcc"],
+]
 
 # ----------------------------------------------------------------------------
 # Run tests + demo
