@@ -68,7 +68,7 @@ cd ghc
 stack exec --no-ghc-package-path -- sh -c ./boot
 stack exec --no-ghc-package-path -- sh -c ^
     "./configure --enable-tarballs-autodownload"
-stack exec --no-ghc-package-path -- make
+stack exec --no-ghc-package-path -- make -j %NUMBER_OF_PROCESSORS%
 
 @rem  (end of script; remaining part is the JScript invoked earlier)
 @goto :EOF
