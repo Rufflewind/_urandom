@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+import argparse, sys
+import colorspacious
+import matplotlib.colors
+import numpy
+import scipy.misc
+
+def hsv_equalize(src_fn, dst_fn, max_C, min_J, max_J):
+    img = scipy.misc.imread(src_fn)
+    img = matplotlib.colors.rgb_to_hsv(img / 255.0)
+
+    h = img[..., 0]                     # hue
+    C = img[..., 1]                     # chroma
+    J = img[..., 2] - C * 0.5           # compute brightness from the V in HSV
+
+    J = min_J + (max_J - min_J) * J
+    img = numpy.stack([
+        360.0 * h,
+        # force chroma to go through zero when brightness is at 0
+        max_C * C * numpy.clip(numpy.sin(J * numpy.pi / 100.0), 0.0, 1.0),
+        J,
+    ], axis=-1)
+
+    img = colorspacious.cspace_convert(img, "hCJ", "sRGB255")
+    scipy.misc.toimage(img, cmin=0.0, cmax=255.0).save(dst_fn)
+
+p = argparse.ArgumentParser(
+    description="Make an HSV image more perceptually uniform")
+p.add_argument("src_fn", metavar="source_image")
+p.add_argument("dst_fn", metavar="dest_image")
+p.add_argument("--max-C", type=float, default=20.0,
+               help=("maximum chroma of the result is (default: 20.0). "
+                     "Typical range: 0.0 to 100.0."))
+p.add_argument("--min-J", type=float, default=0.0,
+               help=("minimum brightness (default: 0.0). "
+                     "Range: 0.0 to 100.0."))
+p.add_argument("--max-J", type=float, default=100.0,
+               help=("maximum brightness (default: 100.0). "
+                     "Range: 0.0 to 100.0."))
+hsv_equalize(**vars(p.parse_args()))
