@@ -4,24 +4,32 @@ import colorspacious
 import matplotlib.colors
 import numpy
 import scipy.misc
+import colorspace # local module
 
-def hsv_equalize(src_fn, dst_fn, max_C, min_J, max_J):
+def hsv_equalize(src_fn, dst_fn, max_C, min_J, max_J, gamma):
     img = scipy.misc.imread(src_fn)
-    img = matplotlib.colors.rgb_to_hsv(img / 255.0)
+    if img.shape[2] == 4:
+        alpha = img[..., 3]
+        img = img[..., :3]
+    else:
+        alpha = None
+    img = colorspace.rgb_to_hls(img / 255.0)
 
     h = img[..., 0]                     # hue
-    C = img[..., 1]                     # chroma
-    J = img[..., 2] - C * 0.5           # compute brightness from the V in HSV
+    J = img[..., 1]                     # brightness
+    C = img[..., 2]                     # chroma
 
-    J = min_J + (max_J - min_J) * J
+    J = min_J + (max_J - min_J) * J ** gamma
     img = numpy.stack([
         360.0 * h,
+        J,
         # force chroma to go through zero when brightness is at 0
         max_C * C * numpy.clip(numpy.sin(J * numpy.pi / 100.0), 0.0, 1.0),
-        J,
     ], axis=-1)
 
-    img = colorspacious.cspace_convert(img, "hCJ", "sRGB255")
+    img = colorspacious.cspace_convert(img, "hJC", "sRGB255")
+    if alpha is not None:
+        img = numpy.concatenate([img, alpha[..., numpy.newaxis]], axis=-1)
     scipy.misc.toimage(img, cmin=0.0, cmax=255.0).save(dst_fn)
 
 p = argparse.ArgumentParser(
@@ -37,4 +45,7 @@ p.add_argument("--min-J", type=float, default=0.0,
 p.add_argument("--max-J", type=float, default=100.0,
                help=("maximum brightness (default: 100.0). "
                      "Range: 0.0 to 100.0."))
+p.add_argument("--gamma", type=float, default=1.0,
+               help=("additional gamma correction (default: 1.0). "
+                     "Range: 0.0 to infinity"))
 hsv_equalize(**vars(p.parse_args()))

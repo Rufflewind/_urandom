@@ -82,16 +82,57 @@ def srgb_from_xyz(xyz):
 def srgb_to_xyz(rgb):
     return numpy.dot(srgb_to_linear(rgb), SRGB_MATRIX_INV)
 
+def invert_or_zero(x):
+    '''Calculate 1 / x unless x is zero, in which case zero is returned.'''
+    return numpy.piecewise(
+        x,
+        [x == 0, x != 0],
+        [lambda x: 0, lambda x: 1 / x],
+    )
+
+def hexagonal_transform(rgb):
+    rgb = numpy.transpose(rgb)
+    v = numpy.max(rgb, axis=0)
+    m = numpy.min(rgb, axis=0)
+    c = v - m
+    inv_c = invert_or_zero(c)
+    # ideally, piecewise would be a better choice, but numpy.piecewise
+    # does not support functions of multiple arguments :(
+    h = numpy.select(
+        [
+            v == rgb[0],
+            v == rgb[1],
+            v == rgb[2],
+        ],
+        [
+            (rgb[1] - rgb[2]) * inv_c % 6.0,
+            (rgb[2] - rgb[0]) * inv_c + 2.0,
+            (rgb[0] - rgb[1]) * inv_c + 4.0,
+        ],
+    ) / 6.0
+    return c, h, m, v
+
+def rgb_to_hsv(rgb):
+    c, h, m, v = hexagonal_transform(rgb)
+    s = c * invert_or_zero(c)
+    return numpy.transpose(numpy.stack([h, s, v]))
+
+def rgb_to_hls(rgb):
+    c, h, m, v = hexagonal_transform(rgb)
+    l = 0.5 * (v + m)
+    s = c * invert_or_zero(1.0 - abs(2.0 * l - 1.0))
+    return numpy.transpose(numpy.stack([h, l, s]))
+
 # ----------------------------------------------------------------------------
 # Testing
 
-import unittest
+import colorsys, unittest
 import numpy
 
 class TestColorConversions(unittest.TestCase):
 
     def assertArrayEq(self, x, y, delta):
-        self.assertLess(numpy.linalg.norm(x - y), delta)
+        self.assertLessEqual(numpy.linalg.norm(x - y), delta)
 
     def test_cielab(self):
         white_cielab = cielab_from_xyz(WHITE_XYZ)
@@ -109,6 +150,44 @@ class TestColorConversions(unittest.TestCase):
         self.assertArrayEq(white_srgb, white_srgb2, 1e-15)
         white_xyz_srgb2 = srgb_to_xyz(white_srgb2)
         self.assertArrayEq(white_xyz_srgb, white_xyz_srgb2, 1e-15)
+
+    def test_hsv(self):
+        colors = numpy.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ])
+        hsv = rgb_to_hsv(colors)
+        hsv2 = [colorsys.rgb_to_hsv(*c) for c in colors]
+        self.assertArrayEq(hsv, hsv2, 0.0)
+        colors *= 0.5
+        hsv = rgb_to_hsv(colors)
+        hsv2 = [colorsys.rgb_to_hsv(*c) for c in colors]
+        self.assertArrayEq(hsv, hsv2, 0.0)
+
+    def test_hls(self):
+        colors = numpy.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ])
+        hls = rgb_to_hls(colors)
+        hls2 = [colorsys.rgb_to_hls(*c) for c in colors]
+        self.assertArrayEq(hls, hls2, 0.0)
+        colors *= 0.5
+        hls = rgb_to_hls(colors)
+        hls2 = [colorsys.rgb_to_hls(*c) for c in colors]
+        self.assertArrayEq(hls, hls2, 0.0)
 
 # ----------------------------------------------------------------------------
 # Demo
