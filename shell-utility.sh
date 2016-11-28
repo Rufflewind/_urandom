@@ -1,39 +1,38 @@
-# download a file from the given URL
+# `init_download_cmd` attempts to define a shell function `download` that
+# downloads a file from a given URL.  `init_download_cmd` itself does not
+# accept any arguments, although it does use the global variable `UNAME_S`.
 #
-# inputs:
-#   - 1:            URL
+# Providing `UNAME_S` is optional.  If provided, it must contain the cached
+# result of `uname -s`.
 #
-# output:
-#   - /dev/stdout:  data of downloaded file
+# The `download` function accepts a single argument, the URL, and yields the
+# downloaded file through stdout.
 #
-download_tool=
-download() {
-    if [ $# -ne 1 ]
-    then
-        echo >&2 "download: expected one argument"
-        return 1
-    fi
-
-    # figure out which tool we should use to download files
-    [ "$download_tool" ] || {
-        if command >/dev/null 2>&1 -v curl
-        then
-            download_tool=curl
-        elif command >/dev/null 2>&1 -v wget
-        then
-            download_tool=wget
+# If `download` is already a valid command (or function) then nothing happens.
+#
+init_download_cmd() {
+    if type download >/dev/null 2>&1; then
+        return 0
+    elif type curl >/dev/null 2>&1; then
+        download() {
+            curl -fLsS "$1"
+        }
+    elif type wget >/dev/null 2>&1; then
+        download() {
+            wget -nv -O - "$1"
+        }
+    else
+        UNAME_S=${UNAME_S-`uname -s || :`}
+        if [ x"${UNAME_S}" = xOpenBSD ] && type ftp >/dev/null 2>&1; then
+            download() {
+                ftp -o - "$1"
+            }
         else
-            download_tool=none
+            printf >&2 "%s%s\n" "error: unable to download files (can't " \
+                'find "curl", "wget" or OpenBSD "ftp")'
+            return 1
         fi
-    }
-
-    # call the download tool
-    case $download_tool in
-        curl) curl -fsLS    -- "$1";;
-        wget) wget -nv -O - -- "$1";;
-        *)    echo >&2 "download: either `curl` or `wget` must be installed"
-              return 1;;
-    esac
+    fi
 }
 
 # perform a one-sided exponential search to find the
