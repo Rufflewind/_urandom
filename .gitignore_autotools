@@ -1,0 +1,13 @@
+# Autotools
+/Makefile
+/Makefile.in
+/aclocal.m4
+/autom4te.cache
+/compile
+/config.guess
+/config.status
+/config.sub
+/configure
+/configure.scan
+/install-sh
+/missing
