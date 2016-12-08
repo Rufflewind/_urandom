@@ -308,6 +308,6 @@ shar_pack() {
 shell_escape() {
     eval '_1=$'"$1"
     _2="s/'/'\\\\''/g"
-    _1=\'`printf "%s" "$_1" | sed "$_2"`\'
+    _1=\'`printf "%s" "$_1" | sed "$_2" && echo "'"`
     eval "$1"'_=$_1'
 }
