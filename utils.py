@@ -2,6 +2,7 @@
 import ctypes
 import errno
 import fcntl
+import heapq
 import io
 import itertools
 import json
@@ -68,6 +69,62 @@ def merge_sets(*sets):
     for s in sets:
         s0.update(s)
     return s0
+#@]
+
+#@new_OrdWrapper[
+def new_OrdWrapper(key=lambda x: x, reverse=False):
+    '''Create a wrapper class that allows a new total ordering to be defined
+    on objects of another type.
+
+    'key' is expected to be a key function: it should return a value of some
+    totally ordered type that defines the desired ordering.  'reverse'
+    determines if the ordering should be reversed.
+
+    The wrapper class defines:
+
+    - a simple constructor that accepts an arbitrary value that can be later
+      accessed using '.value', and
+    - all 6 of the rich comparison methods.
+
+    '''
+    def init_func(self, value):
+        self.value = value
+        self.key = key(value)
+    def repr_func(self):
+        return "OrdWrapper({!r})".format(self.value)
+    if reverse:
+        class OrdWrapper(object):
+            __init__ = init_func
+            __repr__ = repr_func
+            def __lt__(self, other):
+                return self.key > other.key
+            def __le__(self, other):
+                return self.key >= other.key
+            def __eq__(self, other):
+                return self.key == other.key
+            def __ne__(self, other):
+                return self.key != other.key
+            def __gt__(self, other):
+                return self.key < other.key
+            def __ge__(self, other):
+                return self.key <= other.key
+    else:
+        class OrdWrapper(object):
+            __init__ = init_func
+            __repr__ = repr_func
+            def __lt__(self, other):
+                return self.key < other.key
+            def __le__(self, other):
+                return self.key <= other.key
+            def __eq__(self, other):
+                return self.key == other.key
+            def __ne__(self, other):
+                return self.key != other.key
+            def __gt__(self, other):
+                return self.key > other.key
+            def __ge__(self, other):
+                return self.key >= other.key
+    return OrdWrapper
 #@]
 
 #@read_lines[
@@ -393,6 +450,89 @@ def snormpath(path):
     return (sep * num_leading_slashes +
             sep.join(s for s in path.split(sep)
                      if not re.match(r"\.?$", s))) or "."
+#@]
+
+#@toposort[
+#@requires: mod:heapq new_OrdWrapper
+def toposort(graph, key=lambda x: x, reverse=False, flip=False):
+    '''Topologically sort a directed acyclic graph deterministically (see
+    caveats below), ensuring that the arrows always point right, unless 'flip'
+    is 'True', in which case the arrows always point left.
+
+        <graph> = {<vertex>: [<vertex>, ...], ...}
+
+    The `graph` is represented as a dictionary, where each dictionary key
+    uniquely identifies the vertex and its associated value contains a list of
+    direct successors for that vertex.  For example:
+
+        graph = {0: [1, 2], 1: [2], 2: [], 3: []}
+
+    This represents a graph with four vertices and three edges:
+
+        0 -> 1
+        0 -> 2
+        1 -> 2
+
+    Vertex '3' does not have any edges.
+
+    The ordering is determined by the 'key' function, which receives a vertex
+    key and produces some totally ordered value.  The ordering can be reversed
+    by setting 'reverse' to 'True'.
+
+    The sorted result is always lexicographically minimized, which means it is
+    deterministic if and only if the output of 'key' applied to the vertices
+    results in distinct values.
+
+    If you originally had an arbitrarily ordered sequence of items and want to
+    preserve the original ordering of the elements as much as possible,
+    consider using a key function that maps each element to its original
+    position.
+    '''
+
+    # note: the ordering of the edges is immaterial
+    if flip:
+        # we must explicitly perform the flip: the lexicographical ordering
+        # requirement prevents us from using tricks to avoid this, which would
+        # get screwed up by reversing the output of this algorithm
+        new_graph = dict((v, set()) for v in graph)
+        for v1, vs in graph.items():
+            for v2 in vs:
+                new_graph[v2].add(v1)
+        graph = new_graph
+    else:
+        graph = dict((v, frozenset(vs)) for v, vs in graph.items())
+
+    # count the number of dependents and extract the roots
+    indegree = {}
+    for v, deps in graph.items():
+        for dep in deps:
+            indegree[dep] = indegree.get(dep, 0) + 1
+    roots = []
+    for v in graph:
+        if v not in indegree:
+            indegree[v] = 0
+            roots.append(v)
+
+    OrdWrapper = new_OrdWrapper(key=key, reverse=reverse)
+    roots = [OrdWrapper(v) for v in roots]
+
+    # keep roots sorted to ensure a deterministic result
+    heapq.heapify(roots)
+
+    # Kahn's algorithm
+    # (note: this will alter indegree and roots)
+    result = []
+    while roots:
+        v1 = heapq.heappop(roots).value
+        result.append(v1)
+        for v2 in graph[v1]:
+            indegree[v2] -= 1
+            if not indegree[v2]:
+                heapq.heappush(roots, OrdWrapper(v2))
+    if len(result) != len(graph):
+        raise ValueError("graph is cyclic")
+
+    return result
 #@]
 
 #@exception_to_signal[
