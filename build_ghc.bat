@@ -5,6 +5,10 @@
 @rem  inside an empty directory, as it will create two subdirectories: "ghc"
 @rem  and sometimes "stack" (if Stack is not already installed).
 @rem
+@rem  To get this script, open up Command Prompt and run
+@rem
+@rem      powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/Rufflewind/_urandom/master/build_ghc.bat', 'build_ghc.bat')" & build_ghc
+@rem
 @rem  The script prepares the build environment (if necessary), acquires the
 @rem  source code (if necessary), and then starts the build.
 @rem
