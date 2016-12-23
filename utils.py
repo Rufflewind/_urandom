@@ -382,6 +382,8 @@ def save_file(filename, contents, binary=False, encoding=None,
 #@snormpath[
 #@requires: mod:re
 def snormpath(path):
+    '''Like 'normpath', but does not expand '..' to avoid altering the
+    meaning of a path (e.g. due to '..' inside a symlinked directory).'''
     sep = "/"
     m = re.match(re.escape(sep) + "*", path)
     num_leading_slashes = len(m.group(0))
@@ -595,17 +597,32 @@ class LazilyMappedDict(object):
         return value
 #@]
 
-#@shell_escape[
-def shell_escape(s):
-    return "'" + s.replace("'", "'\\''") + "'"
+#@shell_quote[
+#@requires: mod:re
+def shell_quote(string):
+    # we try to be conservative here because some shells have more special
+    # characters than others (`!` and `^` are not safe); we require empty
+    # strings to be quoted
+    if re.match("[]0-9A-Za-z/@:.,_+-]+$", string):
+        return string
+    return "'{0}'".format(string.replace("'", "'\\''"))
 #@]
 
-#@map_shell_escape[
-#@requires: LazilyMappedDict shell_escape
-def map_shell_escape(dict):
+#@shell_quote_arg[
+#@requires: mod:re shell_quote
+def shell_quote_arg(string):
+    # allow `=` since it's safe as an argument
+    if re.match("[]0-9A-Za-z/@:.,_=+-]+$", string):
+        return string
+    return shell_quote(string)
+#@]
+
+#@map_shell_quote[
+#@requires: LazilyMappedDict shell_quote
+def map_shell_quote(dict):
     '''Useful for mapping over the values of `locals()`, as often used in
     `str.format`.'''
-    return LazilyMappedDict(shell_escape, dict)
+    return LazilyMappedDict(shell_quote, dict)
 #@]
 
 #@save_json_file[
