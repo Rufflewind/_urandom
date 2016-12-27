@@ -20,8 +20,9 @@ import threading
 DEVNULL = -3
 #@]
 
-#@JSON_ARGS[
-JSON_ARGS = {
+#@JSON_PRETTY[
+JSON_PRETTY = {
+    "ensure_ascii": False,
     "indent": 4,
     "separators": (",", ": "),
     "sort_keys": True,
@@ -628,12 +629,12 @@ def map_shell_quote(dict):
 #@save_json_file[
 #@requires: mod:json safe_open
 def save_json_file(filename, contents, encoding=None,
-                   errors=None, newline=None, safe=True, json_args={}):
-    json_args = dict(json_args)
+                   errors=None, newline=None, safe=True, json_kwargs={}):
+    json_kwargs = dict(json_kwargs)
     with safe_open(filename, "wt", encoding=encoding,
                    errors=errors, newline=newline, safe=safe) as stream:
-        json.dump(contents, stream, **json_args)
-        if json_args.get("indent", None) is not None:
+        json.dump(contents, stream, **json_kwargs)
+        if json_kwargs.get("indent", None) is not None:
             stream.write("\n")
 #@]
 
