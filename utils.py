@@ -594,7 +594,7 @@ SIGNAL_NAME = dict(
 #@]
 
 #@CompletedProcess[
-#@requires: subprocess
+#@requires: mod:subprocess
 class CompletedProcess(object):
 
     def __init__(self, args, returncode, stdout=None, stderr=None):
