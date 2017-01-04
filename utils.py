@@ -309,6 +309,16 @@ def try_remove(path):
     return True
 #@]
 
+#@makedirs[
+#@requires: mod:os
+def makedirs(name, mode=0o777, exist_ok=False):
+    try:
+        os.makedirs(name, mode=mode)
+    except OSError:
+        if not (exist_ok and path.isdir(name)):
+            raise
+#@]
+
 #@wrapped_open[
 #@requires: mod:io
 def wrapped_open(open, mode="r", encoding=None,
