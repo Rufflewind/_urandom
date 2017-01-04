@@ -21,6 +21,14 @@ import threading
 DEVNULL = -3
 #@]
 
+#@JSON_CANONICAL[
+JSON_CANONICAL = {
+    "ensure_ascii": False,
+    "separators": (",", ":"),
+    "sort_keys": True,
+}
+#@]
+
 #@JSON_PRETTY[
 JSON_PRETTY = {
     "ensure_ascii": False,
@@ -293,6 +301,8 @@ def ensure_str(string):
 def load_file(filename, binary=False, encoding=None,
               errors=None, newline=None):
     '''Read the contents of a file.'''
+    if not binary and encoding is None:
+        raise ValueError("if not binary, encoding must be given")
     mode = "r" + ("b" if binary else "")
     with io.open(filename, mode, encoding=encoding,
                  errors=errors, newline=newline) as stream:
@@ -441,10 +451,13 @@ def save_file(filename, contents, binary=False, encoding=None,
     with the temporary file.  This ensures that the file will not end up in a
     half-written state.  Note that there is a small possibility that the
     temporary file might remain if the program crashes while writing.'''
+    if not binary and encoding is None:
+        raise ValueError("if not binary, encoding must be given")
     mode = "w" + ("b" if binary else "")
     with safe_open(filename, mode, encoding=encoding,
                    errors=errors, newline=newline, safe=safe) as stream:
         stream.write(contents)
+        stream.flush()
 #@]
 
 #@snormpath[
@@ -786,6 +799,7 @@ def save_json_file(filename, contents, encoding=None,
         json.dump(contents, stream, **json_kwargs)
         if json_kwargs.get("indent", None) is not None:
             stream.write("\n")
+        stream.flush()
 #@]
 
 #@Signal[
