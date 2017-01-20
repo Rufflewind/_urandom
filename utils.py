@@ -61,16 +61,6 @@ def hash_file(hasher, file, block_size=(1 << 20)):
     return h
 #@]
 
-#@merge_dicts[
-def merge_dicts(*dicts, **kwargs):
-    merger = kwargs.pop("merger", None)
-    for k in kwargs:
-        raise TypeError("got an unexpected keyword argument {0}".format(k))
-    d0 = {}
-    update_dict(d0, *dicts, merger=merger)
-    return d0
-#@]
-
 #@merge_sets[
 def merge_sets(*sets):
     s0 = set()
@@ -178,6 +168,28 @@ def update_dict(d0, *dicts, **kwargs):
                     d0[k] = v
         else:
             d0.update(d)
+#@]
+
+#@merge_dicts[
+#@requires: update_dict
+def merge_dicts(*dicts, **kwargs):
+    merger = kwargs.pop("merger", None)
+    for k in kwargs:
+        raise TypeError("got an unexpected keyword argument {0}".format(k))
+    d0 = {}
+    update_dict(d0, *dicts, merger=merger)
+    return d0
+#@]
+
+#@exclusive_merge[
+def exclusive_merge(arg0, *args):
+    '''Return one of the arguments if all of them are equal.  Fails with
+    `ValueError` otherwise.'''
+    for arg in args:
+        if arg0 != arg:
+            raise ValueError("conflicting values: {0!r} vs {1!r}"
+                             .format(arg0, arg))
+    return arg0
 #@]
 
 #@FileLock[
