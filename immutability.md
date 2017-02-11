@@ -38,10 +38,10 @@ we would rather assume the more general form:
 
 Now that we have all the pieces together, we can define immutability:
 
-> A type `&T` is said to be **immutable** with respect to the `(n + 1)`-ary operation `f` if, for all `g` constructed using only the safe interface, if the following program `p(f, g)` is valid, then it is possible for the result to be `true`.
+> A type `&T` is said to be (partially) **immutable** with respect to the `(n + 1)`-ary *pure* operation `f` if, for all `g` constructed using only the safe interface, if the following expression `e(f, g)` is valid, then it is possible for the result to be `true`.
 >
 > ~~~rust
-> // p(f, g)
+> // e(f, g)
 > g(|t: &T, x, h| { let y = t.f(x…); h(); y }) == g(|t: &T, x, h| { h(); t.f(x…) })
 > ~~~
 >
@@ -49,18 +49,18 @@ Now that we have all the pieces together, we can define immutability:
 
 The “is possible” is to handle situations where the result could be nondeterministic.  In that case, false positives can occur, but that’s fine since there are always deterministic functions to cover us.
 
-We can moreover state that a type `&T` is **completely immutable** if `&T` is immutable with respect to all safe operations on `f` (including compositions of such).  In this case, we could say `T` is “inorganic”, since if it uses any `Cell`-like type it would likely fail this test.
+We can moreover state that a type `&T` is (fully) **immutable** if `&T` is immutable with respect to all safe, *pure* operations on `&T` (including compositions of such).  In this case, we could say `T` is “inorganic”, since if it uses any `Cell`-like type it would likely fail this test.
 
 Note: I tried using a definition with arbitrary `t: T`, but that would mean that `T = &mut i32` would be considered “immutable” since the reference is exclusive and therefore changes made to its underlying value cannot be observed by `h()`.  The stricter definition proposed here avoids that problem.
 
 ## Definition of purity
 
-We can use the same concept to define *purity*:
+We can use the same concept to define *purity*.  Loosely speaking, a function is *pure* if its execution has no observable effect.
 
-> A `n`-ary function `f` is said to be **pure** if, for every `g` constructed using only the safe interface, if the following program `p(f, g)` is valid, then it is possible for the result to be `true`.
+> A `n`-ary function `f` is said to be **pure** if, for every `g` constructed using only the safe interface, if the following expression `e(f, g)` is valid, then it is possible for the result to be `true`.
 >
 > ~~~rust
-> // p(f, g)
+> // e(f, g)
 > g(|x, h| { let y = f(x…); h(); y }) == g(|x, h| { h(); f(x…) })
 > ~~~
 >
@@ -68,4 +68,6 @@ We can use the same concept to define *purity*:
 >
 > Formally, we can define:
 >
->     pure(f) ≡ ∀ g ∈ Safe . valid(p(f, g)) ⇒ ◇ (eval(p(f, g)) == true)
+>     pure(f) ≡ ∀ g ∈ Safe . valid(e(f, g)) ⇒ ◇ (eval(e(f, g)) == true)
+
+One weakness with this definition is that it is possible for `g` to reliably observe the presence of a pure `f` through, e.g. a CPU counter, on a single CPU computer.  OTOH, one could argue that the compiler is free to re-order *f* and *g*.
