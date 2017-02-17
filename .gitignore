@@ -5,6 +5,8 @@
 .nfs????
 [tT]humbs.db
 *~
+*.bak
+*.bk
 *.dep
 *.log
 *.orig
