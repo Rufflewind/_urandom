@@ -1,31 +1,27 @@
-# `init_download_cmd` attempts to define a shell function `download` that
-# downloads a file from a given URL.  `init_download_cmd` itself does not
-# accept any arguments, although it does use the global variable `UNAME_S`.
+#@snips[
+#@download[
+# Download a file from a given URL.
+#
+# inputs:
+#   - 1:    URL
+#   - 2:    output filename (defaults to "-", a.k.a. stdout)
 #
 # Providing `UNAME_S` is optional.  If provided, it must contain the cached
 # result of `uname -s`.
-#
-# The `download` function accepts a single argument, the URL, and yields the
-# downloaded file through stdout.
-#
-# If `download` is already a valid command (or function) then nothing happens.
-#
-init_download_cmd() {
-    if type download >/dev/null 2>&1; then
-        return 0
-    elif type curl >/dev/null 2>&1; then
+download() {
+    if type curl >/dev/null 2>&1; then
         download() {
-            curl -fLsS "$1"
+            curl -fLsS -o "${2--}" -- "$1"
         }
     elif type wget >/dev/null 2>&1; then
         download() {
-            wget -nv -O - "$1"
+            wget -nv -o "${2--}" -- "$1"
         }
     else
         UNAME_S=${UNAME_S-`uname -s || :`}
         if [ x"${UNAME_S}" = xOpenBSD ] && type ftp >/dev/null 2>&1; then
             download() {
-                ftp -o - "$1"
+                ftp -V -o "${2--}" -- "$1"
             }
         else
             printf >&2 "%s%s\n" "error: unable to download files (can't " \
@@ -34,7 +30,9 @@ init_download_cmd() {
         fi
     fi
 }
+#@]
 
+#@exp_search[
 # perform a one-sided exponential search to find the
 # largest value at which the trial function succeeds
 #
@@ -94,26 +92,9 @@ exp_search() {
         ret=$_3
     fi
 }
+#@]
 
-_test_exp_search() {
-    try() {
-        test "$1" -le $max
-    }
-    max=8
-    while [ $max -lt 120 ]
-    do
-        exp_search 8
-        if [ $ret = $max ]
-        then :
-        else
-            printf '%s\n' "** FAIL [got $k, expected $max]"
-            exit 1
-        fi
-        max=`expr $max + 1`
-    done
-    echo passed
-}
-
+#@git_clone[
 # clone `repo` into `dir`, additionally setting `myrepo` as the `source`
 # remote if provided
 #
@@ -129,7 +110,9 @@ git_clone() {
     [ -z "${3-}" ] ||
         git -C "$2" checkout local || :
 }
+#@]
 
+#@not_prefix_of[
 # check whether `stringB` is not a prefix of `stringA`
 #
 # inputs:
@@ -142,7 +125,9 @@ not_prefix_of() {
         *)     return 0;;
     esac
 }
+#@]
 
+#@strip_prefix[
 # remove `stringB` from the beginning of `stringA`; if `stringB` is not a
 # prefix of `stringA`, `stringA` is returned instead
 #
@@ -157,80 +142,29 @@ not_prefix_of() {
 #   - ret:  `stringA` with possibly `stringB` removed from the beginning
 #
 strip_prefix() {
-    # if the pattern is not a prefix of the original string, return unchanged
-    if not_prefix_of "$1" "$2"
-    then
-        ret=$1
+    # use more optimal form if supported
+    if ( _1=abcd && [ ${_1#ab} = cd ] ) >/dev/null 2>&1; then
+        strip_prefix() {
+            ret=${1#$2}
+        }
     else
-        # obtain substring
-        ret=`printf "%s" "$1" | wc -c`
-        ret=`expr "$ret" + 1`
-        ret=`printf '%s' "$1" | tail -c +"$ret"`
+        strip_prefix() {
+            # if the pattern is not a prefix of the original string, return unchanged
+            if not_prefix_of "$1" "$2"
+            then
+                ret=$1
+            else
+                # obtain substring
+                ret=`printf "%s" "$1" | wc -c`
+                ret=`expr "$ret" + 1`
+                ret=`printf '%s' "$1" | tail -c +"$ret"`
+            fi
+        }
     fi
 }
+#@]
 
-# use more optimal form if supported
-if ( _1=abcd && [ ${_1#ab} = cd ] ) >/dev/null 2>&1
-then
-    strip_prefix() {
-        ret=${1#$2}
-    }
-fi
-
-_test_strip_prefix() {
-    check() {
-        strip_prefix "$1" "$2"
-        exp=`bash -c 'echo "${1##$2}"' _ "$1" "$2"`
-        [ "$ret" = "$exp" ] || {
-            printf '%s' "fail: [$1, $2] => got [$ret], expected [$exp]"
-            exit 1
-        }
-    }
-
-    check '' ''
-
-    check 1 ''
-    check 12 ''
-    check 123 ''
-
-    check '' 1
-    check 1 1
-    check 2 1
-    check 12 1
-    check 22 1
-    check 123 1
-    check 223 1
-
-    check '' 12
-    check 1 12
-    check 2 12
-    check 12 12
-    check 22 12
-    check 13 12
-    check 23 12
-    check 123 12
-    check 223 12
-    check 133 12
-    check 433 12
-
-    check '' 123
-    check 1 123
-    check 2 123
-    check 12 123
-    check 13 123
-    check 23 123
-    check 123 123
-    check 124 123
-    check 134 123
-    check 234 123
-    check 1234 123
-    check 1235 123
-    check 1245 123
-    check 1345 123
-    check 2345 123
-    echo passed
-}
-
+#@shar_pack[
 # pack files into a simple shell archive
 #
 # inputs:
@@ -295,7 +229,9 @@ shar_pack() {
         printf 'EOF\nchmod %s %s\n' "$mode" "$escfn"
     done
 }
+#@]
 
+#@shell_escape[
 # shell-escape the given variable
 #
 # inputs:
@@ -311,3 +247,84 @@ shell_escape() {
     _1=\'`printf "%s" "$_1" | sed "$_2" && echo "'"`
     eval "$1"'_=$_1'
 }
+#@]
+#@]
+
+#@tests[
+#@exp_search[
+exp_search_test() {
+    try() {
+        test "$1" -le $max
+    }
+    max=8
+    while [ $max -lt 120 ]
+    do
+        exp_search 8
+        if [ $ret = $max ]
+        then :
+        else
+            printf '%s\n' "** FAIL [got $k, expected $max]"
+            exit 1
+        fi
+        max=`expr $max + 1`
+    done
+    echo passed
+}
+#@]
+
+#@strip_prefix[
+strip_prefix_test() {
+    check() {
+        strip_prefix "$1" "$2"
+        exp=`bash -c 'echo "${1##$2}"' _ "$1" "$2"`
+        [ "$ret" = "$exp" ] || {
+            printf '%s' "fail: [$1, $2] => got [$ret], expected [$exp]"
+            exit 1
+        }
+    }
+
+    check '' ''
+
+    check 1 ''
+    check 12 ''
+    check 123 ''
+
+    check '' 1
+    check 1 1
+    check 2 1
+    check 12 1
+    check 22 1
+    check 123 1
+    check 223 1
+
+    check '' 12
+    check 1 12
+    check 2 12
+    check 12 12
+    check 22 12
+    check 13 12
+    check 23 12
+    check 123 12
+    check 223 12
+    check 133 12
+    check 433 12
+
+    check '' 123
+    check 1 123
+    check 2 123
+    check 12 123
+    check 13 123
+    check 23 123
+    check 123 123
+    check 124 123
+    check 134 123
+    check 234 123
+    check 1234 123
+    check 1235 123
+    check 1245 123
+    check 1345 123
+    check 2345 123
+    echo passed
+}
+#@]
+#@]
