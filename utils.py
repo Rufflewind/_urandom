@@ -38,6 +38,28 @@ JSON_PRETTY = {
 }
 #@]
 
+#@Identity[
+class Identity(object):
+    '''Allows hashing by identity if hashing is not otherwise available.'''
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Identity({!r})".format(self.value)
+
+    def __hash__(self):
+        __hash__ = getattr(self.value, "__hash__", None)
+        if __hash__ is not None:
+            return __hash__()
+        return hash(id(self.value))
+
+    def __eq__(self, other):
+        __hash__ = getattr(self.value, "__hash__", None)
+        if __hash__ is not None:
+            return self.value == other
+        return id(self.value) == id(other.value)
+#@]
+
 #@combine_surrogate_pair[
 def combine_surrogate_pair(l, r):
     '''Example: chr(combine_surrogate_pair(55357, 56832))
