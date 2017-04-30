@@ -195,10 +195,16 @@ def update_dict(d0, *dicts, **kwargs):
 #@merge_dicts[
 #@requires: update_dict
 def merge_dicts(*dicts, **kwargs):
+    '''Merge multiple dictionaries.  OrderedDict is also supported.'''
     merger = kwargs.pop("merger", None)
     for k in kwargs:
         raise TypeError("got an unexpected keyword argument {0}".format(k))
-    d0 = {}
+    dicts = iter(dicts)
+    try:
+        d0 = next(dicts)
+    except StopIteration:
+        return {}
+    d0 = type(d0)(d0)
     update_dict(d0, *dicts, merger=merger)
     return d0
 #@]
