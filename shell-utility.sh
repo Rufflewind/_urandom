@@ -29,6 +29,7 @@ download() {
             return 1
         fi
     fi
+    download "$@"
 }
 #@]
 
