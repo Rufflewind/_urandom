@@ -69,6 +69,8 @@ Cargo.lock
 *.blg
 *.fdb_latexmk
 *.fls
+*.lof
+*.lot
 *.thm
 *.toc
 *Notes.bib
