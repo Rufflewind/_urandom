@@ -71,6 +71,7 @@ Cargo.lock
 *.fls
 *.lof
 *.lot
+*.out
 *.pdf
 *.thm
 *.toc
