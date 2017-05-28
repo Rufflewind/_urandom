@@ -10,27 +10,10 @@ The caller is free to choose `'a` insofar as `'a` encloses the duration of the c
 
 At run time, the callee’s code must perform the same actions independent of what `'a` gets chosen because lifetimes are always erased.
 
-Therefore, `U<'a>` must remain valid for as long as the maximum duration of `'a`, even if `'a` is not what the compiler ends up picking!   That is, `U<'a>` is guaranteed remain valid as long as `T` is never destroyed or mutably borrowed.
-
-This is true no matter what `borrow` does, as long as the type signature is “honest” (i.e. does not impose any requirements on how `U<'a>` has to be used beyond what is claimed by the type signature).
-
-## Consequence
-
-Consider the following example:
-
-```rust
-fn borrow<'a>(&'a Foo) -> Bar;
-
-{
-    let foo: Foo = ...
-    let bar1 = borrow(&foo);
-    let bar2 = borrow(&foo);
-    // are bar1 and bar2 still valid here?
-}
-```
-
-The answer is *yes* for both `bar1` and `bar2`.  (They need not be bitwise-equal, though.)
-
-Even though the compiler has may choose short lifetimes for both `bar1` and `bar2`, both of them must remain valid between `{` and `}` because the compiler could just as well have chosen longer lifetimes for them!
+Therefore, if this type signature is honest, i.e. does not impose any conditions beyond what can be read off from the type signature, then any property of `U<'a>` that holds for some chosen `'a` must also hold for *all* possible choices of `'a`.   That is to say, any property of `U<'a>` must hold for as long as `T` is never destroyed or mutably borrowed.  This is true no matter what `borrow` does.
 
 You might try to cheat by using a `RefCell`, but it won’t work (within safe Rust, at least) because you can’t get `&'a T` from a `&'a RefCell<T>` (if you could, `RefCell`s would be horribly unsafe).
+
+That being said, it *is* possible to obtain, e.g. a raw pointer or equivalent from `borrow`, which may not be dereferenceable for the duration `'a`, or even at all.  But this is fine because the dereferenceability of raw pointers is never assumed to begin with (safe functions must never assume a raw pointer is valid).  One may assert that validity (in the safe sense) is *not* equivalent to dereferenceability (raw pointers are always “valid” trivially, but may or may not be dereferenceable).
+
+Another consequence of this concerns `Deref`, `Borrow`, and `AsRef`.  All of these functions have the same form as the `borrow` function above.  This means that inso
