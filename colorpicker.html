@@ -53,8 +53,8 @@
       <div id="preview"></div>
     </main>
     <form>
-      <label><input id="view-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness</label>
-      <label><input id="view-hlc" type="radio" name="view"/> (lightness, hue) vs chroma</label>
+      <p><label><input id="view-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness</label></p>
+      <p><label><input id="view-hlc" type="radio" name="view"/> (lightness, hue) vs chroma</label></p>
     </form>
     <script>
 "use strict";
@@ -195,10 +195,12 @@ function cartesian(toXyz, sliderValue) {
             rgb[3] = 1.0;
             srgb_from_xyz(xyz, rgb, bad);
             if (bad[0]) {
+                var desat = 0.2;
+                var dim = 0.1;
                 var avg = (rgb[0] + rgb[1] + rgb[2]) / 3.0;
-                rgb[0] = (rgb[0]) * 0.5 + avg * 0.5 - 0.3;
-                rgb[1] = (rgb[1]) * 0.5 + avg * 0.5 - 0.3;
-                rgb[2] = (rgb[2]) * 0.5 + avg * 0.5 - 0.3;
+                rgb[0] = (rgb[0]) * (1.0 - desat) + avg * desat - dim;
+                rgb[1] = (rgb[1]) * (1.0 - desat) + avg * desat - dim;
+                rgb[2] = (rgb[2]) * (1.0 - desat) + avg * desat - dim;
             }
             data[0 + 4 * (x + width * y)] = 255.0 * rgb[0];
             data[1 + 4 * (x + width * y)] = 255.0 * rgb[1];
