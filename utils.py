@@ -162,14 +162,6 @@ def read_lines(stream):
             break
 #@]
 
-#@signal_name[
-def signal_name(sig):
-    try:
-        return "{0} ({1})".format(SIGNAL_NAME[sig], sig)
-    except KeyError:
-        return "signal {0}".format(sig)
-#@]
-
 #@update_dict[
 def update_dict(d0, *dicts, **kwargs):
     merger = kwargs.pop("merger", None)
@@ -654,6 +646,15 @@ SIGNAL_NAME = dict(
     for name, sig in signal.__dict__.items()
     if re.match("SIG[A-Z]+$", name)
 )
+#@]
+
+#@signal_name[
+#@requires: SIGNAL_NAME
+def signal_name(sig):
+    try:
+        return "{0} ({1})".format(SIGNAL_NAME[sig], sig)
+    except KeyError:
+        return "signal {0}".format(sig)
 #@]
 
 #@CompletedProcess[
