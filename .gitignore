@@ -12,6 +12,7 @@
 *.log
 *.orig
 *.pid
+*.pkg.tar.[gx]z
 *.tmp
 
 # native
@@ -82,3 +83,7 @@ Cargo.lock
 .sass-cache
 *.css.map
 *.js.map
+
+# misc
+*.elc
+*.jar
