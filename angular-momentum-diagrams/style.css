@@ -4,6 +4,30 @@ html, body {
     padding: 0;
 }
 
+h1 {
+    font-size: large;
+}
+
+h1, p {
+    margin: 5px;
+}
+
+.warning {
+    color: red;
+}
+
+#controls {
+    font-family: monospace;
+    font-size: large;
+    padding: 4px 0;
+}
+
+#controls > b {
+    background: white;
+    border-radius: 2px;
+    padding: 2px;
+}
+
 main, #middle-wrapper {
     display: table;
     table-layout: fixed;
@@ -34,25 +58,40 @@ main,
     background: #fff9dd;
     vertical-align: top;
     width: 200px;
+    overflow: scroll;
+}
+
+#tableau-container td,
+#tableau-container th {
+    padding: 4px;
+}
+
+#tableau-container p {
     padding: 8px;
-    overflow-y: scroll;
+    margin: 0;
 }
 
-#tableau {
-    width: 100%;
+#tableau .summed {
+    width: 1em;
 }
 
-#tableau th,
-#tableau td {
-    padding: 10px;
+#tableau .name {
+    min-width: 1em;
 }
 
-#tableau td.phase {
+#tableau .phase {
     text-align: center;
+    width: 2em;
 }
 
-#tableau td.weight {
+#tableau .weight {
     text-align: right;
+    width: 4em;
+}
+
+#tableau td.phase,
+#tableau td.weight {
+    font-family: monospace;
 }
 
 #help {
@@ -61,7 +100,12 @@ main,
 
 #equation {
     background: #ddd;
-    min-height: 10px;
+    text-align: center;
+    padding: 5px;
     overflow: scroll;
     width: 100%;
+}
+
+#version {
+    font-family: monospace;
 }
