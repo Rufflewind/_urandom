@@ -49,6 +49,10 @@ main,
     display: table-row;
 }
 
+#equation-container.out-of-date #equation {
+    background: #e2caca;
+}
+
 #diagram-container,
 #tableau-container {
     display: table-cell;
@@ -95,11 +99,11 @@ main,
 }
 
 #help {
-    background: #ddd;
+    background: #f9f9f9;
 }
 
 #equation {
-    background: #ddd;
+    background: #f9f9f9;
     text-align: center;
     padding: 5px;
     overflow: scroll;

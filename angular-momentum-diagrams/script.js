@@ -136,7 +136,7 @@ function drawDiagramNodes(diagram, container, hist) {
                          var node = diagram.nodes[i];
                          node.x = d3.event.x;
                          node.y = d3.event.y;
-                         updateDiagram(diagram);
+                         updateDiagram(diagram, "superficial");
                          dragStarted = true;
                      }
                  })
@@ -171,7 +171,7 @@ function drawDiagramNodes(diagram, container, hist) {
                          saveDiagram(hist, diagram);
                          updateDiagram(diagram);
                      })
-                     .on("mouseup", function(i) {
+                     .on("mousedown", function(i) {
                          if (d3.event.button == 1) {
                              var diagram = threeArrowRule(
                                  current(hist), i,
@@ -411,9 +411,13 @@ function renderTableau(diagram) {
     tableau.appendChild(main);
 }
 
-function updateDiagram(diagram) {
+function updateDiagram(diagram, superficial) {
     drawDiagram(diagram);
     renderTableau(diagram);
+    if (!superficial) {
+        document.getElementById("equation-container")
+                .className = "out-of-date";
+    }
 }
 
 function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
@@ -430,11 +434,11 @@ function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
     }
     var summedJ = line.superline.summed;
     if (summedJ) {
-        summedVars.js.push(jm.j);
+        summedVars.js[jm.j] = true;
     }
     var summedM = diagram.nodes[otherIndex].type != "terminal";
     if (summedM) {
-        summedVars.ms.push(mNaked);
+        summedVars.ms[mNaked] = true;
     }
     return jm;
 }
@@ -451,7 +455,7 @@ function renderArrows(diagram, lineId, phases) {
 
 function renderEquation(diagram, container) {
     var s = "";
-    var summedVars = {js: [], ms: []};
+    var summedVars = {js: {}, ms: {}};
     var phases = [];
     diagram.nodes.forEach(function(node, nodeIndex) {
         if (node.type == "terminal") {
@@ -508,7 +512,9 @@ function renderEquation(diagram, container) {
             weights += ` (2 j_{${superlineId}} + 1)^{${superline.weight} / 2}`;
         }
     });
-    summedVars = summedVars.js.join(" ") + " " + summedVars.ms.join(" ");
+    summedVars = Array.from(Object.keys(summedVars.js)).join(" ")
+               + " "
+               + Array.from(Object.keys(summedVars.ms)).join(" ");
     if (summedVars != " ") {
         summedVars = `\\sum_{${summedVars}}`;
     }
@@ -653,7 +659,6 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         lineId1;
 
     // merge the lines (be careful with orientation)
-
     diagram.lines[lineId1].arrows = diagram.lines[lineId1].arrows.map(arrow => ({
         t: arrow.t * 0.5,
         direction: (other1 < terminalIndex1 ? 1 : -1) * arrow.direction
@@ -1161,6 +1166,8 @@ document.getElementById("diagram").addEventListener(
 );
 document.getElementById("equation").addEventListener("click", function() {
     renderEquation(current(hist), document.getElementById("equation"));
+    document.getElementById("equation-container")
+            .className = "";
 });
 
 initializeDiagram();
