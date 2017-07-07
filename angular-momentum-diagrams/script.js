@@ -1,7 +1,5 @@
 "use strict";
 
-// TODO history for dragging is broken (the design is broken)
-
 //////////////////////////////////////////////////////////////////////////////
 // Utility
 
@@ -538,8 +536,8 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         diagram.nodes[terminalIndex2].type != "terminal") {
         throw new Error("cannot join non-terminals");
     }
-    var other1 = otherNodeIndex(diagram.nodes, terminalIndex1, 0);
-    var other2 = otherNodeIndex(diagram.nodes, terminalIndex2, 0);
+    let other1 = otherNodeIndex(diagram.nodes, terminalIndex1, 0);
+    let other2 = otherNodeIndex(diagram.nodes, terminalIndex2, 0);
     if (other1 == other2) {
         // FIXME
         error("Cannot connect node to itself (not yet implemented)")
@@ -548,8 +546,8 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         // we only handle cases where LEFT < RIGHT
         return joinTerminals(diagram, terminalIndex2, terminalIndex1);
     }
-    var lineId1 = diagram.nodes[terminalIndex1].lines[0];
-    var lineId2 = diagram.nodes[terminalIndex2].lines[0];
+    let lineId1 = diagram.nodes[terminalIndex1].lines[0];
+    let lineId2 = diagram.nodes[terminalIndex2].lines[0];
     if (lineId1 == lineId2) {
         // FIXME loops are not yet implemented
         error("Cannot join terminals sharing the same line (not yet implemented)");
@@ -558,23 +556,22 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     diagram = deepClone(diagram);
 
     // join with other node
-    diagram.nodes[other2].lines[diagram.nodes[other2].lines.indexOf(lineId2)] =
-        lineId1;
+    let otherLines2 = diagram.nodes[other2].lines;
+    otherLines2[otherLines2.indexOf(lineId2)] = lineId1;
 
     // merge the lines (be careful with orientation)
-    var line1 = diagram.lines[lineId1];
-    var line2 = diagram.lines[lineId2];
+    let line1 = diagram.lines[lineId1];
+    let line2 = diagram.lines[lineId2];
     if (other1 > terminalIndex1) {
         line1 = reverseLine(line1);
     }
     if (terminalIndex2 > other2) {
         line2 = reverseLine(line2);
     }
-    var joined = joinLines(line1, line2);
-    var superlineId1 = joined.line.superline;
-    var superlineId2 = joined.otherSuperline;
+    let joined = joinLines(line1, line2);
+    let superlineId1 = joined.line.superline;
+    let superlineId2 = joined.otherSuperline;
     changePhase(diagram.superlines[superlineId1], joined.phase);
-console.log(joined.phase);
     diagram.lines[lineId1] = joined.line;
     delete diagram.lines[lineId2];
 
@@ -585,7 +582,7 @@ console.log(joined.phase);
     delete diagram.superlines[superlineId2];
 
     // delete the terminal nodes
-    var terminals = [terminalIndex1, terminalIndex2];
+    let terminals = [terminalIndex1, terminalIndex2];
     terminals.sort((x, y) => y - x);
     terminals.forEach(terminalIndex => {
         if (diagram.nodes[terminalIndex].type != "terminal") {
@@ -745,7 +742,7 @@ function threeArrowRule(diagram, nodeIndex) {
 // Drawing
 
 function twoJColor(lineId) {
-    var diagram = current(hist);
+    var diagram = current(state);
     var superlineId = diagram.lines[lineId].superline;
     return mod(diagram.superlines[superlineId].phase, 4) >= 2 ?
            "#ac53b3" : "#051308";
@@ -781,7 +778,7 @@ function drawArrow(container, linesData, diagram) {
     var drag = d3.drag()
                  .on("drag", function(i) {
                      if (controls.modifiers == 0) {
-                         diagram = current(hist);
+                         diagram = current(state);
                          const lineId = i.lineId;
                          const info = getLineInfo(diagram, lineId);
                          const where = findPosOnLine(info,
@@ -794,7 +791,7 @@ function drawArrow(container, linesData, diagram) {
                  })
                  .on("end", function(i) {
                      if (dragStarted) {
-                         saveDiagram(hist, diagram);
+                         saveDiagram(state, diagram);
                          dragStarted = false;
                      }
                  });
@@ -811,9 +808,9 @@ function drawArrow(container, linesData, diagram) {
                        .attr("height", arrowHeadSize)
                        .call(drag)
                        .on("click", function(d) {
-                           var diagram = current(hist);
+                           var diagram = current(state);
                            diagram = flipW1jRule(diagram, d.lineId);
-                           saveDiagram(hist, diagram);
+                           saveDiagram(state, diagram);
                            updateDiagram(diagram);
                        });
     selection.merge(use)
@@ -845,7 +842,7 @@ function drawDiagramLines(diagram, container) {
     let drag = d3.drag()
                  .on("drag", function(i) {
                      if (controls.modifiers == 0) {
-                         diagram = current(hist);
+                         diagram = current(state);
                          const lineId = data[i].id;
                          const info = getLineInfo(diagram, lineId);
                          let line = diagram.lines[lineId];
@@ -871,14 +868,14 @@ function drawDiagramLines(diagram, container) {
                  })
                  .on("end", function(i) {
                      if (dragStarted) {
-                         saveDiagram(hist, diagram);
+                         saveDiagram(state, diagram);
                          dragStarted = false;
                      }
                  });
     let textDrag = d3.drag()
                      .on("drag", function(i) {
                          if (controls.modifiers == 0) {
-                             diagram = current(hist);
+                             diagram = current(state);
                              const lineId = data[i].id;
                              const info = getLineInfo(diagram, lineId);
                              const where = findPosOnLine(info,
@@ -892,7 +889,7 @@ function drawDiagramLines(diagram, container) {
                      })
                      .on("end", function(i) {
                          if (dragStarted) {
-                             saveDiagram(hist, diagram);
+                             saveDiagram(state, diagram);
                              dragStarted = false;
                          }
                      });
@@ -909,7 +906,7 @@ function drawDiagramLines(diagram, container) {
      .call(drag)
      .on("mousedown", function(i) {
          if (controls.modifiers == 0 && d3.event.button == 1) {
-             diagram = current(hist);
+             diagram = current(state);
              const lineId = data[i].id;
              const info = getLineInfo(diagram, lineId);
              let line = diagram.lines[lineId];
@@ -918,7 +915,7 @@ function drawDiagramLines(diagram, container) {
                  line.arcHeight = 0.0;
              }
              updateDiagramSuperficially(diagram);
-             saveDiagram(hist, diagram);
+             saveDiagram(state, diagram);
          }
      });
     g.append("path")
@@ -946,13 +943,13 @@ function drawDiagramLines(diagram, container) {
           .html(i => data[i].superline);
 }
 
-function drawDiagramNodes(diagram, container, hist) {
+function drawDiagramNodes(diagram, container, state) {
     var nodes = diagram.nodes;
     var dragStarted = false; // avoid unnecessary saves
     var drag = d3.drag()
                  .on("drag", function(i) {
                      if (controls.modifiers == 0) {
-                         diagram = current(hist);
+                         diagram = current(state);
                          var node = diagram.nodes[i];
                          node.x = d3.event.x;
                          node.y = d3.event.y;
@@ -962,7 +959,7 @@ function drawDiagramNodes(diagram, container, hist) {
                  })
                  .on("end", function(i) {
                      if (dragStarted) {
-                         saveDiagram(hist, diagram);
+                         saveDiagram(state, diagram);
                          dragStarted = false;
                      }
                  });
@@ -983,19 +980,19 @@ function drawDiagramNodes(diagram, container, hist) {
                      .append("g")
                      .call(drag)
                      .on("click", function(i) {
-                         var diagram = current(hist);
+                         var diagram = current(state);
                          diagram = flipW3jRule(diagram, i);
                          if (controls.modifiers != SHIFT) { // do it twice!
                              diagram = flipW3jRule(diagram, i);
                          }
-                         saveDiagram(hist, diagram);
+                         saveDiagram(state, diagram);
                          updateDiagram(diagram);
                      })
                      .on("mousedown", function(i) {
                          if (d3.event.button == 1) {
                              var diagram = threeArrowRule(
-                                 current(hist), i);
-                             saveDiagram(hist, diagram);
+                                 current(state), i);
+                             saveDiagram(state, diagram);
                              updateDiagram(diagram);
                          }
                      });
@@ -1061,7 +1058,7 @@ function drawDragTrail(trail, container) {
 }
 
 function drawDiagram(diagram) {
-    drawDiagramNodes(diagram, d3.select("#diagram-nodes"), hist);
+    drawDiagramNodes(diagram, d3.select("#diagram-nodes"), state);
     drawDiagramLines(diagram, d3.select("#diagram-lines"));
     drawDragTrail(controls.dragTrail, document.getElementById("diagram-drag-trail"));
 }
@@ -1070,8 +1067,6 @@ function drawDiagram(diagram) {
 // Rendering text
 
 function renderTableau(diagram) {
-    document.getElementById("version").textContent = hist.version;
-    document.getElementById("tableau-container").style.background = hist.version;
     var tableau = document.getElementById("tableau");
     tableau.getElementsByClassName("main")[0].remove();
     var main = document.createElement("tbody");
@@ -1236,90 +1231,92 @@ function updateDiagramSuperficially(diagram) {
 }
 
 function updateDiagram(diagram) {
+    invalidateEquation(state);
     updateDiagramSuperficially(diagram);
-    document.getElementById("equation-container")
-            .className = "out-of-date";
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// History tracking
+// State management
 
-var hist = {
-    // each time the diagram undergoes a non-rule change the version is regenerated
-    version: generateVersion(),
-    history: [],
-    undoDepth: 0
-};
-
-function generateVersion() {
-    var s = "#";
-    var x;
-    for (var i = 0; i < 3; ++i) {
-        x = getRandomInt(192, 256).toString(16);
-        if (x.length == 1) {
-            x = "0" + x;
-        }
-        s += x;
-    }
-    return s;
+const INITIAL_STATE = {
+    diagram: EMPTY_DIAGRAM,
+    frozen: false,
+    staleEquation: true,
 }
 
-function setHash(diagram) {
-    currentHash = "#" + encodeURIComponent(JSON.stringify(diagram))
+let state = {};
+
+let currentHash = "";
+
+function current(state) {
+    return state.diagram;
+}
+
+function frozen(state) {
+    return state.frozen;
+}
+
+function staleEquation(state) {
+    return state.staleEquation;
+}
+
+function invalidateEquation(state) {
+    state.staleEquation = true;
+}
+
+function freshenEquation(state) {
+    state.staleEquation = false;
+}
+
+function toggleFrozen(state) {
+    state.frozen = !state.frozen;
+    setHash(state);
+}
+
+function saveDiagram(state, diagram) {
+    state.diagram = diagram;
+    setHash(state);
+}
+
+function saveNewDiagram(state, diagram) {
+    if (frozen(state)) {
+        throw new Error("cannot edit diagram while frozen");
+    }
+    saveDiagram(state, diagram);
+}
+
+// the goal is to eventually replace all updateDiagram with renderState
+function renderState(state) {
+    document.getElementById("freeze").className =
+        frozen(state) ? "active" : "";
+    document.getElementById("equation-container").className =
+        staleEquation(state) ? "stale" : "";
+    updateDiagramSuperficially(state.diagram)
+}
+
+function setHash(state) {
+    currentHash = "#" + encodeURIComponent(JSON.stringify(state))
     window.location.hash = currentHash;
 }
 
-function saveDiagramWith(hist, diagram, bump) {
-    setHash(diagram);
-    hist.history.splice(hist.history.length - hist.undoDepth, hist.undoDepth);
-    if (bump) {
-        hist.version = generateVersion();
+function loadFromHash(state) {
+    if (window.location.hash.length >= 3) {
+        Object.assign(state,
+                      JSON.parse(decodeURIComponent(
+                          window.location.hash.substr(1))));
+    } else {
+        Object.assign(state, deepClone(INITIAL_STATE));
     }
-    hist.history.push({
-        version: hist.version,
-        diagram: deepClone(diagram)
-    });
-    hist.undoDepth = 0;
+    renderState(state);
 }
 
-function saveNewDiagram(hist, diagram) {
-    return saveDiagramWith(hist, diagram, true);
-}
-
-function saveDiagram(hist, diagram) {
-    return saveDiagramWith(hist, diagram, false);
-}
-
-function updateCurrent(hist, changed) {
-    var entry = hist.history[hist.history.length - 1 - hist.undoDepth];
-    hist.version = entry.version;
-    if (changed) {
-        setHash(entry.diagram);
+window.addEventListener("hashchange", function() {
+    // prevent this from observing our own changes
+    if (currentHash != window.location.hash) {
+        loadFromHash(state);
+        currentHash = window.location.hash;
     }
-    return entry.diagram;
-}
-
-function current(hist) {
-    return updateCurrent(hist, false);
-}
-
-function undo(hist) {
-    var changed = false;
-    if (hist.undoDepth < hist.history.length - 1) {
-        hist.undoDepth += 1;
-        changed = true;
-    }
-    return updateCurrent(hist, changed);
-}
-
-function redo(hist) {
-    var changed = false;
-    if (hist.undoDepth > 0) {
-        hist.undoDepth -= 1;
-        changed = true;
-    }
-    return updateCurrent(hist, changed);
-}
+});
 
 //////////////////////////////////////////////////////////////////////////////
 // Controls
@@ -1343,12 +1340,6 @@ function updateKeyState(controls, event) {
 
 window.addEventListener("keydown", function(event) {
     updateKeyState(controls, event);
-    if (controls.modifiers == CTRL && event.key == "z") {
-        updateDiagram(undo(hist));
-    }
-    if (controls.modifiers == CTRL && event.key == "y") {
-        updateDiagram(redo(hist));
-    }
 
     // reload
     if (controls.modifiers == 0 && event.key == "r") {
@@ -1362,8 +1353,20 @@ window.addEventListener("keydown", function(event) {
     }
 
     // create Clebsch–Gordan coefficient
+    if (controls.modifiers == 0 && event.key == "f") {
+        toggleFrozen(state);
+        renderState(state);
+    }
+
+    // -----------------------------------------------------------------------
+    // remaining actions are only allowed while not frozen
+    if (frozen(state)) {
+        return;
+    }
+
+    // create Clebsch–Gordan coefficient
     if (controls.modifiers == 0 && event.key == "c") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let labels = availSuperlineLabels(diagram, 3);
         let subdiagram = cgDiagram(labels[0],
                                    labels[1],
@@ -1371,13 +1374,13 @@ window.addEventListener("keydown", function(event) {
                                    controls.mouseX,
                                    controls.mouseY);
         diagram = mergeDiagrams(diagram, subdiagram);
-        saveNewDiagram(hist, diagram);
+        saveNewDiagram(state, diagram);
         updateDiagram(diagram);
     }
 
     // create Wigner 3-jm
     if (controls.modifiers == 0 && event.key == "w") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let labels = availSuperlineLabels(diagram, 3);
         let subdiagram = w3jDiagram(labels[0],
                                     labels[1],
@@ -1385,13 +1388,13 @@ window.addEventListener("keydown", function(event) {
                                     controls.mouseX,
                                     controls.mouseY);
         diagram = mergeDiagrams(diagram, subdiagram);
-        saveNewDiagram(hist, diagram);
+        saveNewDiagram(state, diagram);
         updateDiagram(diagram);
     }
 
     // attach
     if (controls.modifiers == 0 && event.key == "a") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let nearest = nearestNodeIndices(diagram.nodes, 2,
                                          controls.mouseX,
                                          controls.mouseY);
@@ -1401,40 +1404,40 @@ window.addEventListener("keydown", function(event) {
             error("no nearby terminals found");
         } else {
             diagram = joinTerminals(diagram, nearest[0], nearest[1]);
-            saveNewDiagram(hist, diagram);
+            saveNewDiagram(state, diagram);
             updateDiagram(diagram);
         }
     }
 
     // create Wigner 1-jm
     if (controls.modifiers == 0 && event.key == "m") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
         if (nearest.length != 1) {
             error("no nearby line found");
         } else {
             diagram = addW1j(diagram, nearest);
-            saveNewDiagram(hist, diagram);
+            saveNewDiagram(state, diagram);
             updateDiagram(diagram);
         }
     }
 
     // add 2j phase
     if (controls.modifiers == 0 && event.key == "j") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
         if (nearest.length != 1) {
             error("no nearby line found");
         } else {
             diagram = add2j(diagram, nearest);
-            saveNewDiagram(hist, diagram);
+            saveNewDiagram(state, diagram);
             updateDiagram(diagram);
         }
     }
 
     // delete node
     if (controls.modifiers == 0 && event.key == "x") {
-        let diagram = current(hist);
+        let diagram = current(state);
         let nearest = nearestNodeIndices(diagram.nodes, 1,
                                          controls.mouseX,
                                          controls.mouseY);
@@ -1445,7 +1448,7 @@ window.addEventListener("keydown", function(event) {
             error("no nearby nodes found");
         } else {
             diagram = deleteNode(diagram, nearest[0]);
-            saveNewDiagram(hist, diagram);
+            saveNewDiagram(state, diagram);
             updateDiagram(diagram);
         }
     }
@@ -1467,25 +1470,6 @@ function error(msg) {
     }, 10000);
 }
 
-function initializeDiagram() {
-    var initialDiagram = EMPTY_DIAGRAM;
-    if (window.location.hash.length >= 3) {
-        initialDiagram =
-            JSON.parse(decodeURIComponent(window.location.hash.substr(1)));
-    }
-    saveDiagram(hist, initialDiagram);
-    updateDiagram(initialDiagram);
-}
-
-var currentHash = "";
-window.addEventListener("hashchange", function() {
-    // prevent this from observing our own changes
-    if (currentHash != window.location.hash) {
-        initializeDiagram();
-        currentHash = window.location.hash;
-    }
-});
-
 window.addEventListener("keyup", function(event) {
     updateKeyState(controls, event);
 });
@@ -1497,9 +1481,9 @@ document.getElementById("diagram").addEventListener(
     }
 );
 document.getElementById("equation").addEventListener("click", function() {
-    renderEquation(current(hist), document.getElementById("equation"));
-    document.getElementById("equation-container")
-            .className = "";
+    renderEquation(current(state), document.getElementById("equation"));
+    freshenEquation(state);
+    renderState(state);
 });
 
-initializeDiagram();
+loadFromHash(state);

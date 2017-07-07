@@ -18,9 +18,8 @@
           <b title="Create 2j phase factor">&nbsp;j</b>
           <b title="Attach two lines">&nbsp;a</b>
           <b title="Delete">&nbsp;x</b>
+          <b id="freeze" title="Freeze/Unfreeze diagram">&nbsp;f</b>
           <b title="Reset and reload page">&nbsp;r</b>
-          <b title="Undo">^z</b>
-          <b title="Redo">^Z</b>
         </p>
       </div>
       <div id="middle-container">
@@ -40,7 +39,6 @@
           </div>
           <div id="tableau-container">
             <table id="tableau">
-              <p>Version: <span id="version">0</span></p>
               <tbody class="header">
                 <tr>
                   <th class="summed"></th>
@@ -55,7 +53,7 @@
         </div>
       </div>
       <div id="equation-container">
-        <div id="equation">🖰</div>
+        <div id="equation" title="Equation (click to refresh)">🖰</div>
       </div>
     </main>
     <script src="https://d3js.org/d3.v4.min.js"></script>

@@ -28,6 +28,10 @@ h1, p {
     padding: 2px;
 }
 
+#freeze.active {
+    background: #81d930;
+}
+
 main, #middle-wrapper {
     display: table;
     table-layout: fixed;
@@ -49,7 +53,7 @@ main,
     display: table-row;
 }
 
-#equation-container.out-of-date #equation {
+#equation-container.state #equation {
     background: #e2caca;
 }
 
