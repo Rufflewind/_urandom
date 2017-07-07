@@ -102,6 +102,11 @@ main,
     font-family: monospace;
 }
 
+#tableau .two-j {
+    color: #ac53b3;
+    font-weight: bold;
+}
+
 #help {
     background: #f9f9f9;
 }

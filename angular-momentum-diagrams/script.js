@@ -20,6 +20,19 @@ function sortTwo(x, y) {
     }
 }
 
+function arrayEqual(xs, ys) {
+    let length = xs.length;
+    if (length != ys.length) {
+        return false;
+    }
+    for (let i = 0; i < length; ++i) {
+        if (xs[i] != ys[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 function deepClone(x) {
     return JSON.parse(JSON.stringify(x));
 }
@@ -33,6 +46,12 @@ function getRandomInt(min, max) {
 
 function childNodesOf() {
     return this.childNodes;
+}
+
+function removeChildren(element) {
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -349,13 +368,13 @@ function endNodeIndices(nodes, lineId) {
     return endNodeAndLineIndices(nodes, lineId).map(x => x.node);
 }
 
-function otherNodeAndLineIndex(nodes, selfIndex, lineIndex) {
-    var lineId = nodes[selfIndex].lines[lineIndex];
+function otherNodeAndLineIndex(nodes, nodeIndex, lineIndex) {
+    var lineId = nodes[nodeIndex].lines[lineIndex];
     if (lineId === undefined) {
         throw new Error(`cannot find line with lineIndex = ${lineIndex}`);
     }
     var nodeAndLineIndices = endNodeAndLineIndices(nodes, lineId);
-    if (nodeAndLineIndices[0].node == selfIndex &&
+    if (nodeAndLineIndices[0].node == nodeIndex &&
         nodeAndLineIndices[0].lineIndex == lineIndex) {
         return nodeAndLineIndices[1];
     } else {
@@ -363,23 +382,17 @@ function otherNodeAndLineIndex(nodes, selfIndex, lineIndex) {
     }
 }
 
-function otherNodeIndex(nodes, selfIndex, lineIndex) {
-    return otherNodeAndLineIndex(nodes, selfIndex, lineIndex).node;
+function otherNodeIndex(nodes, nodeIndex, lineIndex) {
+    return otherNodeAndLineIndex(nodes, nodeIndex, lineIndex).node;
 }
 
-function isLeftOfLine(nodes, selfIndex, lineIndex) {
-    var other = otherNodeAndLineIndex(nodes, selfIndex, lineIndex);
-    if (other.node == selfIndex) {
-        return other.lineIndex > selfIndex;
+function isLeftOfLine(nodes, nodeIndex, lineIndex) {
+    var other = otherNodeAndLineIndex(nodes, nodeIndex, lineIndex);
+    if (other.node == nodeIndex) {
+        return other.lineIndex > nodeIndex;
     } else {
-        return other.node > selfIndex;
+        return other.node > nodeIndex;
     }
-}
-
-function angleToOtherNode(nodes, selfIndex, lineIndex) {
-    var self = nodes[selfIndex];
-    var other = nodes[otherNodeIndex(nodes, selfIndex, lineIndex)];
-    return Math.atan2(other.y - self.y, other.x - self.x);
 }
 
 function nearestNodeIndices(nodes, count, x, y) {
@@ -391,42 +404,26 @@ function nearestNodeIndices(nodes, count, x, y) {
     return nodeIndices.slice(0, count).map(node => node.index);
 }
 
-function w3jOrientation(diagram, nodeIndex) {
-    const node = diagram.nodes[nodeIndex];
-    if (node.type != "w3j") {
-        throw new Error("cannot get orientation of generic node");
-    }
-    let lines = [0, 1, 2].map(function(lineIndex) {
-        const lineId = node.lines[lineIndex];
-        const lineInfo = getLineInfo(diagram, lineId);
-        const baseAngle = angleToOtherNode(diagram.nodes, nodeIndex, lineIndex);
-        const sign = isLeftOfLine(diagram.nodes, nodeIndex, lineIndex) ? 1 : -1;
-        const angle = baseAngle + sign * lineInfo.arc.inclination;
-        return [lineIndex, mod(angle, 2 * Math.PI)];
-    });
-    lines.sort((line1, line2) => line1[1] - line2[1]);
-    if (lines.map(line => mod(line[0] - lines[0][0], 3)).join()
-        == [0, 1, 2].join()) {
-        return 1;
-    } else {
-        return -1;
-    }
-}
-
 //////////////////////////////////////////////////////////////////////////////
 // Diagram manipulation
 
 var EMPTY_DIAGRAM = {
     nodes: [],
     superlines: {},
-    lines: {}
+    lines: {},
+
+    // each entry is a "set" (object) of j's that are equal to each other
+    deltas: [],
+
+    // each entry is an array of the three j's in ascending order
+    triangles: [],
 };
 
 function w3jDiagram(a, b, c, x, y) {
     if (a == b || b == c || c == a) {
         throw new Error("cannot create w3jDiagram with conflicting labels");
     }
-    return {
+    return Object.assign({}, EMPTY_DIAGRAM, {
         nodes: [
             {
                 type: "terminal",
@@ -463,7 +460,7 @@ function w3jDiagram(a, b, c, x, y) {
             [b]: EMPTY_SUPERLINE,
             [c]: EMPTY_SUPERLINE
         }
-    };
+    });
 }
 
 function cgDiagram(a, b, c, x, y) {
@@ -480,6 +477,38 @@ function cgDiagram(a, b, c, x, y) {
     return diagram;
 }
 
+function lineAngle(diagram, nodeIndex, lineIndex) {
+    const node = diagram.nodes[nodeIndex];
+    const lineId = node.lines[lineIndex];
+    const line = diagram.lines[lineId];
+    const lineInfo = getLineInfo(diagram, lineId);
+    const reverse = Number(isLeftOfLine(diagram.nodes, nodeIndex, lineIndex));
+    const baseAngle = (lineInfo.singular ? line.angle : lineInfo.angle)
+                    + reverse * Math.PI;
+    const sign = reverse ? 1 : -1;
+    return baseAngle + sign * lineInfo.arc.inclination;
+}
+
+function w3jOrientation(diagram, nodeIndex) {
+    const node = diagram.nodes[nodeIndex];
+    if (node.type != "w3j") {
+        throw new Error("cannot get orientation of generic node");
+    }
+    let lines = [0, 1, 2].map(function(lineIndex) {
+        const angle = lineAngle(diagram, nodeIndex, lineIndex)
+        return [lineIndex, mod(angle, 2 * Math.PI)];
+    });
+    lines.sort((line1, line2) => line1[1] - line2[1]);
+    if (lines.map(line => mod(line[0] - lines[0][0], 3)).join()
+        == [0, 1, 2].join()) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+// FIXME this is kind of broken with the introduction of arcs
+// should probably just use hover or something instead
 function findNearestLineId(diagram, x, y) {
     var candidates = Object.keys(diagram.lines).map(function(lineId) {
         var nodeIndices = endNodeIndices(diagram.nodes, lineId);
@@ -538,16 +567,15 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         diagram.nodes[terminalIndex2].type != "terminal") {
         throw new Error("cannot join non-terminals");
     }
-    let other1 = otherNodeIndex(diagram.nodes, terminalIndex1, 0);
-    let other2 = otherNodeIndex(diagram.nodes, terminalIndex2, 0);
-    if (other1 == other2) {
-        // FIXME
-        error("Cannot connect node to itself (not yet implemented)")
-        return diagram;
-    } else if (other1 > other2) {
+    let other1 = otherNodeAndLineIndex(diagram.nodes, terminalIndex1, 0);
+    let other2 = otherNodeAndLineIndex(diagram.nodes, terminalIndex2, 0);
+    if (other1.node > other2.node ||
+        (other1.node == other2.node && other1.lineIndex > other1.lineIndex)) {
         // we only handle cases where LEFT < RIGHT
-        return joinTerminals(diagram, terminalIndex2, terminalIndex1);
+        [terminalIndex2, terminalIndex1] = [terminalIndex1, terminalIndex2];
+        [other2, other1] = [other1, other2];
     }
+    diagram = deepClone(diagram);
     let lineId1 = diagram.nodes[terminalIndex1].lines[0];
     let lineId2 = diagram.nodes[terminalIndex2].lines[0];
     if (lineId1 == lineId2) {
@@ -555,24 +583,25 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         error("Cannot join terminals sharing the same line (not yet implemented)");
         return diagram;
     }
-    diagram = deepClone(diagram);
 
     // join with other node
-    let otherLines2 = diagram.nodes[other2].lines;
-    otherLines2[otherLines2.indexOf(lineId2)] = lineId1;
+    diagram.nodes[other2.node].lines[other2.lineIndex] = lineId1;
 
     // merge the lines (be careful with orientation)
     let line1 = diagram.lines[lineId1];
     let line2 = diagram.lines[lineId2];
-    if (other1 > terminalIndex1) {
+    if (other1.node > terminalIndex1) {
         line1 = reverseLine(line1);
     }
-    if (terminalIndex2 > other2) {
+    if (terminalIndex2 > other2.node) {
         line2 = reverseLine(line2);
     }
     let joined = joinLines(line1, line2);
     let superlineId1 = joined.line.superline;
     let superlineId2 = joined.otherSuperline;
+    if (other1.node == other2.node && joined.line.arcHeight == 0.0) {
+        joined.line.arcHeight = 50.0;
+    }
     changePhase(diagram.superlines[superlineId1], joined.phase);
     diagram.lines[lineId1] = joined.line;
     delete diagram.lines[lineId2];
@@ -592,6 +621,7 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         }
         diagram.nodes.splice(terminalIndex, 1);
     });
+
     return diagram;
 }
 
@@ -678,6 +708,19 @@ function flipW3jRule(diagram, nodeIndex) {
         diagram.superlines[superlineId] =
             mergeSuperlines(diagram.superlines[superlineId], {
                 phase: 1,
+                summed: false,
+                weight: 0,
+            });
+    });
+    return diagram;
+}
+
+function trianglePhaseRule(diagram, triangleIndex) {
+    diagram = deepClone(diagram);
+    diagram.triangles[triangleIndex].forEach(function(superlineId) {
+        diagram.superlines[superlineId] =
+            mergeSuperlines(diagram.superlines[superlineId], {
+                phase: 2,
                 summed: false,
                 weight: 0,
             });
@@ -820,10 +863,8 @@ function drawArrow(container, linesData, diagram) {
              .attr("transform", d => d.transform);
 }
 
-function drawDiagramLines(diagram, container) {
-    // HACK: indexes are used here because d3 captures the
-    //       objects directly and doesn't change them :/
-    var data = Object.keys(diagram.lines).map(function(id) {
+function fetchDiagramLinesData(diagram) {
+    return Object.keys(diagram.lines).map(function(id) {
         const line = diagram.lines[id];
         const info = getLineInfo(diagram, id);
         const position = positionOnLine(info, line.textPos, 0);
@@ -840,11 +881,18 @@ function drawDiagramLines(diagram, container) {
             d: d
         }, line);
     });
+}
+
+function drawDiagramLines(diagram, container) {
+    // HACK: indexes are used here because d3 captures the
+    //       objects directly and doesn't change them :/
+    let data = fetchDiagramLinesData(diagram);
     let dragStarted = false;
     let drag = d3.drag()
                  .on("drag", function(i) {
                      if (controls.modifiers == 0) {
                          diagram = current(state);
+                         data = fetchDiagramLinesData(diagram);
                          const lineId = data[i].id;
                          const info = getLineInfo(diagram, lineId);
                          let line = diagram.lines[lineId];
@@ -878,6 +926,7 @@ function drawDiagramLines(diagram, container) {
                      .on("drag", function(i) {
                          if (controls.modifiers == 0) {
                              diagram = current(state);
+                             data = fetchDiagramLinesData(diagram);
                              const lineId = data[i].id;
                              const info = getLineInfo(diagram, lineId);
                              const where = findPosOnLine(info,
@@ -909,6 +958,7 @@ function drawDiagramLines(diagram, container) {
      .on("mousedown", function(i) {
          if (controls.modifiers == 0 && d3.event.button == 1) {
              diagram = current(state);
+             data = fetchDiagramLinesData(diagram);
              const lineId = data[i].id;
              const info = getLineInfo(diagram, lineId);
              let line = diagram.lines[lineId];
@@ -1100,7 +1150,6 @@ function cardinalSpline(xs, ys, smoothness) {
         prevSecantX = secantX;
         prevSecantY = secantY;
     }
-//    console.log(d);
     return d;
 }
 
@@ -1163,10 +1212,10 @@ function renderTableau(diagram) {
                 td.innerHTML = ' .';
                 break;
             case 2:
-                td.innerHTML = ': ';
+                td.innerHTML = '<span class="two-j">:</span> ';
                 break;
             case 3:
-                td.innerHTML = ':.';
+                td.innerHTML = '<span class="two-j">:</span>.';
                 break;
         }
         tr.appendChild(td);
@@ -1174,12 +1223,39 @@ function renderTableau(diagram) {
         td = document.createElement("td");
         td.className = "weight";
         if (superline.weight) {
-            td.textContent = `${superline.weight > 0 ? "+" : ""}${superline.weight}`;
+            td.textContent = (superline.weight > 0 ? "+" : "")
+                           + superline.weight;
         }
         tr.appendChild(td);
         main.appendChild(tr);
     });
     tableau.appendChild(main);
+
+    // Kronecker delta relations
+    var deltaTableau = document.getElementById("delta-tableau");
+    removeChildren(deltaTableau);
+    diagram.deltas.forEach(function(delta) {
+        var li = document.createElement("li");
+        let js = Array.from(Object.keys(delta));
+        js.sort();
+        li.textContent = js.join(" = ");
+        main.appendChild(li);
+    });
+
+    // triangle rule relations
+    let triangleTableau = document.getElementById("triangle-tableau");
+    removeChildren(triangleTableau);
+    diagram.triangles.forEach(function(triangle, triangleIndex) {
+        let li = document.createElement("li");
+        li.textContent = "△{" + triangle.join(", ") + "}";
+        li.addEventListener("mousedown", function() {
+            let diagram = current(state);
+            diagram = trianglePhaseRule(diagram, triangleIndex);
+            saveDiagram(state, diagram);
+            updateDiagram(diagram);
+        });
+        main.appendChild(li);
+    });
 }
 
 function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
@@ -1472,7 +1548,9 @@ window.addEventListener("keydown", function(event) {
     // create Wigner 1-jm
     if (controls.modifiers == 0 && event.key == "m") {
         let diagram = current(state);
-        let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
+        let nearest = findNearestLineId(diagram,
+                                        controls.mouseX,
+                                        controls.mouseY);
         if (nearest.length != 1) {
             error("no nearby line found");
         } else {
@@ -1485,7 +1563,9 @@ window.addEventListener("keydown", function(event) {
     // add 2j phase
     if (controls.modifiers == 0 && event.key == "j") {
         let diagram = current(state);
-        let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
+        let nearest = findNearestLineId(diagram,
+                                        controls.mouseX,
+                                        controls.mouseY);
         if (nearest.length != 1) {
             error("no nearby line found");
         } else {
@@ -1535,9 +1615,11 @@ window.addEventListener("keyup", function(event) {
 });
 
 function clearDragTrail() {
-    controls.dragTrail.xs = [];
-    controls.dragTrail.ys = [];
-    renderState(state);
+    if (controls.dragTrail.xs) {
+        controls.dragTrail.xs = [];
+        controls.dragTrail.ys = [];
+        renderState(state);
+    }
 }
 
 let diagramSvg = document.getElementById("diagram");
