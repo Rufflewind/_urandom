@@ -121,10 +121,9 @@ function w3jOrientation(nodes, index) {
     lines.sort(function (line1, line2) {
         return line1[1] - line2[1];
     });
-    var lines = lines.map(function(line) {
+    if (lines.map(function(line) {
         return mod(line[0] - lines[0][0], 3);
-    });
-    if (lines.join() === [0, 1, 2].join()) {
+    }).join() === [0, 1, 2].join()) {
         return 1;
     } else {
         return -1;
@@ -141,7 +140,7 @@ function drawDiagramNodes(diagram, container, hist) {
                          var node = diagram.nodes[i];
                          node.x = d3.event.x;
                          node.y = d3.event.y;
-                         updateDiagram(diagram, "superficial");
+                         updateDiagramSuperficially(diagram);
                          dragStarted = true;
                      }
                  })
@@ -369,7 +368,7 @@ function renderTableau(diagram) {
     superlineIds.sort((x, y) => {
         var d = x.length - y.length;
         if (d == 0) {
-            d = (x > y) - (x < y);
+            d = Number(x > y) - Number(x < y);
         }
         return d;
     });
@@ -391,7 +390,7 @@ function renderTableau(diagram) {
         td.className = "phase";
         switch (mod(superline.phase, 4)) {
             case 0:
-                td.innerHtml = '  ';
+                td.innerHTML = '  ';
                 break;
             case 1:
                 td.innerHTML = ' .';
@@ -416,13 +415,15 @@ function renderTableau(diagram) {
     tableau.appendChild(main);
 }
 
-function updateDiagram(diagram, superficial) {
+function updateDiagramSuperficially(diagram) {
     drawDiagram(diagram);
     renderTableau(diagram);
-    if (!superficial) {
-        document.getElementById("equation-container")
-                .className = "out-of-date";
-    }
+}
+
+function updateDiagram(diagram) {
+    updateDiagramSuperficially(diagram);
+    document.getElementById("equation-container")
+            .className = "out-of-date";
 }
 
 function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
@@ -511,21 +512,21 @@ function renderEquation(diagram, container) {
             weights += ` (2 j_{${superlineId}} + 1)^{${superline.weight} / 2}`;
         }
     });
-    summedVars = Array.from(Object.keys(summedVars.js)).join(" ")
-               + " "
-               + Array.from(Object.keys(summedVars.ms)).join(" ");
-    if (summedVars != " ") {
-        summedVars = `\\sum_{${summedVars}}`;
+    var summedVarsStr = Array.from(Object.keys(summedVars.js)).join(" ")
+                      + " "
+                      + Array.from(Object.keys(summedVars.ms)).join(" ");
+    if (summedVarsStr != " ") {
+        summedVarsStr = `\\sum_{${summedVars}}`;
     }
-    phases = phases.join(" ");
-    if (phases) {
-        if (phases.startsWith("+ ")) {
-            phases = phases.substr(2);
+    var phasesStr = phases.join(" ");
+    if (phasesStr) {
+        if (phasesStr.startsWith("+ ")) {
+            phasesStr = phasesStr.substr(2);
         }
-        phases = `(-1)^{${phases}}`;
+        phasesStr = `(-1)^{${phases}}`;
     }
-    container.textContent = `\\[${summedVars} ${weights} ${phases} ${s}\\]`;
-    MathJax.Hub.Queue(["Typeset", MathJax.Hub, equation]);
+    container.textContent = `\\[${summedVarsStr} ${weights} ${phasesStr} ${s}\\]`;
+    MathJax.Hub.Queue(["Typeset", MathJax.Hub, container]);
 }
 
 function reverseLine(line) {
@@ -964,7 +965,7 @@ function setHash(diagram) {
     window.location.hash = currentHash;
 }
 
-function saveDiagram(hist, diagram, bump) {
+function saveDiagramWith(hist, diagram, bump) {
     setHash(diagram);
     hist.history.splice(hist.history.length - hist.undoDepth, hist.undoDepth);
     if (bump) {
@@ -977,7 +978,15 @@ function saveDiagram(hist, diagram, bump) {
     hist.undoDepth = 0;
 }
 
-function current(hist, changed) {
+function saveNewDiagram(hist, diagram) {
+    return saveDiagramWith(hist, diagram, true);
+}
+
+function saveDiagram(hist, diagram) {
+    return saveDiagramWith(hist, diagram, false);
+}
+
+function updateCurrent(hist, changed) {
     var entry = hist.history[hist.history.length - 1 - hist.undoDepth];
     hist.version = entry.version;
     if (changed) {
@@ -986,13 +995,17 @@ function current(hist, changed) {
     return entry.diagram;
 }
 
+function current(hist) {
+    return updateCurrent(hist, false);
+}
+
 function undo(hist) {
     var changed = false;
     if (hist.undoDepth < hist.history.length - 1) {
         hist.undoDepth += 1;
         changed = true;
     }
-    return current(hist, changed);
+    return updateCurrent(hist, changed);
 }
 
 function redo(hist) {
@@ -1001,7 +1014,7 @@ function redo(hist) {
         hist.undoDepth -= 1;
         changed = true;
     }
-    return current(hist, changed);
+    return updateCurrent(hist, changed);
 }
 
 var controls = {
@@ -1032,7 +1045,7 @@ window.addEventListener("keydown", function(event) {
 
     // reload
     if (controls.modifiers == 0 && event.key == "r") {
-        window.location = "";
+        window.location.href = "";
     }
 
     // mouse events require the position
@@ -1043,36 +1056,36 @@ window.addEventListener("keydown", function(event) {
 
     // create Clebsch–Gordan coefficient
     if (controls.modifiers == 0 && event.key == "c") {
-        var diagram = current(hist);
-        var labels = availSuperlineLabels(diagram, 3);
-        var subdiagram = cgDiagram(labels[0],
+        let diagram = current(hist);
+        let labels = availSuperlineLabels(diagram, 3);
+        let subdiagram = cgDiagram(labels[0],
                                    labels[1],
                                    labels[2],
                                    controls.mouseX,
                                    controls.mouseY);
         diagram = mergeDiagrams(diagram, subdiagram);
-        saveDiagram(hist, diagram, "bump");
+        saveNewDiagram(hist, diagram);
         updateDiagram(diagram);
     }
 
     // create Wigner 3-jm
     if (controls.modifiers == 0 && event.key == "w") {
-        var diagram = current(hist);
-        var labels = availSuperlineLabels(diagram, 3);
-        var subdiagram = w3jDiagram(labels[0],
+        let diagram = current(hist);
+        let labels = availSuperlineLabels(diagram, 3);
+        let subdiagram = w3jDiagram(labels[0],
                                     labels[1],
                                     labels[2],
                                     controls.mouseX,
                                     controls.mouseY);
         diagram = mergeDiagrams(diagram, subdiagram);
-        saveDiagram(hist, diagram, "bump");
+        saveNewDiagram(hist, diagram);
         updateDiagram(diagram);
     }
 
     // attach
     if (controls.modifiers == 0 && event.key == "a") {
-        var diagram = current(hist);
-        var nearest = findNearestNodeIndices(diagram, 2,
+        let diagram = current(hist);
+        let nearest = findNearestNodeIndices(diagram, 2,
                                              controls.mouseX,
                                              controls.mouseY);
         if (!(nearest.length == 2 &&
@@ -1080,42 +1093,42 @@ window.addEventListener("keydown", function(event) {
               diagram.nodes[nearest[1]].type == "terminal")) {
             notice("no nearby terminals found");
         } else {
-            var diagram = joinTerminals(diagram, nearest[0], nearest[1]);
-            saveDiagram(hist, diagram, "bump");
+            diagram = joinTerminals(diagram, nearest[0], nearest[1]);
+            saveNewDiagram(hist, diagram);
             updateDiagram(diagram);
         }
     }
 
     // create Wigner 1-jm
     if (controls.modifiers == 0 && event.key == "m") {
-        var diagram = current(hist);
-        var nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
+        let diagram = current(hist);
+        let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
         if (nearest.length != 1) {
             notice("no nearby line found");
         } else {
             diagram = addW1j(diagram, nearest);
-            saveDiagram(hist, diagram, "bump");
+            saveNewDiagram(hist, diagram);
             updateDiagram(diagram);
         }
     }
 
     // add 2j phase
     if (controls.modifiers == 0 && event.key == "j") {
-        var diagram = current(hist);
-        var nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
+        let diagram = current(hist);
+        let nearest = findNearestLineId(diagram, controls.mouseX, controls.mouseY);
         if (nearest.length != 1) {
             notice("no nearby line found");
         } else {
             diagram = add2j(diagram, nearest);
-            saveDiagram(hist, diagram, "bump");
+            saveNewDiagram(hist, diagram);
             updateDiagram(diagram);
         }
     }
 
     // delete node
     if (controls.modifiers == 0 && event.key == "x") {
-        var diagram = current(hist);
-        var nearest = findNearestNodeIndices(diagram, 1,
+        let diagram = current(hist);
+        let nearest = findNearestNodeIndices(diagram, 1,
                                              controls.mouseX,
                                              controls.mouseY);
         if (nearest.length != 1 ||
@@ -1125,7 +1138,7 @@ window.addEventListener("keydown", function(event) {
             notice("no nearby nodes found");
         } else {
             diagram = deleteNode(diagram, nearest[0]);
-            saveDiagram(hist, diagram, "bump");
+            saveNewDiagram(hist, diagram);
             updateDiagram(diagram);
         }
     }
