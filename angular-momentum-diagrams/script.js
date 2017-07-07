@@ -1,7 +1,13 @@
 "use strict";
 
+// TODO history for dragging is broken (the design is broken)
+
 //////////////////////////////////////////////////////////////////////////////
 // Utility
+
+function sgn(x) {
+    return x > 0 ? 1 : x < 0 ? -1 : 0;
+}
 
 // Floored modulo
 function mod(x, y) {
@@ -31,6 +37,9 @@ function childNodesOf() {
     return this.childNodes;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Geometry
+
 function linePointDistance(x1, y1, x2, y2, x0, y0) {
     var rx = x0 - x1;
     var ry = y0 - y1;
@@ -48,6 +57,50 @@ function linePointDistance(x1, y1, x2, y2, x0, y0) {
         // projection is to the right of segment
         return Math.sqrt(Math.pow(x0 - x2, 2) + Math.pow(y0 - y2, 2));
     }
+}
+
+function arcInfo(lineLength, arcHeight) {
+    if (arcHeight == 0.0) {
+        return {
+            inclination: 0.0,
+            radius: 0.0, // for SVG compatibility
+            signedRadius: Infinity,
+            large: false,
+            sweep: false,
+        };
+    }
+    const halfLength = lineLength / 2;
+    const signedRadius = (Math.pow(halfLength, 2) / arcHeight + arcHeight) / 2;
+    const large = Math.abs(arcHeight) > halfLength;
+    const sweep = arcHeight < 0;
+    const theta = Math.asin(halfLength / signedRadius);
+    return {
+        inclination: (large ? (sweep ? -1 : 1) * Math.PI - theta : theta),
+        radius: Math.abs(signedRadius),
+        signedRadius: signedRadius,
+        large: large,
+        sweep: sweep,
+    };
+}
+
+// Get the height of the arc between 1 and 2 that also passes through 0.
+function threePointArc(x0, y0, x1, y1, x2, y2) {
+    const ax = x1 - x2;
+    const ay = y1 - y2;
+    const bx = x2 - x0;
+    const by = y2 - y0;
+    const cx = x0 - x1;
+    const cy = y0 - y1;
+    const det = ay * cx - cy * ax;
+    if (det == 0) {
+        return 0.0;
+    }
+    const t = (cx * bx + cy * by) / det;
+    const radius = 0.5 * Math.sqrt(Math.pow(ax - ay * t, 2)
+                                 + Math.pow(ay + ax * t, 2));
+    var side = -sgn(ay * bx - ax * by);
+    const arcHeight = side * radius - t / 2 * Math.sqrt(ax * ax + ay * ay);
+    return arcHeight;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -97,10 +150,27 @@ function mergeSuperlines(superline1, superline2) {
 //////////////////////////////////////////////////////////////////////////////
 // Line manipulation
 
+// type Line = {
+//   superline: String,
+//   direction: -1 (left) | 0 | 1 (right),
+//   arrowPos: 0.0 (left) to 1.0 (right),
+//   arcHeight: -∞ to ∞, (sagitta, + is downward)
+//   angle: 0 to 2π, (of the direct line, clockwise)
+//   textPos: 0.0 (left) to 1.0 (right),
+//   textSide: -1 (up) | 1 (down),
+// }
+//
+// The angle is usually ignored, but if the arcHeight/lineLength is too
+// big, then angle is used to break the degeneracy.
+
 function reverseLine(line) {
     var line = Object.assign({}, line);
-    line.direction = -line.direction;
+    line.direction *= -1;
     line.arrowPos = 1.0 - line.arrowPos;
+    line.arcHeight *= -1;
+    line.angle = mod(line.angle + Math.PI, 2 * Math.PI);
+    line.textPos = 1.0 - line.textPos;
+    line.textSide *= -1;
     return line;
 }
 
@@ -109,6 +179,10 @@ function plainLine(superlineId) {
         superline: superlineId,
         direction: 0,
         arrowPos: 0.5,
+        arcHeight: 0.0,
+        angle: 0.0,
+        textPos: 0.5,
+        textSide: 1,
     };
 }
 
@@ -120,12 +194,130 @@ function canonicalizeLine(line) {
 }
 
 function joinLines(line1, line2) {
-    var superlines = sortTwo(line1.superline, line2.superline);
+    const superlines = sortTwo(line1.superline, line2.superline);
+    const netTextSide = line1.textSide + line2.textSide;
     return Object.assign(canonicalizeLine({
         superline: superlines[0],
         direction: line1.direction + line2.direction,
-        arrowPos: (line1.arrowPos + line2.arrowPos) / 2
+        arrowPos: (line1.arrowPos + line2.arrowPos) / 2,
+        arcHeight: (line1.arcHeight + line2.arcHeight) / 2,
+        angle: 0.0, // can't take an average here
+        textPos: (line1.arrowPos + line2.arrowPos) / 2,
+        textSide: netTextSide ? netTextSide : 1,
     }), {otherSuperline: superlines[1]});
+}
+
+function getLineInfo(diagram, lineId) {
+    const line = diagram.lines[lineId];
+    const ends = endNodeIndices(diagram.nodes, lineId);
+    let x0 = diagram.nodes[ends[0]].x;
+    let y0 = diagram.nodes[ends[0]].y;
+    let x1 = diagram.nodes[ends[1]].x;
+    let y1 = diagram.nodes[ends[1]].y;
+    const xMid = (x0 + x1) / 2;
+    const yMid = (y0 + y1) / 2;
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let lineLength = Math.sqrt(dx * dx + dy * dy);
+    const singular = lineLength == 0.0;
+    const angle = Math.atan2(dy, dx);
+    if (singular) {
+        // fudge numbers to avoid singularity
+        // (epsilon can't be too small or the SVG rendering becomes jittery)
+        const epsilon = 1e-2;
+        dx = epsilon * Math.cos(line.angle);
+        dy = epsilon * Math.sin(line.angle);
+        x0 = xMid - 0.5 * dx;
+        y0 = yMid - 0.5 * dy;
+        x1 = xMid + 0.5 * dx;
+        y1 = yMid + 0.5 * dy;
+        lineLength = epsilon;
+        // don't fudge 'angle'; we'll need it later
+    }
+    const arc = arcInfo(lineLength, line.arcHeight);
+    const c = (arc.signedRadius - line.arcHeight) / lineLength;
+    const xCenter = xMid + c * dy;
+    const yCenter = yMid - c * dx;
+    const arcEx = {
+        xCenter: xCenter,
+        yCenter: yCenter,
+        startAngle: Math.atan2(y0 - yCenter, x0 - xCenter),
+    };
+    return {
+        x0: x0,
+        y0: y0,
+        x1: x1,
+        y1: y1,
+        xMid: xMid,
+        yMid: yMid,
+        dx: dx,
+        dy: dy,
+        angle: angle,
+        lineLength: lineLength,
+        singular: singular,
+        line: line,
+        arc: Object.assign(arc, arcEx),
+    };
+}
+
+function findPosOnLine(lineInfo, x, y) {
+    let pos, side;
+    if (lineInfo.line.arcHeight == 0.0) {
+        const rx = x - lineInfo.x0;
+        const ry = y - lineInfo.y0;
+        pos = ((lineInfo.dx * rx + lineInfo.dy * ry)
+            / Math.pow(lineInfo.lineLength, 2));
+        // left-handed coordinate system!
+        side = -sgn(rx * lineInfo.dy - ry * lineInfo.dx);
+    } else {
+        const arc = lineInfo.arc;
+        const rx = x - arc.xCenter;
+        const ry = y - arc.yCenter;
+        pos = ((arc.startAngle - Math.atan2(ry, rx))
+            / (2 * arc.inclination));
+        side = (sgn(rx * rx + ry * ry - arc.radius * arc.radius)
+            * sgn(lineInfo.line.arcHeight));
+    }
+    if (pos < 0.0) {
+        pos = 0.0;
+    } else if (pos > 1.0) {
+        pos = 1.0;
+    }
+    return {
+        pos: pos,
+        side: side,
+    };
+}
+
+function positionOnLine(lineInfo, pos, shift) {
+    const arc = lineInfo.arc;
+    const baseAngle = Math.atan2(lineInfo.dy, lineInfo.dx)
+                    + Number(lineInfo.line.direction < 0) * Math.PI;
+    if (lineInfo.line.arcHeight == 0.0) {
+        const lineLength = lineInfo.lineLength;
+        const newPos = pos + shift / lineLength;
+        return {
+            x: lineInfo.x0 + lineInfo.dx * newPos,
+            y: lineInfo.y0 + lineInfo.dy * newPos,
+            normalX: -lineInfo.dy / lineLength,
+            normalY: lineInfo.dx / lineLength,
+            angle: baseAngle,
+        };
+    } else {
+        const arrowAngle =
+            2 * arc.inclination * pos
+            + sgn(arc.inclination) * shift / arc.radius;
+        const theta = arc.startAngle - arrowAngle;
+        const normalX = Math.cos(theta);
+        const normalY = Math.sin(theta);
+        return {
+            x: arc.xCenter + arc.radius * normalX,
+            y: arc.yCenter + arc.radius * normalY,
+            normalX: normalX,
+            normalY: normalY,
+            angle: baseAngle - arrowAngle + arc.inclination,
+        };
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -197,6 +389,28 @@ function nearestNodeIndices(nodes, count, x, y) {
     }));
     nodeIndices.sort((x, y) => x.distance - y.distance);
     return nodeIndices.slice(0, count).map(node => node.index);
+}
+
+function w3jOrientation(diagram, nodeIndex) {
+    const node = diagram.nodes[nodeIndex];
+    if (node.type != "w3j") {
+        throw new Error("cannot get orientation of generic node");
+    }
+    let lines = [0, 1, 2].map(function(lineIndex) {
+        const lineId = node.lines[lineIndex];
+        const lineInfo = getLineInfo(diagram, lineId);
+        const baseAngle = angleToOtherNode(diagram.nodes, nodeIndex, lineIndex);
+        const sign = isLeftOfLine(diagram.nodes, nodeIndex, lineIndex) ? 1 : -1;
+        const angle = baseAngle + sign * lineInfo.arc.inclination;
+        return [lineIndex, mod(angle, 2 * Math.PI)];
+    });
+    lines.sort((line1, line2) => line1[1] - line2[1]);
+    if (lines.map(line => mod(line[0] - lines[0][0], 3)).join()
+        == [0, 1, 2].join()) {
+        return 1;
+    } else {
+        return -1;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -530,26 +744,6 @@ function threeArrowRule(diagram, nodeIndex) {
 //////////////////////////////////////////////////////////////////////////////
 // Drawing
 
-function w3jOrientation(nodes, index) {
-    var node = nodes[index];
-    if (node.type != "w3j") {
-        throw new Error("cannot get orientation of generic node");
-    }
-    var lines = [0, 1, 2].map(function(lineIndex) {
-        return [lineIndex, angleToOtherNode(nodes, index, lineIndex)];
-    });
-    lines.sort(function (line1, line2) {
-        return line1[1] - line2[1];
-    });
-    if (lines.map(function(line) {
-        return mod(line[0] - lines[0][0], 3);
-    }).join() === [0, 1, 2].join()) {
-        return 1;
-    } else {
-        return -1;
-    }
-}
-
 function twoJColor(lineId) {
     var diagram = current(hist);
     var superlineId = diagram.lines[lineId].superline;
@@ -558,38 +752,52 @@ function twoJColor(lineId) {
 }
 
 function drawArrow(container, linesData, diagram) {
-    const arrowHeadSize = 25;
+    const arrowHeadSize = 15;
     function data(i) {
-        var line = linesData[i];
+        const line = linesData[i];
         if (line.direction == 0) {
             return [];
         }
-        if (!(line.arrowPos >= 0.0 && line.arrowPos <= 1.0)) {
-            throw new Error(`invalid arrowPos: ${line.arrowPos}`);
+        if (line.arrowPos < 0.0) {
+            line.arrowPos = 0.0;
+        } else if (line.arrowPos > 1.0) {
+            line.arrowPos = 1.0;
         }
-        var nodeIndices = endNodeIndices(diagram.nodes, line.id);
-        var x0 = diagram.nodes[nodeIndices[0]].x;
-        var y0 = diagram.nodes[nodeIndices[0]].y;
-        var x1 = diagram.nodes[nodeIndices[1]].x;
-        var y1 = diagram.nodes[nodeIndices[1]].y;
-        const lineLength = Math.sqrt(Math.pow(x1 - x0, 2)
-                                   + Math.pow(y1 - y0, 2));
-        // the position we want is the tip of the arrow (which follows the
-        // contour of the line), but we want to try to keep the body of the
-        // arrow centered
-        const posCorrection = line.direction * arrowHeadSize / 2 / lineLength;
-        const pos = line.arrowPos + posCorrection;
-        var x = x0 + (x1 - x0) * pos;
-        var y = y0 + (y1 - y0) * pos;
-        var angle = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
-        if (line.direction < 0) {
-            angle += 180;
-        }
+        const info = getLineInfo(diagram, line.id);
+
+        // the coordinate we need is the tip of the arrow (which follows the
+        // contour of the line), but we want to try to keep the body of
+        // the arrow centered
+        const correction = line.direction * arrowHeadSize / 2;
+
+        const position = positionOnLine(info, line.arrowPos, correction);
         return [{
             lineId: line.id,
-            transform: `translate(${x}, ${y}),rotate(${angle})`
+            transform: `translate(${position.x}, ${position.y}),`
+                     + `rotate(${position.angle * 180 / Math.PI})`
         }];
     };
+    var dragStarted = false;
+    var drag = d3.drag()
+                 .on("drag", function(i) {
+                     if (controls.modifiers == 0) {
+                         diagram = current(hist);
+                         const lineId = i.lineId;
+                         const info = getLineInfo(diagram, lineId);
+                         const where = findPosOnLine(info,
+                                                     d3.event.x,
+                                                     d3.event.y);
+                         diagram.lines[lineId].arrowPos = where.pos;
+                         updateDiagramSuperficially(diagram);
+                         dragStarted = true;
+                     }
+                 })
+                 .on("end", function(i) {
+                     if (dragStarted) {
+                         saveDiagram(hist, diagram);
+                         dragStarted = false;
+                     }
+                 });
     var selection = container.selectAll(childNodesOf)
                              .filter("use")
                              .data(data);
@@ -601,6 +809,7 @@ function drawArrow(container, linesData, diagram) {
                        .attr("y", -arrowHeadSize / 2)
                        .attr("width", arrowHeadSize)
                        .attr("height", arrowHeadSize)
+                       .call(drag)
                        .on("click", function(d) {
                            var diagram = current(hist);
                            diagram = flipW1jRule(diagram, d.lineId);
@@ -616,46 +825,118 @@ function drawDiagramLines(diagram, container) {
     // HACK: indexes are used here because d3 captures the
     //       objects directly and doesn't change them :/
     var data = Object.keys(diagram.lines).map(function(id) {
-        var line = diagram.lines[id];
-        var nodeIndices = endNodeIndices(diagram.nodes, id);
-        var x0 = diagram.nodes[nodeIndices[0]].x;
-        var y0 = diagram.nodes[nodeIndices[0]].y;
-        var x1 = diagram.nodes[nodeIndices[1]].x;
-        var y1 = diagram.nodes[nodeIndices[1]].y;
-        var textOffsetAngle = Math.atan2(y1 - y0, x1 - x0) + Math.PI / 2;
-        var textOffset = 17.0;
-        var d = `M ${x0} ${y0} ` +
-                `L ${x1} ${y1}`;
+        const line = diagram.lines[id];
+        const info = getLineInfo(diagram, id);
+        const position = positionOnLine(info, line.textPos, 0);
+        // don't use sgn here!
+        const textOffset = 16 * line.textSide * (line.arcHeight < 0 ? -1 : 1);
+        const d = `M ${info.x0} ${info.y0} `
+                + `A ${info.arc.radius} ${info.arc.radius} 0 `
+                + `${Number(info.arc.large)} ${Number(info.arc.sweep)} `
+                + `${info.x1} ${info.y1}`;
         return Object.assign({
             id: id,
-            x0: x0,
-            y0: y0,
-            x1: x1,
-            y1: y1,
-            textX: (x0 + x1) / 2 + textOffset * Math.cos(textOffsetAngle),
-            textY: (y0 + y1) / 2 + textOffset * Math.sin(textOffsetAngle),
+            textX: position.x + textOffset * position.normalX,
+            textY: position.y + textOffset * position.normalY,
             d: d
         }, line);
     });
+    let dragStarted = false;
+    let drag = d3.drag()
+                 .on("drag", function(i) {
+                     if (controls.modifiers == 0) {
+                         diagram = current(hist);
+                         const lineId = data[i].id;
+                         const info = getLineInfo(diagram, lineId);
+                         let line = diagram.lines[lineId];
+                         if (info.singular) {
+                             const dx = d3.event.x - info.xMid;
+                             const dy = d3.event.y - info.yMid;
+                             line.angle = Math.atan2(dy, dx) - Math.PI / 2;
+                             line.arcHeight = Math.sqrt(dx * dx + dy * dy);
+                         } else {
+                             line.angle = info.angle;
+                             line.arcHeight = threePointArc(
+                                 d3.event.x,
+                                 d3.event.y,
+                                 info.x0,
+                                 info.y0,
+                                 info.x1,
+                                 info.y1
+                             );
+                         }
+                         updateDiagramSuperficially(diagram);
+                         dragStarted = true;
+                     }
+                 })
+                 .on("end", function(i) {
+                     if (dragStarted) {
+                         saveDiagram(hist, diagram);
+                         dragStarted = false;
+                     }
+                 });
+    let textDrag = d3.drag()
+                     .on("drag", function(i) {
+                         if (controls.modifiers == 0) {
+                             diagram = current(hist);
+                             const lineId = data[i].id;
+                             const info = getLineInfo(diagram, lineId);
+                             const where = findPosOnLine(info,
+                                                         d3.event.x,
+                                                         d3.event.y);
+                             diagram.lines[lineId].textPos = where.pos;
+                             diagram.lines[lineId].textSide = where.side;
+                             updateDiagramSuperficially(diagram);
+                             dragStarted = true;
+                         }
+                     })
+                     .on("end", function(i) {
+                         if (dragStarted) {
+                             saveDiagram(hist, diagram);
+                             dragStarted = false;
+                         }
+                     });
     var selection = container.selectAll("g.line")
                              .data(Array.from(data.keys()));
     selection.exit().remove();
     var g = selection.enter()
                      .append("g")
-                     .attr("class", "line")
-    var path = g.append("path")
-                .attr("fill", "transparent")
-                .attr("stroke", "black")
-                .attr("stroke-width", "2");
+                     .attr("class", "line");
+    g.append("path")
+     .attr("fill", "none")
+     .attr("stroke", "rgba(255, 255, 255, 0.85)")
+     .attr("stroke-width", "16")
+     .call(drag)
+     .on("mousedown", function(i) {
+         if (controls.modifiers == 0 && d3.event.button == 1) {
+             diagram = current(hist);
+             const lineId = data[i].id;
+             const info = getLineInfo(diagram, lineId);
+             let line = diagram.lines[lineId];
+             if (!info.singular) {
+                 line.angle = info.angle;
+                 line.arcHeight = 0.0;
+             }
+             updateDiagramSuperficially(diagram);
+             saveDiagram(hist, diagram);
+         }
+     });
+    g.append("path")
+     .attr("class", "visible")
+     .attr("fill", "none")
+     .attr("stroke-width", "2")
     g.append("text")
      .attr("class", "line-label")
      .attr("alignment-baseline", "middle")
      .attr("text-anchor", "middle")
-     .attr("font-size", "large");
+     .attr("font-size", "large")
+     .call(textDrag);
     var arrowG = g.append("g");
     var merged = selection.merge(g).selectAll(childNodesOf);
     merged.filter("g").call(drawArrow, data, diagram);
     merged.filter("path")
+          .attr("d", i => data[i].d)
+    merged.filter("path.visible")
           .attr("d", i => data[i].d)
           .attr("stroke", i => twoJColor(data[i].id));
     merged.filter("text")
@@ -689,7 +970,7 @@ function drawDiagramNodes(diagram, container, hist) {
         return Object.assign({
             index: index,
             orientation: node.type == "w3j" ?
-                         w3jOrientation(nodes, index) : 0
+                         w3jOrientation(diagram, index) : 0
         }, node);
     });
     // HACK: indices aren't stable!
