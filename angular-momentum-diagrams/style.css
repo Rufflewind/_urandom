@@ -122,3 +122,14 @@ main,
     user-select: none;
     cursor: crosshair;
 }
+
+#diagram-drag-trail path {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#diagram-drag-trail path.main {
+    stroke: rgba(45, 182, 244, 0.4);
+    stroke-width: 10px;
+}

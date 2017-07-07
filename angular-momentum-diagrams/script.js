@@ -35,6 +35,8 @@ function childNodesOf() {
     return this.childNodes;
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 //////////////////////////////////////////////////////////////////////////////
 // Geometry
 
@@ -1054,13 +1056,71 @@ function drawDiagramNodes(diagram, container, state) {
           .attr("transform", i => data[i].orientation > 0 ? "scale(-1,1)" : "");
 }
 
+// Choose smoothness = 1 for a Catmull–Rom spline.
+function cardinalSpline(xs, ys, smoothness) {
+    const length = xs.length;
+    if (length != ys.length) {
+        throw new Error("xs and ys must have same length");
+    }
+    let d = "";
+    let prevSecantX, prevSecantY;
+    for (let i = 0; i < length; ++i) {
+        if (i == 0) {
+            // do nothing
+            d += `M ${xs[i]} ${ys[i]} `;
+            continue;
+        }
+        if (i == 1 && i == length - 1) {
+            d += `L ${xs[i]} ${ys[i]} `;
+            continue;
+        }
+        const x01 = xs[i] - xs[i - 1];
+        const y01 = ys[i] - ys[i - 1];
+        const d01 = Math.sqrt(x01 * x01 + y01 * y01);
+        const x12 = xs[i + 1] - xs[i];
+        const y12 = ys[i + 1] - ys[i];
+        const d12 = Math.sqrt(x12 * x12 + y12 * y12);
+        let secantX = smoothness * (xs[i + 1] - xs[i - 1]) / (d01 + d12);
+        let secantY = smoothness * (ys[i + 1] - ys[i - 1]) / (d01 + d12);
+        if (i == 1) {
+            // natural condition (i.e. second derivative must vanish)
+            prevSecantX = (3.0 * x01 / d01 - secantX) / 2.0;
+            prevSecantY = (3.0 * y01 / d01 - secantY) / 2.0;
+        } else if (i == length - 1) {
+            // natural condition (i.e. second derivative must vanish)
+            secantX = (3.0 * x01 / d01 - prevSecantX) / 2.0;
+            secantY = (3.0 * y01 / d01 - prevSecantY) / 2.0;
+        }
+        const control1X = xs[i - 1] + prevSecantX * d01 / 3.0;
+        const control1Y = ys[i - 1] + prevSecantY * d01 / 3.0;
+        const control2X = xs[i] - secantX * d01 / 3.0;
+        const control2Y = ys[i] - secantY * d01 / 3.0;
+        d += `C ${control1X} ${control1Y} ${control2X} ${control2Y} `
+           + `${xs[i]} ${ys[i]}`;
+        prevSecantX = secantX;
+        prevSecantY = secantY;
+    }
+//    console.log(d);
+    return d;
+}
+
 function drawDragTrail(trail, container) {
+    let path;
+    if (container.children.length == 0) {
+        path = document.createElementNS(SVG_NS, "path");
+        path.setAttribute("class", "main");
+        container.appendChild(path);
+    } else {
+        path = container.children[0];
+    }
+    path.setAttribute("d", cardinalSpline(trail.xs, trail.ys, 1.0));
 }
 
 function drawDiagram(diagram) {
     drawDiagramNodes(diagram, d3.select("#diagram-nodes"), state);
     drawDiagramLines(diagram, d3.select("#diagram-lines"));
-    drawDragTrail(controls.dragTrail, document.getElementById("diagram-drag-trail"));
+    drawDragTrail(controls.dragTrail,
+                  document.getElementById("diagram-drag-trail"));
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1325,7 +1385,7 @@ var controls = {
     modifiers: 0,
     mouseX: null,
     mouseY: null,
-    dragTrail: []
+    dragTrail: {xs: [], ys: []},
 };
 
 const ALT = 0x1;
@@ -1474,12 +1534,27 @@ window.addEventListener("keyup", function(event) {
     updateKeyState(controls, event);
 });
 
-document.getElementById("diagram").addEventListener(
-    "mousemove", function(event) {
-        controls.mouseX = event.offsetX;
-        controls.mouseY = event.offsetY;
+function clearDragTrail() {
+    controls.dragTrail.xs = [];
+    controls.dragTrail.ys = [];
+    renderState(state);
+}
+
+let diagramSvg = document.getElementById("diagram");
+diagramSvg.addEventListener("mousemove", function(event) {
+    controls.mouseX = event.offsetX;
+    controls.mouseY = event.offsetY;
+    if (event.buttons == 1) {
+        controls.dragTrail.xs.push(controls.mouseX);
+        controls.dragTrail.ys.push(controls.mouseY);
+        renderState(state);
+    } else {
+        clearDragTrail();
     }
-);
+});
+diagramSvg.addEventListener("mouseup", function(event) {
+    clearDragTrail();
+});
 document.getElementById("equation").addEventListener("click", function() {
     renderEquation(current(state), document.getElementById("equation"));
     freshenEquation(state);
