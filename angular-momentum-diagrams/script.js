@@ -1,5 +1,10 @@
 "use strict";
 
+// floored modulo
+function mod(x, y) {
+    return (x % y + y) % y;
+}
+
 function deepClone(x) {
     return JSON.parse(JSON.stringify(x));
 }
@@ -117,7 +122,7 @@ function w3jOrientation(nodes, index) {
         return line1[1] - line2[1];
     });
     var lines = lines.map(function(line) {
-        return (line[0] - lines[0][0] + 3) % 3;
+        return mod(line[0] - lines[0][0], 3);
     });
     if (lines.join() === [0, 1, 2].join()) {
         return 1;
@@ -174,8 +179,7 @@ function drawDiagramNodes(diagram, container, hist) {
                      .on("mousedown", function(i) {
                          if (d3.event.button == 1) {
                              var diagram = threeArrowRule(
-                                 current(hist), i,
-                                 controls.modifiers == SHIFT);
+                                 current(hist), i);
                              saveDiagram(hist, diagram);
                              updateDiagram(diagram);
                          }
@@ -241,31 +245,34 @@ function drawDiagramNodes(diagram, container, hist) {
 function twoJColor(lineId) {
     var diagram = current(hist);
     var superlineId = diagram.lines[lineId].superline;
-    return diagram.superlines[superlineId].phase % 4 >= 2 ?
+    return mod(diagram.superlines[superlineId].phase, 4) >= 2 ?
            "#ac53b3" : "#051308";
 }
 
-function drawArrows(container, linesData, diagram) {
+function drawArrow(container, linesData, diagram) {
     function data(i) {
         var line = linesData[i];
-        return line.arrows.map(function(arrow, arrowIndex) {
-            var nodeIndices = endNodeIndices(diagram.nodes, line.id);
-            var x0 = diagram.nodes[nodeIndices[0]].x;
-            var y0 = diagram.nodes[nodeIndices[0]].y;
-            var x1 = diagram.nodes[nodeIndices[1]].x;
-            var y1 = diagram.nodes[nodeIndices[1]].y;
-            var x = x0 + (x1 - x0) * arrow.t;
-            var y = y0 + (y1 - y0) * arrow.t;
-            var angle = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
-            if (arrow.direction < 0) {
-                angle += 180;
-            }
-            return {
-                lineId: line.id,
-                arrowIndex: arrowIndex,
-                transform: `translate(${x}, ${y}),rotate(${angle})`
-            };
-        });
+        if (line.direction == 0) {
+            return [];
+        }
+        if (!(line.arrowPos >= 0.0 && line.arrowPos <= 1.0)) {
+            throw `invalid arrowPos: ${line.arrowPos}`;
+        }
+        var nodeIndices = endNodeIndices(diagram.nodes, line.id);
+        var x0 = diagram.nodes[nodeIndices[0]].x;
+        var y0 = diagram.nodes[nodeIndices[0]].y;
+        var x1 = diagram.nodes[nodeIndices[1]].x;
+        var y1 = diagram.nodes[nodeIndices[1]].y;
+        var x = x0 + (x1 - x0) * line.arrowPos;
+        var y = y0 + (y1 - y0) * line.arrowPos;
+        var angle = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
+        if (line.direction < 0) {
+            angle += 180;
+        }
+        return [{
+            lineId: line.id,
+            transform: `translate(${x}, ${y}),rotate(${angle})`
+        }];
     };
     var selection = container.selectAll(childNodesOf)
                              .filter("use")
@@ -280,7 +287,7 @@ function drawArrows(container, linesData, diagram) {
                        .attr("height", 20)
                        .on("click", function(d) {
                            var diagram = current(hist);
-                           diagram = flipW1jRule(diagram, d.lineId, d.arrowIndex);
+                           diagram = flipW1jRule(diagram, d.lineId);
                            saveDiagram(hist, diagram);
                            updateDiagram(diagram);
                        });
@@ -331,7 +338,7 @@ function drawDiagramLines(diagram, container) {
      .attr("font-size", "large");
     var arrowG = g.append("g");
     var merged = selection.merge(g).selectAll(childNodesOf);
-    merged.filter("g").call(drawArrows, data, diagram);
+    merged.filter("g").call(drawArrow, data, diagram);
     merged.filter("path")
           .attr("d", i => data[i].d)
           .attr("stroke", i => twoJColor(data[i].id));
@@ -382,7 +389,7 @@ function renderTableau(diagram) {
         // phase
         td = document.createElement("td");
         td.className = "phase";
-        switch (superline.phase % 4) {
+        switch (mod(superline.phase, 4)) {
             case 0:
                 td.innerHtml = '  ';
                 break;
@@ -395,8 +402,6 @@ function renderTableau(diagram) {
             case 3:
                 td.innerHTML = ':.';
                 break;
-            default:
-                throw "invalid phase: " + superline.phase;
         }
         tr.appendChild(td);
         // weight
@@ -429,7 +434,7 @@ function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
     };
     var line = diagram.lines[lineId];
     var otherIndex = otherNodeIndex(diagram.nodes, nodeIndex, lineIndex);
-    if (otherIndex < nodeIndex && line.arrows.length % 2 == 1) {
+    if (otherIndex < nodeIndex && line.direction != 0) {
         jm.m = `\\overline{${jm.m}}`;
     }
     var summedJ = line.superline.summed;
@@ -441,16 +446,6 @@ function renderNodeLine(diagram, nodeIndex, lineIndex, summedVars) {
         summedVars.ms[mNaked] = true;
     }
     return jm;
-}
-
-function renderArrows(diagram, lineId, phases) {
-    var line = diagram.lines[lineId];
-    var sign = -1;
-    line.arrows.forEach(function(arrow) {
-        phases.push(`+ j_{${diagram.lines[lineId].superline}}`);
-        phases.push(`${sign * arrow.direction > 0 ? "+" : "-"} m_{${lineId}}`);
-        sign = -sign;
-    });
 }
 
 function renderEquation(diagram, container) {
@@ -490,12 +485,16 @@ function renderEquation(diagram, container) {
         }
     });
     Object.keys(diagram.lines).forEach(function(lineId) {
-        renderArrows(diagram, lineId, phases);
+        var line = diagram.lines[lineId];
+        if (line.direction != 0) {
+            phases.push(`+ j_{${diagram.lines[lineId].superline}} `
+                      + `${line.direction < 0 ? "+" : "-"} m_{${lineId}}`);
+        }
     });
     var weights = "";
     Object.keys(diagram.superlines).forEach(function(superlineId) {
         var superline = diagram.superlines[superlineId];
-        switch (superline.phase % 4) {
+        switch (mod(superline.phase, 4)) {
             case 0:
                 break;
             case 1:
@@ -530,36 +529,34 @@ function renderEquation(diagram, container) {
 }
 
 function reverseLine(line) {
-    line.arrows = line.arrows.map(function(arrow) {
-        return {
-            t: 1 - arrow.t,
-            direction: -arrow.direction
-        };
-    });
+    var line = Object.assign({}, line);
+    line.direction = -line.direction;
+    line.arrowPos = 1.0 - line.arrowPos;
+    return line;
 }
 
-function simplifyArrows(diagram, lineId) {
-    var line = diagram.lines[lineId];
-    var direction = 0; // either -1, 0, or -1
-    var phase = 0; // either 0 or 1
-    line.arrows.sort((x, y) => x.t - y.t);
-    line.arrows.forEach(function(arrow) {
-        if (direction == 0) {
-            direction = arrow.direction;
-        } else {
-            phase ^= arrow.direction == direction;
-            direction = 0;
-        }
-    });
-    line.arrows = [];
-    if (direction) {
-        line.arrows.push({
-            t: 0.5,
-            direction: direction
-        });
+function sortTwo(x, y) {
+    if (x < y) {
+        return [x, y];
+    } else {
+        return [y, x];
     }
-    var superline = diagram.superlines[line.superline];
-    superline.phase = (superline.phase + 2 * phase) % 4;
+}
+
+function canonicalizeLine(line) {
+    return {
+        line: Object.assign({}, line, {direction: line.direction % 2}),
+        phase: mod(Math.trunc(line.direction / 2), 2) * 2,
+    };
+}
+
+function joinLines(line1, line2) {
+    var superlines = sortTwo(line1.superline, line2.superline);
+    return Object.assign(canonicalizeLine({
+        superline: superlines[0],
+        direction: line1.direction + line2.direction,
+        arrowPos: (line1.arrowPos + line2.arrowPos) / 2
+    }), {otherSuperline: superlines[1]});
 }
 
 // NOTE: must maintain invariant that terminals precede all other nodes.
@@ -585,9 +582,13 @@ function newLabel(label) {
     return match[1] + (Number(match[2]) + 1).toString();
 }
 
+function changePhase(superline, phase) {
+    superline.phase = mod(superline.phase + phase, 4);
+}
+
 function mergeSuperlines(superline1, superline2) {
     superline1 = Object.assign({}, superline1);
-    superline1.phase = (superline1.phase + superline2.phase) % 4;
+    changePhase(superline1, superline2.phase);
     superline1.weight += superline2.weight;
     superline1.summed |= superline2.summed;
     return superline1;
@@ -650,8 +651,6 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         notice("Cannot join terminals sharing the same line (not yet implemented)");
         return diagram;
     }
-    var superlineId1 = diagram.lines[lineId1].superline;
-    var superlineId2 = diagram.lines[lineId2].superline;
     diagram = deepClone(diagram);
 
     // join with other node
@@ -659,15 +658,21 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         lineId1;
 
     // merge the lines (be careful with orientation)
-    diagram.lines[lineId1].arrows = diagram.lines[lineId1].arrows.map(arrow => ({
-        t: arrow.t * 0.5,
-        direction: (other1 < terminalIndex1 ? 1 : -1) * arrow.direction
-    })).concat(diagram.lines[lineId2].arrows.map(arrow => ({
-        t: 0.5 + arrow.t * 0.5,
-        direction: (terminalIndex2 < other2 ? 1 : -1) * arrow.direction
-    })));
+    var line1 = diagram.lines[lineId1];
+    var line2 = diagram.lines[lineId2];
+    if (other1 > terminalIndex1) {
+        line1 = reverseLine(line1);
+    }
+    if (terminalIndex2 > other2) {
+        line2 = reverseLine(line2);
+    }
+    var joined = joinLines(line1, line2);
+    var superlineId1 = joined.line.superline;
+    var superlineId2 = joined.otherSuperline;
+    changePhase(diagram.superlines[superlineId1], joined.phase);
+console.log(joined.phase);
+    diagram.lines[lineId1] = joined.line;
     delete diagram.lines[lineId2];
-    simplifyArrows(diagram, lineId1);
 
     // equate superlines and merge their factors
     diagram.superlines[superlineId1] =
@@ -689,16 +694,14 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
 
 function addW1j(diagram, lineId) {
     diagram = deepClone(diagram);
-    var arrows = diagram.lines[lineId].arrows;
-    if (arrows.length == 0) {
-        arrows.push({
-            t: 0.5,
-            direction: -1,
-        });
-    } else if (arrows[0].direction < 0) {
-        arrows[0].direction *= -1;
+    var line = diagram.lines[lineId];
+    // cycle through all possible directions
+    if (line.direction > 0) {
+        line.direction = -1;
+    } else if (line.direction < 0) {
+        line.direction = 0;
     } else {
-        arrows.pop();
+        line.direction = 1;
     }
     return diagram;
 }
@@ -706,7 +709,7 @@ function addW1j(diagram, lineId) {
 function add2j(diagram, lineId) {
     diagram = deepClone(diagram);
     var superline = diagram.superlines[diagram.lines[lineId].superline];
-    superline.phase = (superline.phase + 2) % 4;
+    changePhase(superline, 2);
     return diagram;
 }
 
@@ -743,7 +746,7 @@ function deleteNode(diagram, nodeIndex) {
                 return;
             }
             if (otherIndex < nodeIndex) {
-                reverseLine(diagram.lines[lineId]);
+                diagram.lines[lineId] = reverseLine(diagram.lines[lineId]);
             }
             terminals.push({
                 type: "terminal",
@@ -776,63 +779,74 @@ function flipW3jRule(diagram, nodeIndex) {
     return diagram;
 }
 
-function flipW1jRule(diagram, lineId, arrowIndex) {
-    diagram = deepClone(diagram);
-    diagram.lines[lineId].arrows[arrowIndex].direction *= -1;
-    var superlineId = diagram.lines[lineId].superline;
-    diagram.superlines[superlineId] =
-        mergeSuperlines(diagram.superlines[superlineId], {
-            phase: 2,
-            summed: false,
-            weight: 0,
-        });
+function flipW1jRule(diagram, lineId) {
+    if (diagram.lines[lineId].direction) {
+        diagram = deepClone(diagram);
+        diagram.lines[lineId].direction *= -1;
+        var superlineId = diagram.lines[lineId].superline;
+        diagram.superlines[superlineId] =
+            mergeSuperlines(diagram.superlines[superlineId], {
+                phase: 2,
+                summed: false,
+                weight: 0,
+            });
+    }
     return diagram;
 }
 
-function threeArrowRule(diagram, nodeIndex, reversed) {
-    if (diagram.nodes[nodeIndex].type != "w3j") {
+function threeArrowRule(diagram, nodeIndex) {
+    diagram = deepClone(diagram);
+    var node = diagram.nodes[nodeIndex];
+    if (node.type != "w3j") {
         return diagram;
     }
-    diagram = deepClone(diagram);
     var direction = 0;
     // figure out the direction that would minimize the phase change
-    diagram.nodes[nodeIndex].lines.forEach(function(lineId, lineIndex) {
-        var arrows = diagram.lines[lineId].arrows;
-        if (arrows.length > 0) {
-            if (isLeftOfLine(diagram.nodes, nodeIndex, lineIndex)) {
-                direction -= arrows[0].direction;
-            } else {
-                direction += arrows[0].direction;
-            }
+    node.lines.forEach(function(lineId, lineIndex) {
+        var line = diagram.lines[lineId];
+        if (isLeftOfLine(diagram.nodes, nodeIndex, lineIndex)) {
+            direction -= line.direction;
+        } else {
+            direction += line.direction;
         }
     });
     if (direction == 0) {
         // we still don't have a direction, so let's just pick "outgoing"
         direction = 1;
+    } else if (direction == 3) {
+        // if all outgoing, completely reverse the direction
+        direction = -2;
     } else {
         // normalize to one
         direction = direction / Math.abs(direction);
     }
-    if (reversed) {
-        direction *= -1;
-    }
-    diagram.nodes[nodeIndex].lines.forEach(function(lineId, lineIndex) {
-        var arrows = diagram.lines[lineId].arrows;
+    node.lines.forEach(function(lineId, lineIndex) {
+        var line = diagram.lines[lineId];
         if (isLeftOfLine(diagram.nodes, nodeIndex, lineIndex)) {
-            arrows.unshift({
-                t: 0.0,
-                direction: direction
-            });
+            line.direction += direction;
         } else {
-            arrows.push({
-                t: 1.0,
-                direction: -direction
-            });
+            line.direction -= direction;
         }
-        simplifyArrows(diagram, lineId);
+        var canonicalized = canonicalizeLine(line);
+        diagram.lines[lineId] = canonicalized.line;
+        changePhase(diagram.superlines[line.superline], canonicalized.phase);
     });
     return diagram;
 }
+
+function plainLine(superlineId) {
+    return {
+        superline: superlineId,
+        direction: 0,
+        arrowPos: 0.5,
+    };
+}
+
+var EMPTY_SUPERLINE = {
+    phase: 0,
+    summed: false,
+    weight: 0,
+};
 
 function w3jDiagram(a, b, c, x, y) {
     if (a == b || b == c || c == a) {
@@ -866,47 +880,29 @@ function w3jDiagram(a, b, c, x, y) {
             },
         ],
         lines: {
-            [a]: {
-                superline: a,
-                arrows: []
-            },
-            [b]: {
-                superline: b,
-                arrows: []
-            },
-            [c]: {
-                superline: c,
-                arrows: []
-            }
+            [a]: plainLine(a),
+            [b]: plainLine(b),
+            [c]: plainLine(c)
         },
         superlines: {
-            [a]: {
-                phase: 0,
-                summed: false,
-                weight: 0,
-            },
-            [b]: {
-                phase: 0,
-                summed: false,
-                weight: 0,
-            },
-            [c]: {
-                phase: 0,
-                summed: false,
-                weight: 0,
-            }
+            [a]: EMPTY_SUPERLINE,
+            [b]: EMPTY_SUPERLINE,
+            [c]: EMPTY_SUPERLINE
         }
     };
 }
 
 function cgDiagram(a, b, c, x, y) {
     var diagram = w3jDiagram(a, b, c, x, y);
-    diagram.lines[c].arrows.push({
-        t: 0.5,
+    diagram.lines[c] = Object.assign({}, diagram.lines[c], {
         direction: 1
     });
-    diagram.superlines[b].phase = 2;
-    diagram.superlines[c].weight = 1;
+    diagram.superlines[b] = Object.assign({}, diagram.superlines[b], {
+        phase: 2
+    });
+    diagram.superlines[c] = Object.assign({}, diagram.superlines[c], {
+        weight: 1
+    });
     return diagram;
 }
 
