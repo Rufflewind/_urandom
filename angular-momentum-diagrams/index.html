@@ -34,23 +34,25 @@
               </symbol>
               <g id="diagram-lines"></g>
               <g id="diagram-nodes"></g>
-              <g id="diagram-drag-trail"></g>
+              <path id="diagram-drag-trail" class="" d=""/>
             </svg>
           </div>
           <div id="tableau-container">
-            <table id="tableau">
-              <tbody class="header">
-                <tr>
-                  <th class="summed"></th>
-                  <th class="name"><var>j</var></th>
-                  <th class="phase">(−1)<sup><var>j</var></sup></th>
-                  <th class="weight">√(2 <var>j</var> + 1)<sup></th>
-                </tr>
-              </tbody>
-              <tbody class="main"></tbody>
-            </table>
-            <ul id="delta-tableau"></ul>
-            <ul id="triangle-tableau"></ul>
+            <div id="tableau-wrapper">
+              <table id="tableau">
+                <thead class="header">
+                  <tr>
+                    <th class="summed"></th>
+                    <th class="name"><var>j</var></th>
+                    <th class="phase">(−1)<sup><var>j</var></sup></th>
+                    <th class="weight">√(2 <var>j</var> + 1)<sup></th>
+                  </tr>
+                </thead>
+                <tbody id="tableau-body" class="main"></tbody>
+              </table>
+              <ul id="triangle-tableau"></ul>
+              <ul id="delta-tableau"></ul>
+            </div>
           </div>
         </div>
       </div>
@@ -58,7 +60,6 @@
         <div id="equation" title="Equation (click to refresh)">🖰</div>
       </div>
     </main>
-    <script src="https://d3js.org/d3.v4.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML"></script>
     <script src="script.js"></script>
   </body>

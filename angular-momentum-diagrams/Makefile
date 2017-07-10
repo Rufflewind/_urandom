@@ -1,9 +1,4 @@
-all: lint
+all: deploy
 
-deploy: lint
+deploy:
 	cd .. && $(MAKE) deploy-gh-pages
-
-lint:
-	ln -f script.js script.ts
-	tsc -t es2016 --noEmit script.ts libs.d.ts
-	rm script.ts
