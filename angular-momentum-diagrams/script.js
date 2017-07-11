@@ -34,6 +34,17 @@ function sortTwo(x, y) {
     }
 }
 
+function intercalate(sep, xs) {
+    let ys = []
+    xs.forEach((x, i) => {
+        if (i != 0) {
+            ys.push(sep)
+        }
+        ys.push(x)
+    })
+    return ys
+}
+
 function arrayEqual(xs, ys) {
     let length = xs.length
     if (length != ys.length) {
@@ -58,6 +69,14 @@ function deduplicateObject(object, image) {
         }
     })
     return image
+}
+
+function arrayRemove(xs, indices) {
+    xs = Array.from(xs)
+    Array.from(indices)
+         .sort((x, y) => y - x)
+         .forEach(i => xs.splice(i, 1))
+    return xs
 }
 
 function deepClone(x) {
@@ -135,7 +154,7 @@ function threePointArc(x0, y0, x1, y1, x2, y2) {
     return arcHeight
 }
 
-// Choose smoothness = 1 for a Catmull–Rom spline.
+// Choose smoothness = 1 for a Catmull-Rom spline.
 function cardinalSpline(xs, ys, smoothness) {
     const length = xs.length
     if (length != ys.length) {
@@ -196,6 +215,7 @@ function removeChildren(element) {
 }
 
 const VNODE_KEY = Symbol("VNODE_KEY")
+const VNODE_SYMBOLS = Symbol("VNODE_SYMBOLS")
 const VNODE_EVENT_LISTENERS = Symbol("VNODE_EVENT_LISTENERS")
 
 function vnodeAmendAttributes(attrs, elem) {
@@ -225,6 +245,12 @@ function vnodeAmendAttributes(attrs, elem) {
             listeners.push([event, v])
         } else if (v == null) {
             elem.removeAttribute(k, v)
+        } else if (typeof(k) == "symbol") {
+            let symbols = elem[VNODE_SYMBOLS]
+            if (!symbols) {
+                elem[VNODE_SYMBOLS] = {}
+            }
+            symbols[k] = v
         } else {
             if (elem.getAttribute(k) != v) {
                 elem.setAttribute(k, v)
@@ -250,6 +276,7 @@ function vnodeRenderAttributes(attrs, elem) {
             }
         }
     }
+    delete elem[VNODE_SYMBOLS]
     vnodeAmendAttributes(attrs, elem)
 }
 
@@ -393,6 +420,12 @@ function applyRendering(rendering) {
 //////////////////////////////////////////////////////////////////////////////
 // Superline manipulation
 
+const ZERO_J = {type: "zero"}
+
+function isZeroJ(j) {
+    return typeof j == "object" && j.type == "zero"
+}
+
 const EMPTY_SUPERLINE = {
     phase: 0,
     summed: false,
@@ -427,11 +460,34 @@ function changePhase(superline, phase) {
 }
 
 function mergeSuperlines(superline1, superline2) {
-    superline1 = Object.assign({}, superline1)
+    superline1 = Object.assign({}, EMPTY_SUPERLINE, superline1)
+    superline2 = Object.assign({}, EMPTY_SUPERLINE, superline2)
     changePhase(superline1, superline2.phase)
     superline1.weight += superline2.weight
     superline1.summed |= superline2.summed
     return superline1
+}
+
+function addDelta(deltas, ...entries) {
+    if (entries.length < 2) {
+        return deltas
+    }
+    deltas = Array.from(deltas)
+    for (let i = 0; i < deltas.length; ++i) {
+        for (let j = 0; j < entries.length; ++j) {
+            if (deltas[i].includes(entries[j])) {
+                deltas[i] = Array.from(deltas[i])
+                entries.forEach(x => {
+                    if (!deltas[i].includes(x)) {
+                        deltas[i].push(x)
+                    }
+                })
+                return deltas
+            }
+        }
+    }
+    deltas.push(entries)
+    return deltas
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -441,10 +497,10 @@ function mergeSuperlines(superline1, superline2) {
 //   superline: String,
 //   direction: -1 (left) | 0 | 1 (right),
 //   arrowPos: 0.0 (left) to 1.0 (right),
-//   arcHeight: -∞ to ∞, (sagitta, + is downward)
-//   angle: 0 to 2π, (of the direct line, clockwise)
+//   arcHeight: -INF to INF, (sagitta, + is downward)
+//   angle: 0 to 2PI, (of the direct line, clockwise)
 //   textPos: 0.0 (left) to 1.0 (right),
-//   textOffset: -∞ to ∞, (+ is downward)
+//   textOffset: -INF to INF, (+ is downward)
 // }
 //
 // The angle is usually ignored, but if the arcHeight/lineLength is too
@@ -480,7 +536,13 @@ function canonicalizeLine(line) {
     }
 }
 
-function joinLines(line1, line2) {
+function joinLines(line1, reverse1, line2, reverse2) {
+    if (reverse1) {
+        return joinLines(reverseLine(line1), false, line2, reverse2)
+    }
+    if (reverse2) {
+        return joinLines(line1, reverse1, reverseLine(line2), false)
+    }
     const superlines = sortTwo(line1.superline, line2.superline)
     return Object.assign(canonicalizeLine({
         superline: superlines[0],
@@ -605,23 +667,23 @@ function positionOnLine(lineInfo, pos, shift) {
 //////////////////////////////////////////////////////////////////////////////
 // Node manipulation
 
-function setDiagramLineProps(diagram, lineId, props) {
-    const lines = diagram.lines
-    return Object.freeze(Object.assign({}, diagram, {
-        lines: Object.freeze(Object.assign({}, lines, {
-            [lineId]: Object.freeze(Object.assign({}, lines[lineId], props)),
-        })),
-    }))
-}
-
-function setDiagramNodeProps(diagram, nodeIndex, props) {
-    const nodes = diagram.nodes
-    return Object.freeze(Object.assign({}, diagram, {
-        nodes: Object.freeze(Object.assign([], nodes, {
-            [nodeIndex]: Object.freeze(Object.assign({}, nodes[nodeIndex],
-                                                     props)),
-        }))
-    }))
+function terminalNode(lineId, variable, x, y) {
+    // every terminal has an associated name for the "m" variable;
+    // because this variable is *free*, rules must never change this variable!
+    // (you are free to rename the lineId whatever you want, but try to reuse
+    // the user's naming if possible)
+    //
+    // when rendering lines connected to terminal(s), be aware that the name(s)
+    // on the terminal(s) *supersede* the name of the line itself (lineId); if
+    // there are two terminals, then an m-delta is implied (this is how we
+    // represent m-deltas)
+    return Object.freeze({
+        type: "terminal",
+        lines: Object.freeze([lineId]),
+        variable: variable,
+        x: x,
+        y: y,
+    })
 }
 
 function endNodeAndLineIndices(nodes, lineId) {
@@ -636,10 +698,7 @@ function endNodeAndLineIndices(nodes, lineId) {
         for (let lineIndex = 0; lineIndex < numLines; ++lineIndex) {
             const nodeLineId = lines[lineIndex]
             if (nodeLineId == lineId) {
-                nodeAndLineIndices.push({
-                    node: nodeIndex,
-                    lineIndex: lineIndex
-                })
+                nodeAndLineIndices.push([nodeIndex, lineIndex])
             }
         }
     }
@@ -651,7 +710,7 @@ function endNodeAndLineIndices(nodes, lineId) {
 }
 
 function endNodeIndices(nodes, lineId) {
-    return endNodeAndLineIndices(nodes, lineId).map(x => x.node)
+    return endNodeAndLineIndices(nodes, lineId).map(x => x[0])
 }
 
 function otherNodeAndLineIndex(nodes, nodeIndex, lineIndex) {
@@ -660,8 +719,9 @@ function otherNodeAndLineIndex(nodes, nodeIndex, lineIndex) {
         throw new Error(`cannot find line with lineIndex = ${lineIndex}`)
     }
     let nodeAndLineIndices = endNodeAndLineIndices(nodes, lineId)
-    if (nodeAndLineIndices[0].node == nodeIndex &&
-        nodeAndLineIndices[0].lineIndex == lineIndex) {
+    if (lexicalCmp(nodeAndLineIndices[0],
+                   [nodeIndex, lineIndex],
+                   defaultCmp) == 0) {
         return nodeAndLineIndices[1]
     } else {
         return nodeAndLineIndices[0]
@@ -669,16 +729,12 @@ function otherNodeAndLineIndex(nodes, nodeIndex, lineIndex) {
 }
 
 function otherNodeIndex(nodes, nodeIndex, lineIndex) {
-    return otherNodeAndLineIndex(nodes, nodeIndex, lineIndex).node
+    return otherNodeAndLineIndex(nodes, nodeIndex, lineIndex)[0]
 }
 
 function isLeftOfLine(nodes, nodeIndex, lineIndex) {
-    const other = otherNodeAndLineIndex(nodes, nodeIndex, lineIndex)
-    if (other.node == nodeIndex) {
-        return other.lineIndex > nodeIndex
-    } else {
-        return other.node > nodeIndex
-    }
+    return lexicalCmp(otherNodeAndLineIndex(nodes, nodeIndex, lineIndex),
+                      [nodeIndex, lineIndex], defaultCmp) > 0
 }
 
 function nearestNodeIndices(nodes, count, x, y) {
@@ -700,7 +756,7 @@ const EMPTY_DIAGRAM = Object.freeze({
     superlines: Object.freeze({}),
     lines: Object.freeze({}),
 
-    // each entry is a "set" (object) of j's that are equal to each other
+    // each entry is an array of j's that are equal to each other
     deltas: Object.freeze([]),
 
     // each entry is an array of the three j's in ascending order
@@ -713,24 +769,9 @@ function w3jDiagram(a, b, c, x, y) {
     }
     return Object.freeze(Object.assign({}, EMPTY_DIAGRAM, {
         nodes: Object.freeze([
-            {
-                type: "terminal",
-                lines: Object.freeze([a]),
-                x: x - 50,
-                y: y + 50,
-            },
-            {
-                type: "terminal",
-                lines: Object.freeze([b]),
-                x: x + 50,
-                y: y + 50,
-            },
-            {
-                type: "terminal",
-                lines: Object.freeze([c]),
-                x: x,
-                y: y - 70,
-            },
+            terminalNode(a, a, x - 50, y + 50),
+            terminalNode(b, b, x + 50, y + 50),
+            terminalNode(c, c, x, y - 70),
             {
                 type: "w3j",
                 lines: Object.freeze([a, b, c]),
@@ -770,6 +811,25 @@ function cgDiagram(a, b, c, x, y) {
     }))
 }
 
+function setDiagramLineProps(diagram, lineId, props) {
+    const lines = diagram.lines
+    return Object.freeze(Object.assign({}, diagram, {
+        lines: Object.freeze(Object.assign({}, lines, {
+            [lineId]: Object.freeze(Object.assign({}, lines[lineId], props)),
+        })),
+    }))
+}
+
+function setDiagramNodeProps(diagram, nodeIndex, props) {
+    const nodes = diagram.nodes
+    return Object.freeze(Object.assign({}, diagram, {
+        nodes: Object.freeze(Object.assign([], nodes, {
+            [nodeIndex]: Object.freeze(Object.assign({}, nodes[nodeIndex],
+                                                     props)),
+        }))
+    }))
+}
+
 function lineAngle(diagram, nodeIndex, lineIndex) {
     const node = diagram.nodes[nodeIndex]
     const lineId = node.lines[lineIndex]
@@ -800,29 +860,6 @@ function w3jOrientation(diagram, nodeIndex) {
     }
 }
 
-// FIXME this is kind of broken with the introduction of arcs
-// should probably just use hover or something instead
-function findNearestLineId(diagram, x, y) {
-    return Object
-        .keys(diagram.lines)
-        .map(function(lineId) {
-            const nodeIndices = endNodeIndices(diagram.nodes, lineId)
-            return {
-                distance: linePointDistance(
-                    diagram.nodes[nodeIndices[0]].x,
-                    diagram.nodes[nodeIndices[0]].y,
-                    diagram.nodes[nodeIndices[1]].x,
-                    diagram.nodes[nodeIndices[1]].y,
-                    x, y
-                ),
-                id: lineId
-            }
-        })
-        .sort((x, y) => x.distance - y.distance)
-        .slice(0, 1)
-        .map(x => x.id)
-}
-
 function mergeDiagrams(diagram1, diagram2) {
     let diagram = deepClone(diagram1)
     Object.keys(diagram2.superlines).forEach(function(superlineId) {
@@ -846,7 +883,9 @@ function mergeDiagrams(diagram1, diagram2) {
     })
     let terminals = []
     diagram2.nodes.forEach(function(node) {
-        node.lines = node.lines.map(lineId => renames[lineId])
+        node = Object.assign({}, node, {
+            lines: node.lines.map(lineId => renames[lineId]),
+        })
         if (node.type == "terminal") {
             terminals.push(node)
         } else {
@@ -867,8 +906,7 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     }
     let other1 = otherNodeAndLineIndex(diagram.nodes, terminalIndex1, 0)
     let other2 = otherNodeAndLineIndex(diagram.nodes, terminalIndex2, 0)
-    if (other1.node > other2.node ||
-        (other1.node == other2.node && other1.lineIndex > other1.lineIndex)) {
+    if (lexicalCmp(other1, other2, defaultCmp) > 0) {
         // we only handle cases where LEFT < RIGHT
         ;[terminalIndex2, terminalIndex1] = [terminalIndex1, terminalIndex2]
         ;[other2, other1] = [other1, other2]
@@ -883,21 +921,14 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     }
 
     // join with other node
-    diagram.nodes[other2.node].lines[other2.lineIndex] = lineId1
+    diagram.nodes[other2[0]].lines[other2[1]] = lineId1
 
     // merge the lines (be careful with orientation)
-    let line1 = diagram.lines[lineId1]
-    let line2 = diagram.lines[lineId2]
-    if (other1.node > terminalIndex1) {
-        line1 = reverseLine(line1)
-    }
-    if (terminalIndex2 > other2.node) {
-        line2 = reverseLine(line2)
-    }
-    let joined = joinLines(line1, line2)
+    let joined = joinLines(diagram.lines[lineId1], other1[0] > terminalIndex1,
+                           diagram.lines[lineId2], terminalIndex2 > other2[0])
     let superlineId1 = joined.line.superline
     let superlineId2 = joined.otherSuperline
-    if (other1.node == other2.node && joined.line.arcHeight == 0.0) {
+    if (other1[0] == other2[0] && joined.line.arcHeight == 0.0) {
         joined.line.arcHeight = 50.0
     }
     changePhase(diagram.superlines[superlineId1], joined.phase)
@@ -911,9 +942,7 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     delete diagram.superlines[superlineId2]
 
     // delete the terminal nodes
-    ;[terminalIndex1, terminalIndex2]
-        .sort((x, y) => y - x)
-        .forEach(terminalIndex => diagram.nodes.splice(terminalIndex, 1))
+    diagram.nodes = arrayRemove(diagram.nodes, [terminalIndex1, terminalIndex2])
 
     return diagram
 }
@@ -938,6 +967,22 @@ function add2j(diagram, lineId) {
     return diagram
 }
 
+function flipW3j(diagram, nodeIndex) {
+    if (diagram.nodes[nodeIndex].type != "w3j") {
+        return diagram
+    }
+    diagram = deepClone(diagram)
+    let lines = diagram.nodes[nodeIndex].lines
+    lines.reverse()
+    for (let i = 0; i < 3; ++i) {
+        if (lines[i] == lines[(i + 1) % 3]) {
+            diagram.lines[lines[i]] = reverseLine(diagram.lines[lines[i]])
+            break
+        }
+    }
+    return diagram
+}
+
 function deleteNode(diagram, nodeIndex) {
     diagram = deepClone(diagram)
     const node = diagram.nodes[nodeIndex]
@@ -957,9 +1002,7 @@ function deleteNode(diagram, nodeIndex) {
         if (danglingSuperline) {
             delete diagram.superlines[superlineId]
         }
-        ;[nodeIndex, otherIndex]
-            .sort((x, y) => y - x)
-            .forEach(terminalIndex => diagram.nodes.splice(terminalIndex, 1))
+        diagram.nodes = arrayRemove(diagram.nodes, [nodeIndex, otherIndex])
     } else {
         let terminals = []
         node.lines.forEach(function(lineId, lineIndex) {
@@ -971,12 +1014,7 @@ function deleteNode(diagram, nodeIndex) {
             if (otherIndex < nodeIndex) {
                 diagram.lines[lineId] = reverseLine(diagram.lines[lineId])
             }
-            terminals.push({
-                type: "terminal",
-                lines: [lineId],
-                x: node.x,
-                y: node.y
-            })
+            terminals.push(terminalNode(lineId, lineId, node.x, node.y))
         })
         diagram.nodes.splice(nodeIndex, 1)
         diagram.nodes = terminals.concat(diagram.nodes)
@@ -986,13 +1024,16 @@ function deleteNode(diagram, nodeIndex) {
 
 //////////////////////////////////////////////////////////////////////////////
 // Diagrammatic rules
+//
+// We distinguish between transformations used for editing (which generally
+// do not preserve the semantics) and transformations used for derivations
+// that always preserve equivalence.  The latter are called "rules".
 
 function flipW3jRule(diagram, nodeIndex) {
     if (diagram.nodes[nodeIndex].type != "w3j") {
         return diagram
     }
-    diagram = deepClone(diagram)
-    diagram.nodes[nodeIndex].lines.reverse()
+    diagram = deepClone(flipW3j(diagram, nodeIndex))
     diagram.nodes[nodeIndex].lines.forEach(function(lineId) {
         const superlineId = diagram.lines[lineId].superline
         diagram.superlines[superlineId] =
@@ -1073,6 +1114,146 @@ function threeArrowRule(diagram, nodeIndex) {
     return diagram
 }
 
+function defaultCmp(x, y) {
+    if (x < y) {
+        return -1
+    } else if (y < x) {
+        return 1
+    } else {
+        return 0
+    }
+}
+
+function lexicalCmp(xs, ys, cmp) {
+    const nx = xs.length
+    const ny = ys.length
+    const n = nx < ny ? nx : ny
+    for (let i = 0; i < n; ++i) {
+        const r = cmp(xs[i], ys[i])
+        if (r) {
+            return r
+        }
+    }
+    return defaultCmp(nx, ny)
+}
+
+function deltaIntroRule(diagram, nodeIndex) {
+    const node = diagram.nodes[nodeIndex]
+    if (node.type != "w3j") {
+        return "this node is not a Wigner 3-jm symbol"
+    }
+
+    // check if the node has a loop
+    const nodeLines = node.lines
+    let cutIndex, loopLineIndex, expectedLoopDirection
+    if (nodeLines[0] == nodeLines[1]) {
+        cutIndex = 2
+        expectedLoopDirection = +1
+        loopLineIndex = nodeLines[0]
+    } else if (nodeLines[1] == nodeLines[2]) {
+        cutIndex = 0
+        expectedLoopDirection = +1
+        loopLineIndex = nodeLines[1]
+    } else if (nodeLines[2] == nodeLines[0]) {
+        cutIndex = 1
+        expectedLoopDirection = -1
+        loopLineIndex = nodeLines[2]
+    } else {
+        return "no loops found"
+    }
+
+    // make sure the loop is directed
+    const loopSuperlineId = diagram.lines[loopLineIndex].superline
+    let loopPhase
+    switch (diagram.lines[loopLineIndex].direction * expectedLoopDirection) {
+        case 1:
+            loopPhase = 0
+            break
+        case -1:
+            loopPhase = 2
+            break
+        default:
+            return "loop must be directed"
+    }
+
+    const other = otherNodeAndLineIndex(diagram.nodes, nodeIndex, cutIndex)
+    const otherNode = diagram.nodes[other[0]]
+    if (otherNode.type != "w3j") {
+        return "other node is not a Wigner 3-jm symbol"
+    }
+
+    // join the lines (this part is really messy)
+    const joins = [0, 1, 2]
+        .filter(i => i != other[1])
+        .map(lineIndex => ({
+            lineIndex: lineIndex,
+            id: otherNode.lines[lineIndex],
+            line: diagram.lines[otherNode.lines[lineIndex]],
+            end: isLeftOfLine(diagram.nodes, other[0], lineIndex),
+            nl: otherNodeAndLineIndex(diagram.nodes, other[0], lineIndex),
+        }))
+        .sort((x, y) => lexicalCmp(x.nl, y.nl, defaultCmp))
+    const joined = joinLines(joins[0].line, joins[0].end,
+                             joins[1].line, !joins[1].end)
+    const direction = mod(joins[1].lineIndex - joins[0].lineIndex, 3) == 1
+                    ? 1 : -1
+    let line = joined.line
+    line.direction += direction
+    const canonicalized = canonicalizeLine(line)
+    let lines = Object.assign({}, diagram.lines)
+    delete lines[loopLineIndex]
+    delete lines[node.lines[cutIndex]]
+    delete lines[joins[1].id]
+    lines[joins[0].id] = canonicalized.line
+
+    // update the phase on the loop superline
+    let superlines = Object.assign({}, diagram.superlines)
+    superlines[loopSuperlineId] = mergeSuperlines(superlines[loopSuperlineId], {
+        phase: loopPhase,
+        weight: 1,
+    })
+
+    // join the other two superlines
+    const superline1 = joined.line.superline
+    const superline2 = joined.otherSuperline
+    if (superline1 != superline2) {
+        superlines[superline1] = mergeSuperlines(diagram.superlines[superline1],
+                                                 diagram.superlines[superline2])
+        superlines[superline2] = EMPTY_SUPERLINE
+    }
+    superlines[superline1] = mergeSuperlines(superlines[superline1], {
+        phase: joined.phase + canonicalized.phase,
+        weight: -1,
+    })
+
+    // update nodes and other things
+    return Object.freeze(Object.assign({}, diagram, {
+        nodes: Object.freeze(arrayRemove(Object.assign([], diagram.nodes, {
+            [joins[0].nl[0]]: Object.freeze(Object.assign(
+                {}, diagram.nodes[joins[0].nl[0]], {
+                    lines: Object.freeze(Object.assign(
+                        [], diagram.nodes[joins[0].nl[0]].lines, {
+                            [joins[0].nl[1]]: joins[0].id,
+                        })),
+                })),
+            [joins[1].nl[0]]: Object.freeze(Object.assign(
+                {}, diagram.nodes[joins[1].nl[0]], {
+                    lines: Object.freeze(Object.assign(
+                        [], diagram.nodes[joins[1].nl[0]].lines, {
+                            [joins[1].nl[1]]: joins[0].id,
+                        })),
+                })),
+        }), [nodeIndex, other[0]])),
+        lines: Object.freeze(lines),
+        superlines: superlines,
+        deltas: addDelta(addDelta(diagram.deltas,
+                                  superline1,
+                                  superline2),
+                         ZERO_J,
+                         node.lines[cutIndex])
+    }))
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Drawing
 
@@ -1099,6 +1280,7 @@ function renderArrow(update, diagram, lineId) {
     // the arrow centered
     const correction = line.direction * arrowHeadSize / 2
     const position = positionOnLine(info, line.arrowPos, correction)
+    const rawPosition = positionOnLine(info, line.arrowPos, 0)
     const angle = position.tangentAngle
                 + Number(line.direction < 0) * Math.PI
     if (line.direction == 0) {
@@ -1116,7 +1298,7 @@ function renderArrow(update, diagram, lineId) {
         oncontextmenu: function(e) { e.preventDefault() },
         onmousedown: function(e) {
             if (e.buttons == 1) {
-                update(startDrag(position.x, position.y, {
+                update(startDrag(rawPosition.x, rawPosition.y, {
                     superficial: true,
                 }, (diagram, x, y) => {
                     // prevent arrows from getting stuck under nodes
@@ -1199,7 +1381,19 @@ function renderLine(update, diagram, lineId) {
         }
     }
     return vnode(
-        "svg:g", {"class": "line"},
+        "svg:g", {
+            "class": "line",
+            onmouseover: function(e) {
+                update(setActive({
+                    type: "line",
+                    lineId: lineId,
+                }))
+            },
+            onmouseout: function(e) {
+                update(setActive({type: null}))
+            },
+        },
+        vnode("svg:title", {}, `j[${line.superline}] m[${lineId}]`),
         // this path (1) increases hit area (2) helps delineate crossing lines
         vnode("svg:path", {
             fill: "none",
@@ -1256,13 +1450,13 @@ function renderLine(update, diagram, lineId) {
     )
 }
 
-function renderNode(update, diagram, nodeIndex) {
+function renderNode(update, diagram, nodeIndex, frozen) {
     const node = diagram.nodes[nodeIndex]
     let gChildren = [vnode("svg:title", {},
                            node.type == "w3j"
-                         ? "Wigner 3-jm symbol"
+                         ? `Wigner[${node.lines.join(" ")}]`
                          : node.type == "terminal"
-                         ? "Line terminal"
+                         ? `m[${node.variable}]`
                          : node.type)]
 
     if (node.type == "w3j") {
@@ -1285,7 +1479,7 @@ function renderNode(update, diagram, nodeIndex) {
     } else if (node.type == "terminal") {
         gChildren.push(vnode("svg:circle", {
             r: 10,
-            fill: "rgba(0, 0, 0, 0.2)",
+            fill: frozen ? "transparent" : "rgba(0, 0, 0, 0.2)",
         }))
 
     } else {
@@ -1304,6 +1498,15 @@ function renderNode(update, diagram, nodeIndex) {
     return vnode("svg:g", {
         transform: `translate(${node.x}, ${node.y})`,
         oncontextmenu: function(e) { e.preventDefault() },
+        onmouseover: function(e) {
+            update(setActive({
+                type: "node",
+                nodeIndex: nodeIndex,
+            }))
+        },
+        onmouseout: function(e) {
+            update(setActive({type: null}))
+        },
         onmousedown: function(e) {
             if (e.buttons == 1) {
                 update(startDrag(node.x, node.y, {
@@ -1327,8 +1530,13 @@ function renderNode(update, diagram, nodeIndex) {
                 }
                 e.preventDefault()
             } else if (e.buttons == 4) {
-                update(modifyDiagram({equivalent: true}, diagram =>
-                    threeArrowRule(diagram, nodeIndex)))
+                if (e.shiftKey) {
+                    update(modifyDiagram({equivalent: true}, diagram =>
+                        deltaIntroRule(diagram, nodeIndex)))
+                } else {
+                    update(modifyDiagram({equivalent: true}, diagram =>
+                        threeArrowRule(diagram, nodeIndex)))
+                }
                 e.preventDefault()
             }
         },
@@ -1347,25 +1555,29 @@ function renderJTableau(update, superlines) {
         let phase
         switch (mod(superline.phase, 4)) {
             case 0:
-                phase = ["  "]
+                phase = ["\xa0\xa0"]
                 break
             case 1:
-                phase = [" ."]
+                phase = ["\xa0."]
                 break
             case 2:
-                phase = [vnode("span", {"class": "two-j"}, ":"), " "]
+                phase = [vnode("span", {"class": "two-j"}, ":"), "\xa0"]
                 break
             case 3:
                 phase = [vnode("span", {"class": "two-j"}, ":"), "."]
                 break
         }
         let weight = superline.weight
-                   ? (superline.weight > 0 ? "+" : "")
-                   + superline.weight
+                   ? (superline.weight > 0
+                    ? "+"
+                    : superline.weight < 0
+                    ? "\u2212"
+                    : "")
+                   + Math.abs(superline.weight)
                    : ""
         return vnode(
             "tr", {},
-            vnode("td", {"class": "summed"}, superline.summed ? "∑" : ""),
+            vnode("td", {"class": "summed"}, superline.summed ? "\u2211" : ""),
             vnode("td", {"class": "name"}, superlineId),
             vnode("td", {"class": "phase"}, ...phase),
             vnode("td", {"class": "weight"}, weight),
@@ -1374,47 +1586,90 @@ function renderJTableau(update, superlines) {
 }
 
 function renderTriangleTableau(update, triangles) {
-    return triangles.forEach((triangle, triangleIndex) => vnode("li", {
+    return triangles.map((triangle, triangleIndex) => vnode("li", {
         onmousedown: function(e) {
             update(modifyDiagram({equivalent: true}, diagram =>
                 trianglePhaseRule(diagram, triangleIndex)))
             e.preventDefault()
         },
-    }, "△{" + triangle.join(", ") + "}"))
+    }, "{" + triangle.join(" ") + "}"))
 }
 
 function renderDeltaTableau(update, deltas) {
-    return deltas.forEach(delta =>
-        vnode("li", {}, Array.from(Object.keys(delta)).sort().join(" = ")))
+    return deltas.map(delta =>
+        vnode("li", {},
+              ...intercalate(
+                  " = ",
+                  Array.from(delta)
+                       .map(x => isZeroJ(x)
+                             ? vnode("span", {"class": "zero"}, "0")
+                             : String(x)))))
+}
+
+function renderVariable(type, name) {
+    if (type == "j" && isZeroJ(name)) {
+        return "0"
+    }
+    return `${type}_{\\text{${name}}}`
 }
 
 function renderEquationLine(diagram, nodeIndex, lineIndex, summedVars) {
     const lineId = diagram.nodes[nodeIndex].lines[lineIndex]
-    const mNaked = `m_{${lineId}}`
-    let jm = {
-        j: `j_{${diagram.lines[lineId].superline}}`,
-        m: mNaked
-    }
     const line = diagram.lines[lineId]
     const otherIndex = otherNodeIndex(diagram.nodes, nodeIndex, lineIndex)
-    if (otherIndex < nodeIndex && line.direction != 0) {
-        jm.m = `\\overline{${jm.m}}`
+    const otherNode = diagram.nodes[otherIndex]
+    // avoid redundant summation over an m-delta
+    const mName = otherNode.type == "terminal"
+                ? otherNode.variable
+                : lineId
+    const mNaked = renderVariable("m", mName)
+    const jm = {
+        j: renderVariable("j", diagram.lines[lineId].superline),
+        m: otherIndex < nodeIndex && line.direction != 0
+         ? `\\overline{${mNaked}}`
+         : mNaked,
     }
     if (line.superline.summed) {
         summedVars.js[jm.j] = true
     }
-    if (diagram.nodes[otherIndex].type != "terminal") {
+    if (otherNode.type != "terminal") {
         summedVars.ms[mNaked] = true
     }
     return jm
 }
 
 function renderEquation(diagram, container) {
+    const nodes = diagram.nodes
     let s = ""
     let summedVars = {js: {}, ms: {}}
     let phases = []
-    diagram.nodes.forEach(function(node, nodeIndex) {
+    let mDeltas = []
+    nodes.forEach(function(node, nodeIndex) {
         if (node.type == "terminal") {
+            const otherIndex = otherNodeIndex(nodes, nodeIndex, 0)
+            if (otherIndex > nodeIndex) {
+                return
+            }
+            const var1 = nodes[otherIndex].variable
+            const var2 = node.variable
+            if (var1 == var2) {
+                return
+            }
+            const m1 = renderVariable("m", var1)
+            const m2 = renderVariable("m", var2)
+            switch (diagram.lines[node.lines[0]].direction) {
+                case 0:
+                    mDeltas.push(`\\delta_{${m1} ${m2}}`)
+                    break
+                case -1:
+                    mDeltas.push(`\\delta_{${m1} \\overline{${m2}}}`)
+                    break
+                case 1:
+                    mDeltas.push(`\\delta_{\\overline{${m1}} ${m2}}`)
+                    break
+                default:
+                    throw new Error(`unnormalized direction: ${direction}`)
+            }
         } else if (node.type == "w3j") {
             s += "\\begin{pmatrix}"
             let jRow = ""
@@ -1461,22 +1716,49 @@ function renderEquation(diagram, container) {
                 phases.push(`- j_{${superlineId}}`)
                 break
         }
-        if (superline.weight) {
+        if (superline.weight == 0) {
+        } else if (superline.weight == 2) {
+            weights += ` (2 j_{${superlineId}} + 1)`
+        } else if (superline.weight % 2 == 0) {
+            weights += ` (2 j_{${superlineId}} + 1)^{${superline.weight / 2}}`
+        } else {
             weights += ` (2 j_{${superlineId}} + 1)^{${superline.weight} / 2}`
         }
     })
     Object.keys(diagram.lines).forEach(function(lineId) {
         const line = diagram.lines[lineId]
-        if (line.direction != 0) {
-            phases.push(`+ j_{${diagram.lines[lineId].superline}} `
-                      + `${line.direction < 0 ? "+" : "-"} m_{${lineId}}`)
+        let name
+        switch (line.direction) {
+            case 0:
+                return
+            case -1:
+                const node2 = nodes[endNodeIndices(nodes, lineId)[1]]
+                if (node2.type == "terminal") {
+                    name = node2.variable
+                } else {
+                    name = lineId
+                }
+                break
+            case 1:
+                const node1 = nodes[endNodeIndices(nodes, lineId)[0]]
+                if (node1.type == "terminal") {
+                    name = node1.variable
+                } else {
+                    name = lineId
+                }
+                break
+            default:
+                throw new Error(`unnormalized direction: ${direction}`)
         }
+        const j = renderVariable("j", diagram.lines[lineId].superline)
+        const m = renderVariable("m", name)
+        phases.push(`+ ${j} ${line.direction < 0 ? "+" : "-"} ${m}`)
     })
-    let summedVarsStr = Array.from(Object.keys(summedVars.js)).join(" ")
+    let summedVarsStr = Object.keys(summedVars.js).join(" ")
                       + " "
-                      + Array.from(Object.keys(summedVars.ms)).join(" ")
+                      + Object.keys(summedVars.ms).join(" ")
     if (summedVarsStr != " ") {
-        summedVarsStr = `\\sum_{${summedVars}}`
+        summedVarsStr = `\\sum_{${summedVarsStr}}`
     }
     let phasesStr = phases.join(" ")
     if (phasesStr) {
@@ -1485,8 +1767,21 @@ function renderEquation(diagram, container) {
         }
         phasesStr = `(-1)^{${phasesStr}}`
     }
-    container.textContent =
-        `\\[${summedVarsStr} ${weights} ${phasesStr} ${s}\\]`
+    const mDeltasStr = mDeltas.join(" ")
+    const jDeltas = diagram.deltas.map(js => {
+        if (js.length < 2) {
+            return ""
+        }
+        const j0 = renderVariable("j", js[0])
+        return js.slice(1)
+                 .map(j => `\\delta_{${j0} ${renderVariable("j", j)}}`)
+                 .join(" ")
+    }).join(" ")
+    const triangles = diagram.triangles.map(js =>
+        `\\{${js.map(j => renderVariable("j", j)).join(", ")}\}`
+    ).join(" ")
+    container.textContent = `\\[${summedVarsStr} ${jDeltas} ${mDeltasStr} `
+                          + `${weights} ${phasesStr} ${s}\\]`
     MathJax.Hub.Queue(["Typeset", MathJax.Hub])
 }
 
@@ -1517,7 +1812,7 @@ function newEditor(diagram, frozen) {
         staleEquation: true,
 
         // controls
-        modifiers: 0,
+        active: {type: null},
         mouseX: null,
         mouseY: null,
         dragTrail: {xs: [], ys: []},
@@ -1539,6 +1834,7 @@ function loadEditor(editor) {
         Object.assign(editor, INITIAL_EDITOR)
     } else if (editor.savedHash != hash) {
         editor.snapshot = JSON.parse(decodeURIComponent(hash.substr(1)))
+        editor.staleEquation = true
         editor.savedSnapshot = editor.snapshot
         editor.savedHash = hash
     }
@@ -1552,7 +1848,6 @@ function renderEditor(update, editor) {
             attributes: {
                 onhashchange: _ => update(loadEditor),
                 onkeydown: e => update(keyDown.bind(null, e)),
-                onkeyup: e => update(changeKeyState(e)),
                 onmousemove: e => update(mouseMove(e)),
                 onmouseup: e => update(mouseUp(e)),
             },
@@ -1571,7 +1866,7 @@ function renderEditor(update, editor) {
         {
             element: document.getElementById("diagram-nodes"),
             children: diagram.nodes.map((_, nodeIndex) =>
-                renderNode(update, diagram, nodeIndex)),
+                renderNode(update, diagram, nodeIndex, editor.snapshot.frozen)),
         },
         {
             element: document.getElementById("diagram-drag-trail"),
@@ -1616,7 +1911,7 @@ function renderEditor(update, editor) {
 //   transient
 //   equivalent
 //   superficial (implies equivalent)
-//   toggleFreeze (implies equivalent)
+//   toggleFreeze (implies superficial)
 function modifyDiagram(flags, diagramTransform) {
     return editor => {
         const equivalent = flags.equivalent
@@ -1626,31 +1921,38 @@ function modifyDiagram(flags, diagramTransform) {
             // nonequivalent changes are forbidden while frozen
             return
         }
+        const diagram = diagramTransform(editor.snapshot.diagram)
+        if (typeof(diagram) == "string") { // error?
+            error(diagram)
+            return
+        }
         editor.snapshot = Object.assign({}, editor.snapshot, {
-            diagram: diagramTransform(editor.snapshot.diagram),
+            diagram: diagram,
             frozen: Boolean(Number(flags.toggleFreeze)
                           ^ Number(editor.snapshot.frozen)),
         })
         if (!flags.transient) {
             saveEditor(editor)
         }
-        editor.staleEquation = !flags.superficial
-                            || editor.staleEquation
+        const superficial = flags.superficial || flags.toggleFreeze
+        editor.staleEquation = !superficial || editor.staleEquation
     }
 }
 
-function changeKeyState(event) {
-    return editor => {
-        editor.modifiers = event.altKey
-            | (event.ctrlKey << 1)
-            | (event.shiftKey << 2)
-    }
+function getModifiers(event) {
+    return event.altKey | (event.ctrlKey << 1) | (event.shiftKey << 2)
 }
 
 function freshenEquation(container) {
     return editor => {
         editor.staleEquation = false
         renderEquation(editor.snapshot.diagram, container)
+    }
+}
+
+function setActive(entity) {
+    return editor => {
+        editor.active = entity
     }
 }
 
@@ -1705,15 +2007,21 @@ function startDrag(x, y, flags, dragger) {
     }
 }
 
-function keyDown(event, editor) {
+function keyDown(e, editor) {
     const snapshot = editor.snapshot
     const update = f => f(editor)
 
-    update(changeKeyState(event))
-
     // reload
-    if (editor.modifiers == 0 && event.key == "r") {
+    if (getModifiers(e) == 0 && e.key == "r") {
         window.location.href = ""
+        e.preventDefault()
+        return
+    }
+
+    // help
+    if (getModifiers(e) == SHIFT && e.key == "?") {
+        window.location.href = "help.txt"
+        e.preventDefault()
         return
     }
 
@@ -1723,13 +2031,15 @@ function keyDown(event, editor) {
         return
     }
 
-    // create Clebsch–Gordan coefficient
-    if (editor.modifiers == 0 && event.key == "f") {
+    // create Clebsch-Gordan coefficient
+    if (getModifiers(e) == 0 && e.key == "f") {
         update(modifyDiagram({toggleFreeze: true}, identity))
+        e.preventDefault()
+        return
     }
 
-    // create Clebsch–Gordan coefficient
-    if (editor.modifiers == 0 && event.key == "c") {
+    // create Clebsch-Gordan coefficient
+    if (getModifiers(e) == 0 && e.key == "c") {
         update(modifyDiagram({}, diagram => {
             const labels = availSuperlineLabels(diagram, 3)
             return mergeDiagrams(diagram,
@@ -1739,10 +2049,12 @@ function keyDown(event, editor) {
                                            editor.mouseX,
                                            editor.mouseY))
         }))
+        e.preventDefault()
+        return
     }
 
     // create Wigner 3-jm
-    if (editor.modifiers == 0 && event.key == "w") {
+    if (getModifiers(e) == 0 && e.key == "w") {
         update(modifyDiagram({}, diagram => {
             const labels = availSuperlineLabels(diagram, 3)
             return mergeDiagrams(diagram, w3jDiagram(labels[0],
@@ -1751,10 +2063,12 @@ function keyDown(event, editor) {
                                                      editor.mouseX,
                                                      editor.mouseY))
         }))
+        e.preventDefault()
+        return
     }
 
     // attach
-    if (editor.modifiers == 0 && event.key == "a") {
+    if (getModifiers(e) == 0 && e.key == "a") {
         update(modifyDiagram({}, diagram => {
             const nearest = nearestNodeIndices(diagram.nodes, 2,
                                                editor.mouseX,
@@ -1768,40 +2082,35 @@ function keyDown(event, editor) {
                 return joinTerminals(diagram, nearest[0], nearest[1])
             }
         }))
+        e.preventDefault()
+        return
     }
 
     // create Wigner 1-jm
-    if (editor.modifiers == 0 && event.key == "m") {
-        update(modifyDiagram({}, diagram => {
-            const nearest = findNearestLineId(diagram,
-                                              editor.mouseX,
-                                              editor.mouseY)
-            if (nearest.length != 1) {
-                error("no nearby line found")
-                return diagram
-            } else {
-                return addW1j(diagram, nearest)
-            }
-        }))
+    if (getModifiers(e) == 0 && e.key == "m" && editor.active.type == "line") {
+        update(modifyDiagram({}, diagram =>
+            addW1j(diagram, editor.active.lineId)))
+        e.preventDefault()
+        return
     }
 
-    // add 2j phase
-    if (editor.modifiers == 0 && event.key == "j") {
-        update(modifyDiagram({}, diagram => {
-            const nearest = findNearestLineId(diagram,
-                                              editor.mouseX,
-                                              editor.mouseY)
-            if (nearest.length != 1) {
-                error("no nearby line found")
-                return diagram
-            } else {
-                return add2j(diagram, nearest)
-            }
-        }))
+    // add 2j phase / flip Wigner 3j node
+    if (getModifiers(e) == 0 && e.key == "j") {
+        if (editor.active.type == "line") {
+            update(modifyDiagram({}, diagram =>
+                add2j(diagram, editor.active.lineId)))
+            e.preventDefault()
+            return
+        } else if (editor.active.type == "node") {
+            update(modifyDiagram({}, diagram =>
+                flipW3j(diagram, editor.active.nodeIndex)))
+            e.preventDefault()
+            return
+        }
     }
 
     // delete node
-    if (editor.modifiers == 0 && event.key == "x") {
+    if (getModifiers(e) == 0 && e.key == "x") {
         update(modifyDiagram({}, diagram => {
             const nodes = diagram.nodes
             const nearest = nearestNodeIndices(nodes, 1,
@@ -1817,6 +2126,8 @@ function keyDown(event, editor) {
                 return deleteNode(diagram, nearest[0])
             }
         }))
+        e.preventDefault()
+        return
     }
 }
 
@@ -1832,7 +2143,7 @@ function error(msg) {
         window.clearTimeout(errorTimeout)
     }
     errorTimeout = window.setTimeout(function() {
-        notice.textContent = " "
+        notice.textContent = "\xa0"
     }, 10000)
 }
 

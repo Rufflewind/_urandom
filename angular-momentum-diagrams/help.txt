@@ -1,0 +1,95 @@
+This tool is very much a work in progress.  Beware of incomplete features,
+bugs, etc.
+
+Right now, there is no plan to make this work on mobile, sorry.  You need a
+relatively modern browser, and a working mouse with a scroll-wheel button.
+
+Unfinished major features:
+- Pinching rule (orthogonality) is not yet implemented
+- Cutting rule (factorization/separation) is not yet implemented
+- Reversed pruning rule (zero delta) is not yet implemented
+- Triangular deltas are not yet tracked
+- No way to rename the variables yet
+
+Layout
+======
+
+The main area shows the diagram, of course.
+
+The right panel shows the tableau, which tracks phases, weights, and other
+tedious details.
+
+The bottom panel, if clicked, will display the equation.  This equation is not
+updated automatically (because MathJax is really slow).
+
+Usage
+=====
+
+There are two kinds of things you can do in the editor:
+
+  - Editing:
+      - These often violate equivalence.
+      - You can disable editing by toggling the frozen mode ([f] key).
+
+  - Applying rules:
+      - These always preserve equivalence (if not then it's a bug...)
+
+You can "undo" by clicking the back button on your browser.  Note that every
+change to the diagram automatically updates the URL, so you can "save"
+diagrams by bookmarking the URL.  You can also send it to other people.  (Be
+aware that the URL can get very very long for complicated diagrams!)
+
+Editing
+-------
+
+[w]: create a Wigner 3-jm symbol at the location of your cursor
+[c]: create a Clebsch-Gordan coefficient at the location of your cursor
+[m]: create/flip/destroy a Wigner 1-jm symbol on the line at
+     the location of your cursor
+     (this is simply a (-1)^(j - m) phase factor)
+[j]: on a line, this will create a (-1)^(2 j) phase factor
+     on a Wigner 3-jm node, it will flip the node without changing any phases
+
+[a]: attach/join two nearby terminals, forming a single line
+[x]: delete a node or a free line
+[f]: turn frozen mode on or off (this disables editing)
+[r]: reset and clear the entire diagram
+     (note if you encounter a bug in the app and [r] doesn't work,
+      you can still click on this button as a link to reset!)
+
+Rules
+-----
+
+First of all, you're allowed to move things around freely (with the exception
+of the terminals, which remain fixed).  You can drag nodes, lines, arrows, and
+labels.
+
+These are the explicit rules that you can use.  Don't worry about the
+phase factors or weights: the editor will automatically adjust them :D
+
+- [Right-click] on a node to flip the orientation.
+  This changes the phase by (-1)^(j1 + j2 + j3)
+
+- [Shift] + [Right-click] on a node to change the phase by
+  (-1)^(j1 + j2 + j3)
+
+- [Middle-click] on a node to change the surrounding arrows
+
+- [Right-click] on an arrow to flip the arrow.
+  This changes the phase by (-1)^(2 j)
+
+- [Shift] + [Middle-click] on a node to simplify a node that is connected to
+  itself (pruning rule).
+
+Interpretation
+==============
+
+Here, arrows on the diagram are interpreted literally as (-1)^(j - m) phase
+factors, accompanied by a reversal of the sign of m.  This makes their
+behavior somewhat different from the conventional Jucys diagrams where arrows
+signify variance.  The end result is that the rules are (IMO) much more
+mechanical and translate easily to an equation.  There is a cost though, in
+that certain "unsaturable" diagrams can occur if the diagrams are not
+manipulated carefully.  Eventually, the goal is to have the application tell
+you when the diagram has reached an unsaturable state, but this is not yet
+implemented.

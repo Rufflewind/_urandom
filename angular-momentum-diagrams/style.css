@@ -29,6 +29,12 @@ h1, p {
     padding: 2px;
 }
 
+#controls a:link,
+#controls a:visited {
+    color: blue;
+    text-decoration: none;
+}
+
 #freeze.active {
     background: #81d930;
 }
@@ -55,7 +61,7 @@ main,
 }
 
 #equation-container.stale #equation {
-    background: #e2caca;
+    color: #999;
 }
 
 #diagram-container,
@@ -140,4 +146,9 @@ path#diagram-drag-trail {
     stroke-linejoin: round;
     stroke: rgba(45, 182, 244, 0.4);
     stroke-width: 10px;
+}
+
+#delta-tableau .zero {
+    color: #2966c6;
+    font-weight: bold;
 }
