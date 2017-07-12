@@ -26,6 +26,14 @@ function clamp(min, max, x) {
     }
 }
 
+function round(dx, x) {
+    return x + dx / 2 - mod(x + dx / 2, dx)
+}
+
+function roundIf(cond, dx, x) {
+    return cond ? round(dx, x) : x
+}
+
 function sortTwo(x, y) {
     if (x < y) {
         return [x, y]
@@ -58,6 +66,15 @@ function arrayEqual(xs, ys) {
     return true
 }
 
+let currentId = 0
+const idMap = new WeakMap()
+function id(object) {
+    if (!idMap.has(object)) {
+        idMap.set(object, ++currentId)
+    }
+    return idMap.get(object)
+}
+
 function deduplicateObject(object, image) {
     const ks = Object.keys(object)
     if (ks.length != Object.keys(image).length) {
@@ -74,8 +91,8 @@ function deduplicateObject(object, image) {
 function arrayRemove(xs, indices) {
     xs = Array.from(xs)
     Array.from(indices)
-         .sort((x, y) => y - x)
-         .forEach(i => xs.splice(i, 1))
+              .sort((x, y) => y - x)
+              .forEach(i => xs.splice(i, 1))
     return xs
 }
 
@@ -303,10 +320,10 @@ function vnodeRenderChildren(children, elem) {
                 while (oldChild) {
                     if (oldChild instanceof Element ||
                         oldChild instanceof Text) {
-                        elem.removeChild(oldChild)
                         if (oldChild[VNODE_KEY] == key) {
                             break
                         }
+                        elem.removeChild(oldChild)
                     } else {
                         elem.insertBefore(fragment, oldChild)
                         ++j
@@ -549,7 +566,8 @@ function joinLines(line1, reverse1, line2, reverse2) {
         direction: line1.direction + line2.direction,
         arrowPos: (line1.arrowPos + line2.arrowPos) / 2,
         arcHeight: (line1.arcHeight + line2.arcHeight) / 2,
-        angle: 0.0, // can't take an average here
+        angle: Math.atan2(Math.sin(line1.angle) + Math.sin(line2.angle),
+                          Math.cos(line1.angle) + Math.cos(line2.angle)),
         textPos: (line1.arrowPos + line2.arrowPos) / 2,
         textOffset: line1.textOffset + line2.textOffset,
     }), {otherSuperline: superlines[1]})
@@ -616,7 +634,7 @@ function findPosOnLine(lineInfo, x, y) {
         const rx = x - lineInfo.x0
         const ry = y - lineInfo.y0
         pos = (lineInfo.dx * rx + lineInfo.dy * ry)
-             / Math.pow(lineInfo.lineLength, 2)
+        / Math.pow(lineInfo.lineLength, 2)
         // left-handed coordinate system!
         offset = -(rx * lineInfo.dy - ry * lineInfo.dx) / lineInfo.lineLength
     } else {
@@ -628,7 +646,7 @@ function findPosOnLine(lineInfo, x, y) {
         const shift = 0.5 * cycle - 0.5 // remove the bias toward pos = 1.0
         pos = mod(rawAngle / (2 * arc.inclination) + shift, cycle) - shift
         offset = (Math.sqrt(rx * rx + ry * ry) - Math.abs(arc.radius))
-               * sgn(lineInfo.line.arcHeight)
+        * sgn(lineInfo.line.arcHeight)
     }
     return {
         pos: pos,
@@ -897,9 +915,6 @@ function mergeDiagrams(diagram1, diagram2) {
 }
 
 function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
-        if (typeof(terminalIndex1) != "number" || typeof(terminalIndex2) != "number") {
-            throw "WTF"
-        }
     if (diagram.nodes[terminalIndex1].type != "terminal" ||
         diagram.nodes[terminalIndex2].type != "terminal") {
         throw new Error("cannot join non-terminals")
@@ -920,20 +935,26 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
         return diagram
     }
 
-    // join with other node
-    diagram.nodes[other2[0]].lines[other2[1]] = lineId1
-
     // merge the lines (be careful with orientation)
-    let joined = joinLines(diagram.lines[lineId1], other1[0] > terminalIndex1,
-                           diagram.lines[lineId2], terminalIndex2 > other2[0])
+    let line1 = diagram.lines[lineId1]
+    let line2 = diagram.lines[lineId2]
+    line1.angle = getLineInfo(diagram, lineId1).angle
+    line2.angle = getLineInfo(diagram, lineId2).angle
+    let joined = joinLines(line1, other1[0] > terminalIndex1,
+                           line2, terminalIndex2 > other2[0])
     let superlineId1 = joined.line.superline
     let superlineId2 = joined.otherSuperline
     if (other1[0] == other2[0] && joined.line.arcHeight == 0.0) {
-        joined.line.arcHeight = 50.0
+        joined.line.arcHeight =
+            (getLineInfo(diagram, lineId1).lineLength
+           + getLineInfo(diagram, lineId2).lineLength) / 2
     }
     changePhase(diagram.superlines[superlineId1], joined.phase)
     diagram.lines[lineId1] = joined.line
     delete diagram.lines[lineId2]
+
+    // join with other node
+    diagram.nodes[other2[0]].lines[other2[1]] = lineId1
 
     // equate superlines and merge their factors
     diagram.superlines[superlineId1] =
@@ -983,6 +1004,17 @@ function flipW3j(diagram, nodeIndex) {
     return diagram
 }
 
+function isDanglingSuperline(diagram, superlineId) {
+    const lineIds = Object.keys(diagram.lines)
+    let i = lineIds.length
+    while (i--) {
+        if (diagram.lines[lineIds[i]].superline == superlineId) {
+            return false
+        }
+    }
+    return true
+}
+
 function deleteNode(diagram, nodeIndex) {
     diagram = deepClone(diagram)
     const node = diagram.nodes[nodeIndex]
@@ -993,13 +1025,7 @@ function deleteNode(diagram, nodeIndex) {
         }
         const superlineId = diagram.lines[node.lines[0]].superline
         delete diagram.lines[node.lines[0]]
-        let danglingSuperline = true
-        Object.keys(diagram.lines).forEach(function(lineId) {
-            if (diagram.lines[lineId].superline == superlineId) {
-                danglingSuperline = false
-            }
-        })
-        if (danglingSuperline) {
+        if (isDanglingSuperline(diagram, superlineId)) {
             delete diagram.superlines[superlineId]
         }
         diagram.nodes = arrayRemove(diagram.nodes, [nodeIndex, otherIndex])
@@ -1008,7 +1034,15 @@ function deleteNode(diagram, nodeIndex) {
         node.lines.forEach(function(lineId, lineIndex) {
             const otherIndex = otherNodeIndex(diagram.nodes, nodeIndex, lineIndex)
             if (otherIndex == nodeIndex) {
-                delete diagram.lines[lineIndex]
+                const line = diagram.lines[lineId]
+                if (!line) {
+                    return
+                }
+                delete diagram.lines[lineId]
+                const superlineId = line.superline
+                if (isDanglingSuperline(diagram, superlineId)) {
+                    delete diagram.superlines[superlineId]
+                }
                 return
             }
             if (otherIndex < nodeIndex) {
@@ -1259,8 +1293,7 @@ function deltaIntroRule(diagram, nodeIndex) {
 
 function twoJColor(diagram, lineId) {
     const superlineId = diagram.lines[lineId].superline
-    return mod(diagram.superlines[superlineId].phase, 4) >= 2 ?
-           "#ac53b3" : "#051308"
+    return mod(diagram.superlines[superlineId].phase, 4) >= 2
 }
 
 function renderArrow(update, diagram, lineId) {
@@ -1287,25 +1320,24 @@ function renderArrow(update, diagram, lineId) {
         return []
     }
     return [vnode("svg:use", {
+        "class": "arrow " + (twoJColor(diagram, lineId) ? "two-j " : ""),
         href: "#arrowhead",
         x: -arrowHeadSize,
         y: -arrowHeadSize / 2,
         width: arrowHeadSize,
         height: arrowHeadSize,
-        fill: twoJColor(diagram, lineId),
         transform: `translate(${position.x}, ${position.y}),`
                  + `rotate(${angle * 180 / Math.PI})`,
-        oncontextmenu: function(e) { e.preventDefault() },
         onmousedown: function(e) {
             if (e.buttons == 1) {
                 update(startDrag(rawPosition.x, rawPosition.y, {
                     superficial: true,
-                }, (diagram, x, y) => {
-                    // prevent arrows from getting stuck under nodes
-                    const pos = clamp(0.1, 0.9, findPosOnLine(info, x, y).pos)
+                }, (diagram, x, y, snap) => {
+                    const pos = findPosOnLine(info, x, y).pos
                     let lines = Object.assign({}, diagram.lines)
+                    // prevent arrows from getting stuck under nodes
                     lines[lineId] = Object.assign({}, lines[lineId], {
-                        arrowPos: pos,
+                        arrowPos: clamp(0.1, 0.9, roundIf(snap, 0.1, pos)),
                     })
                     return Object.assign({}, diagram, {lines: lines})
                 }))
@@ -1329,7 +1361,7 @@ function renderArrow(update, diagram, lineId) {
 
 function renderLine(update, diagram, lineId) {
     const line = diagram.lines[lineId]
-    const minTextOffset = 16
+    const minTextOffset = 20
     const info = getLineInfo(diagram, lineId)
     const position = positionOnLine(info, line.textPos, 0)
     let textOffset = line.textOffset
@@ -1345,26 +1377,30 @@ function renderLine(update, diagram, lineId) {
             + `${info.x1} ${info.y1}`
     const textX = position.x + textOffset * position.normalX
     const textY = position.y + textOffset * position.normalY
-    const color = twoJColor(diagram, lineId)
+    const twoJ = twoJColor(diagram, lineId) ? "two-j " : ""
     function onmousedown(e) {
         if (e.buttons == 1) {
             update(startDrag(e.offsetX, e.offsetY, {
                 superficial: true,
-            }, (diagram, x, y) => {
+            }, (diagram, x, y, snap) => {
                 let change
                 if (info.singular) {
                     const dx = x - info.xMid
                     const dy = y - info.yMid
+                    const angle = Math.atan2(dy, dx) - Math.PI / 2
+                    const height = Math.sqrt(dx * dx + dy * dy)
                     change = {
-                        angle: Math.atan2(dy, dx) - Math.PI / 2,
-                        arcHeight: Math.sqrt(dx * dx + dy * dy),
+                        angle: roundIf(snap, Math.PI / 6, angle),
+                        arcHeight: clamp(20.0, Infinity,
+                                         roundIf(snap, 20.0, height)),
                     }
                 } else {
                     change = {
                         angle: info.trueAngle,
-                        arcHeight: threePointArc(x, y,
-                                                 info.x0, info.y0,
-                                                 info.x1, info.y1)
+                        arcHeight: roundIf(snap, 20.0,
+                                           threePointArc(x, y,
+                                                         info.x0, info.y0,
+                                                         info.x1, info.y1)),
                     }
                 }
                 return setDiagramLineProps(diagram, lineId, change)
@@ -1381,57 +1417,48 @@ function renderLine(update, diagram, lineId) {
         }
     }
     return vnode(
-        "svg:g", {
+        "svg:g",
+        {
+            // prevent hover effects from sticking when nodes change
+            [VNODE_KEY]: lineId,
             "class": "line",
             onmouseover: function(e) {
-                update(setActive({
+                update(setHover({
                     type: "line",
                     lineId: lineId,
                 }))
             },
             onmouseout: function(e) {
-                update(setActive({type: null}))
+                update(setHover({type: null}))
             },
         },
         vnode("svg:title", {}, `j[${line.superline}] m[${lineId}]`),
         // this path (1) increases hit area (2) helps delineate crossing lines
         vnode("svg:path", {
-            fill: "none",
-            stroke: "rgba(255, 255, 255, 0.7)",
-            "stroke-width": "16",
+            "class": "bg",
             d: d,
-            oncontextmenu: function(e) { e.preventDefault() },
             onmousedown: onmousedown,
         }),
         vnode("svg:path", {
-            "class": "visible",
-            fill: "none",
-            "stroke-width": "2",
+            "class": "fg " + twoJ,
             d: d,
-            stroke: color,
-            oncontextmenu: function(e) { e.preventDefault() },
             onmousedown: onmousedown,
         }),
         vnode("svg:text", {
-            "class": "line-label",
-            "alignment-baseline": "middle",
-            "text-anchor": "middle",
-            "font-size": "large",
+            "class": "label " + twoJ,
             x: textX,
             y: textY,
-            fill: color,
-            oncontextmenu: function(e) { e.preventDefault() },
             onmousedown: function(e) {
                 if (e.buttons == 1) {
                     update(startDrag(textX, textY, {
                         superficial: true,
-                    }, (diagram, x, y) => {
+                    }, (diagram, x, y, snap) => {
                         const where = findPosOnLine(info, x, y)
                         // prevent text from getting stuck under nodes
-                        const pos = clamp(0.1, 0.9, where.pos)
                         return setDiagramLineProps(diagram, lineId, {
-                            textPos: pos,
-                            textOffset: where.offset,
+                            textPos: clamp(0.1, 0.9,
+                                           roundIf(snap, 0.1, where.pos)),
+                            textOffset: roundIf(snap, 10.0, where.offset),
                         })
                     }))
                     e.preventDefault()
@@ -1461,51 +1488,50 @@ function renderNode(update, diagram, nodeIndex, frozen) {
 
     if (node.type == "w3j") {
         const circularArrowSize = 30
-        const orientation = w3jOrientation(diagram, nodeIndex)
+        const orientation = w3jOrientation(diagram, nodeIndex) > 0
+                          ? "flipped " : ""
         gChildren.push(vnode("svg:circle", {
+            "class": orientation,
             r: 18,
-            fill: orientation > 0 ? "#d98b7c" : "#2eb0ba",
         }))
         gChildren.push(vnode("svg:use", {
+            "class": "arrow " + orientation,
             href: "#clockwise",
             x: -circularArrowSize / 2,
             y: -circularArrowSize / 2,
             width: circularArrowSize,
             height: circularArrowSize,
-            fill: "white",
-            transform: orientation > 0 ? "scale(-1,1)" : "",
         }))
 
     } else if (node.type == "terminal") {
+        const frozenClass = frozen ? "frozen " : ""
         gChildren.push(vnode("svg:circle", {
+            "class": frozenClass,
             r: 10,
-            fill: frozen ? "transparent" : "rgba(0, 0, 0, 0.2)",
         }))
 
     } else {
         gChildren.push(vnode("svg:circle", {
             r: 22,
-            fill: "#ddd",
         }))
         gChildren.push(vnode("svg:text", {
-            "class": "node-label",
-            "alignment-baseline": "middle",
-            "text-anchor": "middle",
-            "font-size": "large",
+            "class": "label",
         }))
     }
 
     return vnode("svg:g", {
+        // prevent hover effects from sticking when nodes change
+        [VNODE_KEY]: id(node),
+        "class": "node " + node.type,
         transform: `translate(${node.x}, ${node.y})`,
-        oncontextmenu: function(e) { e.preventDefault() },
         onmouseover: function(e) {
-            update(setActive({
+            update(setHover({
                 type: "node",
                 nodeIndex: nodeIndex,
             }))
         },
         onmouseout: function(e) {
-            update(setActive({type: null}))
+            update(setHover({type: null}))
         },
         onmousedown: function(e) {
             if (e.buttons == 1) {
@@ -1513,10 +1539,12 @@ function renderNode(update, diagram, nodeIndex, frozen) {
                     // moving terminals and/or custom nodes
                     // changes the semantics of the diagram
                     superficial: node.type == "w3j",
-                }, (diagram, x, y) => setDiagramNodeProps(diagram, nodeIndex, {
-                    x: x,
-                    y: y,
-                })))
+                }, (diagram, x, y, snap) =>
+                    setDiagramNodeProps(diagram, nodeIndex, {
+                        x: roundIf(snap, 20.0, x),
+                        y: roundIf(snap, 20.0, y),
+                    })
+                ))
                 e.preventDefault()
             } else if (e.buttons == 2) {
                 if (e.shiftKey) { // do it twice!
@@ -1812,7 +1840,7 @@ function newEditor(diagram, frozen) {
         staleEquation: true,
 
         // controls
-        active: {type: null},
+        hover: {type: null},
         mouseX: null,
         mouseY: null,
         dragTrail: {xs: [], ys: []},
@@ -1859,6 +1887,12 @@ function renderEditor(update, editor) {
             },
         },
         {
+            element: document.getElementById("diagram"),
+            attributes: {
+                oncontextmenu: function(e) { e.preventDefault() },
+            },
+        },
+        {
             element: document.getElementById("diagram-lines"),
             children: Object.keys(diagram.lines).map(lineId =>
                 renderLine(update, diagram, lineId)),
@@ -1871,7 +1905,9 @@ function renderEditor(update, editor) {
         {
             element: document.getElementById("diagram-drag-trail"),
             attributes: {
-                d: cardinalSpline(editor.dragTrail.xs, editor.dragTrail.ys, 1.0),
+                d: cardinalSpline(editor.dragTrail.xs,
+                                  editor.dragTrail.ys,
+                                  1.0),
             },
         },
 
@@ -1950,9 +1986,9 @@ function freshenEquation(container) {
     }
 }
 
-function setActive(entity) {
+function setHover(entity) {
     return editor => {
-        editor.active = entity
+        editor.hover = entity
     }
 }
 
@@ -1988,7 +2024,8 @@ function mouseMove(event) {
                 diagram => editor.dragger(
                     diagram,
                     event.clientX + editor.dragOffsetX,
-                    event.clientY + editor.dragOffsetY))(editor)
+                    event.clientY + editor.dragOffsetY,
+                    event.ctrlKey))(editor)
         } else if (event.buttons == 1) {
             editor.dragTrail.xs.push(editor.mouseX)
             editor.dragTrail.ys.push(editor.mouseY)
@@ -2087,23 +2124,23 @@ function keyDown(e, editor) {
     }
 
     // create Wigner 1-jm
-    if (getModifiers(e) == 0 && e.key == "m" && editor.active.type == "line") {
+    if (getModifiers(e) == 0 && e.key == "m" && editor.hover.type == "line") {
         update(modifyDiagram({}, diagram =>
-            addW1j(diagram, editor.active.lineId)))
+            addW1j(diagram, editor.hover.lineId)))
         e.preventDefault()
         return
     }
 
     // add 2j phase / flip Wigner 3j node
     if (getModifiers(e) == 0 && e.key == "j") {
-        if (editor.active.type == "line") {
+        if (editor.hover.type == "line") {
             update(modifyDiagram({}, diagram =>
-                add2j(diagram, editor.active.lineId)))
+                add2j(diagram, editor.hover.lineId)))
             e.preventDefault()
             return
-        } else if (editor.active.type == "node") {
+        } else if (editor.hover.type == "node") {
             update(modifyDiagram({}, diagram =>
-                flipW3j(diagram, editor.active.nodeIndex)))
+                flipW3j(diagram, editor.hover.nodeIndex)))
             e.preventDefault()
             return
         }
@@ -2148,7 +2185,6 @@ function error(msg) {
 }
 
 // keep the state as a global to make debugging easier
-let __editor
 function initEditor() {
     let editor = {}
     Object.assign(editor, INITIAL_EDITOR)
@@ -2159,7 +2195,6 @@ function initEditor() {
         }
         applyRendering(renderEditor(update, editor))
     }
-    __editor = editor
     update(loadEditor)
 }
 

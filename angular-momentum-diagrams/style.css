@@ -135,9 +135,10 @@ main,
     font-family: monospace;
 }
 
-#diagram {
+#diagram,
+#tableau {
     user-select: none;
-    cursor: crosshair;
+    cursor: default;
 }
 
 path#diagram-drag-trail {
@@ -151,4 +152,112 @@ path#diagram-drag-trail {
 #delta-tableau .zero {
     color: #2966c6;
     font-weight: bold;
+}
+
+g.line * {
+    transition: fill 0.15s, stroke 0.15s;
+}
+
+g.line path.bg,
+g.line path.fg {
+    fill: none;
+}
+
+g.line path.bg {
+    stroke: rgba(255, 255, 255, 0.7);
+    stroke-width: 18;
+    stroke-linecap: round
+}
+
+g.line:hover path.bg {
+    stroke: rgba(255, 255, 220, 0.85);
+}
+
+g.line path.fg {
+    stroke-width: 2;
+}
+
+g.line path.fg {
+    stroke: #051308;
+}
+
+g.line:hover path.fg {
+    stroke: #737a74;
+}
+
+g.line path.fg.two-j {
+    stroke: #ac53b3;
+}
+
+g.line:hover path.fg.two-j {
+    stroke: #de9dc1;
+}
+
+g.line text.label {
+    fill: #051308;
+    alignment-baseline: middle;
+    text-anchor: middle;
+    font-size: large;
+}
+
+g.line:hover text.label,
+g.line:hover use.arrow {
+    fill: #737a74;
+}
+
+g.line text.label.two-j,
+g.line use.arrow.two-j {
+    fill: #ac53b3;
+}
+
+g.line:hover text.label.two-j,
+g.line:hover use.arrow.two-j {
+    fill: #de9dc1;
+}
+
+g.node circle {
+    fill: "#ddd";
+    transition: fill 0.15s;
+}
+
+g.node text.label {
+    alignment-baseline: middle;
+    text-anchor: middle;
+    font-size: large;
+}
+
+g.node.w3j circle {
+    fill: #2eb0ba;
+}
+
+g.node.w3j:hover circle {
+    fill: #83e3ea;
+}
+
+g.node.w3j circle.flipped {
+    fill: #d98b7c;
+}
+
+g.node.w3j:hover circle.flipped {
+    fill: #edbfb6;
+}
+
+g.node.w3j use.arrow {
+    fill: white;
+}
+
+g.node.w3j use.arrow.flipped {
+    transform: scale(-1,1);
+}
+
+g.node.terminal circle {
+    fill: rgba(0, 0, 0, 0.3);
+}
+
+g.node.terminal:hover circle {
+    fill: rgba(100, 100, 100, 0.3);
+}
+
+g.node.terminal circle.frozen {
+    fill: transparent;
 }
