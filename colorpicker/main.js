@@ -1,7 +1,6 @@
 "use strict";
 
 // TODO add a way to disable the masking
-// TODO implement masking for CIECAM02
 
 var ciebase = require("ciebase");
 var ciecam02 = require("ciecam02");
@@ -17,8 +16,6 @@ var cam = ciecam02.cam({
 
 var xyz = ciebase.xyz(ciebase.workspace.sRGB, ciebase.illuminant.D65);
 
-var gamut = ciecam02.gamut(xyz, cam);
-
 function leadingZeros(n, s) {
     s = String(s);
     return Array(n - s.length + 1).join("0") + s;
@@ -27,21 +24,47 @@ function leadingZeros(n, s) {
 function labToJch(lab) {
     var j = lab[0] * 100.0;
     var c = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]) * 100.0;
-    var h = Math.atan2(lab[2], lab[1]) * 200.0 / Math.PI;
+    var h = Math.atan2(lab[2], lab[1]) * 180.0 / Math.PI;
     if (h < 0) {
-        h += 400.0;
+        h += 360.0;
     }
     return [j, c, h];
 }
 
 function jchToLab(jch) {
     var r = jch[1] / 100.0;
-    var t = jch[2] * Math.PI / 200.0;
+    var t = jch[2] * Math.PI / 180.0;
     return [
         jch[0] / 100.0,
         r * Math.cos(t),
         r * Math.sin(t)
     ];
+}
+
+function clipRgb(rgb) {
+    var inGamut = true;
+    if (rgb[0] < 0.0) {
+        inGamut = false;
+        rgb[0] = 0.0;
+    } else if (rgb[0] > 1.0) {
+        inGamut = false;
+        rgb[0] = 1.0;
+    }
+    if (rgb[1] < 0.0) {
+        inGamut = false;
+        rgb[1] = 0.0;
+    } else if (rgb[1] > 1.0) {
+        inGamut = false;
+        rgb[1] = 1.0;
+    }
+    if (rgb[2] < 0.0) {
+        inGamut = false;
+        rgb[2] = 0.0;
+    } else if (rgb[2] > 1.0) {
+        inGamut = false;
+        rgb[2] = 1.0;
+    }
+    return inGamut;
 }
 
 // https://stackoverflow.com/a/5624139
@@ -78,33 +101,53 @@ function circularMask(ctx, width, height) {
     ctx.clip();
 }
 
+function inpToLab(inp, maxChroma) {
+    return [
+        inp[2],
+        (2.0 * inp[0] - 1.0) * maxChroma,
+        (2.0 * inp[1] - 1.0) * maxChroma
+    ];
+}
+
+function labToInp(lab, maxChroma) {
+    return [
+        (lab[1] / maxChroma + 1.0) / 2.0,
+        (lab[2] / maxChroma + 1.0) / 2.0,
+        lab[0]
+    ];
+}
+
+function inpToCab(inp, maxChroma) {
+    return [
+        maxChroma * inp[2],
+        2.0 * inp[0] - 1.0,
+        2.0 * inp[1] - 1.0
+    ];
+}
+
+function cabToInp(cab, maxChroma) {
+    return [
+        (cab[1] + 1.0) / 2.0,
+        (cab[2] + 1.0) / 2.0,
+        cab[0] / maxChroma,
+    ];
+}
+
 var VIEW_SRGB = {
     mask: function(ctx) {},
     fromSrgb: trivialConverter,
     toSrgb: trivialConverter
 };
 
-var VIEW_HCL = {
+var VIEW_LAB_HCL = {
     mask: circularMask,
     display: function(lab) {
         return "(L=" + lab[0].toFixed(2)
              + ", a=" + (lab[1] > 0 ? "+" : "") + lab[1].toFixed(2)
              + ", b=" + (lab[2] > 0 ? "+" : "") + lab[2].toFixed(2) + ")";
     },
-    transform: function(inp, maxChroma) {
-        return [
-            inp[2],
-            (2.0 * inp[0] - 1.0) * maxChroma,
-            (2.0 * inp[1] - 1.0) * maxChroma
-        ];
-    },
-    untransform: function(lab, maxChroma) {
-        return [
-            (lab[1] / maxChroma + 1.0) / 2.0,
-            (lab[2] / maxChroma + 1.0) / 2.0,
-            lab[0]
-        ];
-    },
+    transform: inpToLab,
+    untransform: labToInp,
     toSrgb: function(lab) {
         return cielab.cielabToSrgb(lab);
     },
@@ -113,7 +156,7 @@ var VIEW_HCL = {
     }
 };
 
-var VIEW_HLC = {
+var VIEW_LAB_HLC = {
     mask: circularMask,
     display: function(cab) {
         var x = cab[1];
@@ -128,20 +171,8 @@ var VIEW_HLC = {
              + "\xb0, C=" + cab[0].toFixed(2)
              + ", L=" + (1.0 - r).toFixed(2) + ")";
     },
-    transform: function(inp, maxChroma) {
-        return [
-            maxChroma * inp[2],
-            2.0 * inp[0] - 1.0,
-            2.0 * inp[1] - 1.0
-        ];
-    },
-    untransform: function(lab, maxChroma) {
-        return [
-            (lab[1] + 1.0) / 2.0,
-            (lab[2] + 1.0) / 2.0,
-            lab[0] / maxChroma,
-        ];
-    },
+    transform: inpToCab,
+    untransform: cabToInp,
     toSrgb: function(cab) {
         var x = cab[1];
         var y = cab[2];
@@ -150,9 +181,7 @@ var VIEW_HLC = {
         if (r < 1e-8) {
             lab = [1.0, 0.0, 0.0];
         } else {
-            lab = [1.0 - r,
-                   cab[0] * x / r,
-                   cab[0] * y / r];
+            lab = [1.0 - r, cab[0] * x / r, cab[0] * y / r];
         }
         return cielab.cielabToSrgb(lab);
     },
@@ -183,33 +212,53 @@ var VIEW_CAM02_HCL = {
              + ", C=" + leadingZeros(3, jch[1].toFixed(0))
              + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + ")";
     },
-    transform: function(inp, maxChroma) {
-        return [
-            inp[2],
-            (2.0 * inp[0] - 1.0) * maxChroma,
-            (2.0 * inp[1] - 1.0) * maxChroma
-        ];
-    },
-    untransform: function(lab, maxChroma) {
-        return [
-            (lab[1] / maxChroma + 1.0) / 2.0,
-            (lab[2] / maxChroma + 1.0) / 2.0,
-            lab[0]
-        ];
-    },
+    transform: inpToLab,
+    untransform: labToInp,
     toSrgb: function(lab) {
         var jch = labToJch(lab);
-        return {
-            value: xyz.toRgb(cam.toXyz({J: jch[0], C: jch[1], H: jch[2]})),
-            inGamut: true
-        };
+        jch = {J: jch[0], C: jch[1], h: jch[2]};
+        var rgb = xyz.toRgb(cam.toXyz(jch));
+        var inGamut = clipRgb(rgb);
+        return {value: rgb, inGamut: inGamut};
     },
     fromSrgb: function(rgb) {
         var jch = cam.fromXyz(xyz.fromRgb(rgb));
-        return {
-            value: jchToLab([jch.J, jch.C, jch.h]),
-            inGamut: true
+        return {value: jchToLab([jch.J, jch.C, jch.h]), inGamut: true};
+    }
+};
+
+var VIEW_CAM02_HLC = {
+    mask: circularMask,
+    display: function(lab) {
+        var jch = labToJch(lab);
+        return "(J=" + leadingZeros(3, jch[0].toFixed(0))
+             + ", C=" + leadingZeros(3, jch[1].toFixed(0))
+             + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + ")";
+    },
+    transform: inpToCab,
+    untransform: cabToInp,
+    toSrgb: function(cab) {
+        var x = cab[1];
+        var y = cab[2];
+        var h = Math.atan2(y, x);
+        if (h < 0.0) {
+            h += 2 * Math.PI;
+        }
+        var jch = {
+            J: 100.0 * (1.0 - Math.sqrt(x * x + y * y)),
+            C: 100.0 * cab[0],
+            h: h * 180.0 / Math.PI
         };
+        var rgb = xyz.toRgb(cam.toXyz(jch));
+        var inGamut = clipRgb(rgb);
+        return {value: rgb, inGamut: inGamut};
+    },
+    fromSrgb: function(rgb) {
+        var jch = cam.fromXyz(xyz.fromRgb(rgb));
+        var r = 1.0 - jch.J / 100.0;
+        var t = jch.h * Math.PI / 180.0;
+        var cab = [jch.C / 100.0, r * Math.cos(t), r * Math.sin(t)];
+        return {value: cab, inGamut: true};
     }
 };
 
@@ -222,7 +271,7 @@ function cartesian(toSrgb, transform, sliderValue, maxChroma) {
             var r = toSrgb(transform(inp, maxChroma));
             var rgb = r.value;
             if (!r.inGamut) {
-                var desat = 0.2;
+                var desat = 0.5;
                 var dim = 0.1;
                 var avg = (rgb[0] + rgb[1] + rgb[2]) / 3.0;
                 rgb[0] = (rgb[0]) * (1.0 - desat) + avg * desat - dim;
@@ -338,21 +387,26 @@ window.addEventListener("hashchange", function() {
     }
 });
 
-var hclRadio = document.getElementById("view-hcl");
-hclRadio.addEventListener("change", function() {
-    view = VIEW_HCL;
-    redraw(true);
-});
-var hlcRadio = document.getElementById("view-hlc");
-hlcRadio.addEventListener("change", function() {
-    view = VIEW_HLC;
-    redraw(true);
-});
-var cam02HclRadio = document.getElementById("view-cam02-hcl");
-cam02HclRadio.addEventListener("change", function() {
-    view = VIEW_CAM02_HCL;
-    redraw(true);
-});
+document.getElementById("view-lab-hcl")
+        .addEventListener("change", function() {
+            view = VIEW_LAB_HCL;
+            redraw(true);
+        });
+document.getElementById("view-lab-hlc")
+        .addEventListener("change", function() {
+            view = VIEW_LAB_HLC;
+            redraw(true);
+        });
+document.getElementById("view-cam02-hcl")
+        .addEventListener("change", function() {
+            view = VIEW_CAM02_HCL;
+            redraw(true);
+        });
+document.getElementById("view-cam02-hlc")
+        .addEventListener("change", function() {
+            view = VIEW_CAM02_HLC;
+            redraw(true);
+        });
 
 var slider = document.getElementById("slider");
 slider.addEventListener("input", function(e) {
@@ -391,7 +445,7 @@ colorText.addEventListener("keydown", function(e) {
 });
 
 var currentColorState = new ColorState(VIEW_SRGB, [0.65, 0.65, 0.65]);
-var view = VIEW_HCL;
+var view = VIEW_LAB_HCL;
 
 var ctx = canvas.getContext("2d");
 var width = 400;

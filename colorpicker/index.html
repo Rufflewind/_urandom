@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>CIELAB color picker</title>
+    <title>CIELAB and CIECAM02 color picker</title>
     <style>
       html {
           font-family: "Fira Sans", "Helvetica Neue", Helvetica, "Noto Sans", Arial, sans-serif;
@@ -48,7 +48,7 @@
     </style>
   </head>
   <body>
-    <h1>CIE<a href="https://en.wikipedia.org/wiki/Lab_color_space">LAB</a> color picker</h1>
+    <h1><a href="https://en.wikipedia.org/wiki/Lab_color_space">CIELAB</a> and <a href="https://en.wikipedia.org/wiki/CIECAM02">CIECAM02</a> color picker</h1>
     <main>
       <div id="resize">
         <canvas id="canvas"></canvas>
@@ -60,9 +60,10 @@
       <div id="display"></div>
     </main>
     <form>
-      <p><label><input id="view-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness</label></p>
-      <p><label><input id="view-hlc" type="radio" name="view"/> (lightness, hue) vs chroma</label></p>
-      <p><label><input id="view-cam02-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness (CIECAM02)</label></p>
+      <p><label><input id="view-lab-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness (CIELAB)</label></p>
+      <p><label><input id="view-lab-hlc" type="radio" name="view"/> (lightness, hue) vs chroma (CIELAB)</label></p>
+      <p><label><input id="view-cam02-hcl" type="radio" name="view"/> (chroma, hue) vs lightness (CIECAM02)</label></p>
+      <p><label><input id="view-cam02-hlc" type="radio" name="view"/> (lightness, hue) vs chroma (CIECAM02)</label></p>
     </form>
     <script src="script.js"></script>
   </body>
