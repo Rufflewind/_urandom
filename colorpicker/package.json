@@ -1,0 +1,15 @@
+{
+  "name": "colorpicker",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node_modules/webpack-dev-server/bin/webpack-dev-server.js --hot --inline --colors --no-info --history-api-fallback",
+    "build": "node_modules/webpack/bin/webpack.js"
+  },
+  "devDependencies": {
+    "webpack": "^3.2.0",
+    "webpack-dev-server": "^2.5.1"
+  },
+  "dependencies": {
+    "ciecam02": "^0.4.6"
+  }
+}

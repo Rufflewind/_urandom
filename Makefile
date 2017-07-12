@@ -2,7 +2,7 @@ all:
 
 deploy-gh-pages: dist/.git/config all
 	mkdir -p $(<D)/../colorpicker
-	ln -f colorpicker.html $(<D)/../colorpicker/index.html
+	ln -f colorpicker/{index.html,script.js} $(<D)/../colorpicker
 	mkdir -p $(<D)/../angular-momentum-diagrams
 	ln -f angular-momentum-diagrams/*.{css,html,js,txt} $(<D)/../angular-momentum-diagrams
 	cd $(<D)/.. && \
