@@ -1319,44 +1319,57 @@ function renderArrow(update, diagram, lineId) {
     if (line.direction == 0) {
         return []
     }
-    return [vnode("svg:use", {
-        "class": "arrow " + (twoJColor(diagram, lineId) ? "two-j " : ""),
-        href: "#arrowhead",
-        x: -arrowHeadSize,
-        y: -arrowHeadSize / 2,
-        width: arrowHeadSize,
-        height: arrowHeadSize,
-        transform: `translate(${position.x}, ${position.y}),`
-                 + `rotate(${angle * 180 / Math.PI})`,
-        onmousedown: function(e) {
-            if (e.buttons == 1) {
-                update(startDrag(rawPosition.x, rawPosition.y, {
-                    superficial: true,
-                }, (diagram, x, y, snap) => {
-                    const pos = findPosOnLine(info, x, y).pos
-                    let lines = Object.assign({}, diagram.lines)
-                    // prevent arrows from getting stuck under nodes
-                    lines[lineId] = Object.assign({}, lines[lineId], {
-                        arrowPos: clamp(0.1, 0.9, roundIf(snap, 0.1, pos)),
-                    })
-                    return Object.assign({}, diagram, {lines: lines})
-                }))
-                e.preventDefault()
-            } else if (e.buttons == 2) {
-                update(modifyDiagram({equivalent: true}, diagram =>
-                    flipW1jRule(diagram, lineId)))
-            } else if (e.buttons == 4) {
-                update(modifyDiagram({superficial: true}, diagram => {
-                    let lines = Object.assign({}, diagram.lines)
-                    lines[lineId] = Object.assign({}, lines[lineId], {
-                        arrowPos: 0.5,
-                    })
-                    return Object.assign({}, diagram, {lines: lines})
-                }))
-                e.preventDefault()
-            }
+    return [vnode(
+        "svg:g",
+        {
+            "class": "arrow",
+            onmousedown: function(e) {
+                if (e.buttons == 1) {
+                    update(startDrag(rawPosition.x, rawPosition.y, {
+                        superficial: true,
+                    }, (diagram, x, y, snap) => {
+                        const pos = findPosOnLine(info, x, y).pos
+                        let lines = Object.assign({}, diagram.lines)
+                        // prevent arrows from getting stuck under nodes
+                        lines[lineId] = Object.assign({}, lines[lineId], {
+                            arrowPos: clamp(0.1, 0.9, roundIf(snap, 0.1, pos)),
+                        })
+                        return Object.assign({}, diagram, {lines: lines})
+                    }))
+                    e.stopPropagation()
+                } else if (e.buttons == 2) {
+                    update(modifyDiagram({equivalent: true}, diagram =>
+                        flipW1jRule(diagram, lineId)))
+                    e.stopPropagation()
+                } else if (e.buttons == 4) {
+                    update(modifyDiagram({superficial: true}, diagram => {
+                        let lines = Object.assign({}, diagram.lines)
+                        lines[lineId] = Object.assign({}, lines[lineId], {
+                            arrowPos: 0.5,
+                        })
+                        return Object.assign({}, diagram, {lines: lines})
+                    }))
+                    e.stopPropagation()
+                }
+            },
         },
-    })]
+        vnode("svg:circle", {
+            "class": "hit",
+            r: 25,
+            cx: rawPosition.x,
+            cy: rawPosition.y,
+        }),
+        vnode("svg:use", {
+            "class": "arrow " + (twoJColor(diagram, lineId) ? "two-j " : ""),
+            href: "#arrowhead",
+            x: -arrowHeadSize,
+            y: -arrowHeadSize / 2,
+            width: arrowHeadSize,
+            height: arrowHeadSize,
+            transform: `translate(${position.x}, ${position.y}),`
+                     + `rotate(${angle * 180 / Math.PI})`,
+        }),
+    )]
 }
 
 function renderLine(update, diagram, lineId) {
@@ -1405,7 +1418,7 @@ function renderLine(update, diagram, lineId) {
                 }
                 return setDiagramLineProps(diagram, lineId, change)
             }))
-            e.preventDefault()
+            e.stopPropagation()
         } else if (e.buttons == 4) {
             update(modifyDiagram({superficial: true}, diagram =>
                 info.singular ? diagram : setDiagramLineProps(diagram, lineId, {
@@ -1413,7 +1426,7 @@ function renderLine(update, diagram, lineId) {
                     arcHeight: 0.0,
                 })
             ))
-            e.preventDefault()
+            e.stopPropagation()
         }
     }
     return vnode(
@@ -1444,6 +1457,11 @@ function renderLine(update, diagram, lineId) {
             d: d,
             onmousedown: onmousedown,
         }),
+        vnode("svg:path", {
+            "class": "hit",
+            d: d,
+            onmousedown: onmousedown,
+        }),
         vnode("svg:text", {
             "class": "label " + twoJ,
             x: textX,
@@ -1461,7 +1479,7 @@ function renderLine(update, diagram, lineId) {
                             textOffset: roundIf(snap, 10.0, where.offset),
                         })
                     }))
-                    e.preventDefault()
+                    e.stopPropagation()
                 } else if (e.buttons == 4) {
                     update(modifyDiagram({superficial: true}, diagram =>
                         setDiagramLineProps(diagram, lineId, {
@@ -1469,11 +1487,11 @@ function renderLine(update, diagram, lineId) {
                             textOffset: 0.0,
                         })
                     ))
-                    e.preventDefault()
+                    e.stopPropagation()
                 }
             },
         }, line.superline),
-        ...renderArrow(update, diagram, lineId)
+        ...renderArrow(update, diagram, lineId),
     )
 }
 
@@ -1545,7 +1563,7 @@ function renderNode(update, diagram, nodeIndex, frozen) {
                         y: roundIf(snap, 20.0, y),
                     })
                 ))
-                e.preventDefault()
+                e.stopPropagation()
             } else if (e.buttons == 2) {
                 if (e.shiftKey) { // do it twice!
                     update(modifyDiagram({equivalent: true}, diagram =>
@@ -1556,7 +1574,7 @@ function renderNode(update, diagram, nodeIndex, frozen) {
                     update(modifyDiagram({equivalent: true}, diagram =>
                         flipW3jRule(diagram, nodeIndex)))
                 }
-                e.preventDefault()
+                e.stopPropagation()
             } else if (e.buttons == 4) {
                 if (e.shiftKey) {
                     update(modifyDiagram({equivalent: true}, diagram =>
@@ -1565,7 +1583,7 @@ function renderNode(update, diagram, nodeIndex, frozen) {
                     update(modifyDiagram({equivalent: true}, diagram =>
                         threeArrowRule(diagram, nodeIndex)))
                 }
-                e.preventDefault()
+                e.stopPropagation()
             }
         },
     }, ...gChildren)
@@ -1618,7 +1636,7 @@ function renderTriangleTableau(update, triangles) {
         onmousedown: function(e) {
             update(modifyDiagram({equivalent: true}, diagram =>
                 trianglePhaseRule(diagram, triangleIndex)))
-            e.preventDefault()
+            e.stopPropagation()
         },
     }, "{" + triangle.join(" ") + "}"))
 }
@@ -1813,6 +1831,17 @@ function renderEquation(diagram, container) {
     MathJax.Hub.Queue(["Typeset", MathJax.Hub])
 }
 
+function renderDragTrack(start, stop) {
+    return [
+        vnode("svg:path", {
+            "class": "drag-track",
+            d: `M ${start[0]} ${start[1]} `
+             + `L ${stop[0]} ${stop[1]} `,
+            "marker-end": "url(#drag-track-arrowhead)",
+        }),
+    ]
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // State management
 //
@@ -1829,12 +1858,9 @@ const EMPTY_SNAPSHOT = {
     frozen: false,
 }
 
-function newEditor(diagram, frozen) {
+function newEditor() {
     return {
-        snapshot: deduplicateObject({
-            diagram: diagram,
-            frozen: frozen,
-        }, EMPTY_SNAPSHOT),
+        snapshot: EMPTY_SNAPSHOT,
         savedSnapshot: EMPTY_SNAPSHOT,
         savedHash: "",
         staleEquation: true,
@@ -1843,11 +1869,10 @@ function newEditor(diagram, frozen) {
         hover: {type: null},
         mouseX: null,
         mouseY: null,
-        dragTrail: {xs: [], ys: []},
+        dragTrackStart: null,
+        dragTrackStop: null,
     }
 }
-
-const INITIAL_EDITOR = newEditor(EMPTY_DIAGRAM, false)
 
 function saveEditor(editor) {
     editor.savedSnapshot = editor.snapshot
@@ -1859,13 +1884,18 @@ function loadEditor(editor) {
     const hash = window.location.hash
     // prevent hashchange listener from observing our own changes
     if (hash.length < 3) {
-        Object.assign(editor, INITIAL_EDITOR)
+        Object.assign(editor, newEditor())
     } else if (editor.savedHash != hash) {
         editor.snapshot = JSON.parse(decodeURIComponent(hash.substr(1)))
         editor.staleEquation = true
         editor.savedSnapshot = editor.snapshot
         editor.savedHash = hash
     }
+}
+
+function toSvgCoords(p) {
+    const rect = document.getElementById("diagram").getBoundingClientRect()
+    return [p[0] - rect.left, p[1] - rect.top]
 }
 
 function renderEditor(update, editor) {
@@ -1876,6 +1906,11 @@ function renderEditor(update, editor) {
             attributes: {
                 onhashchange: _ => update(loadEditor),
                 onkeydown: e => update(keyDown.bind(null, e)),
+                onmousedown: e => {
+                    if (e.buttons == 2) {
+                        update(startDragTrack(e))
+                    }
+                },
                 onmousemove: e => update(mouseMove(e)),
                 onmouseup: e => update(mouseUp(e)),
             },
@@ -1903,14 +1938,12 @@ function renderEditor(update, editor) {
                 renderNode(update, diagram, nodeIndex, editor.snapshot.frozen)),
         },
         {
-            element: document.getElementById("diagram-drag-trail"),
-            attributes: {
-                d: cardinalSpline(editor.dragTrail.xs,
-                                  editor.dragTrail.ys,
-                                  1.0),
-            },
+            element: document.getElementById("diagram-drag-track"),
+            children: editor.dragTrackStop != null
+                    ? renderDragTrack(toSvgCoords(editor.dragTrackStart),
+                                      toSvgCoords(editor.dragTrackStop))
+                    : [],
         },
-
         {
             element: document.getElementById("tableau-body"),
             children: renderJTableau(update, diagram.superlines),
@@ -1992,11 +2025,23 @@ function setHover(entity) {
     }
 }
 
-function clearDragTrail(editor) {
-    if (editor.dragTrail.xs) {
-        editor.dragTrail.xs = []
-        editor.dragTrail.ys = []
+function startDragTrack(event) {
+    return editor => {
+        editor.dragTrackStart = [event.clientX, event.clientY]
     }
+}
+
+function updateDragTrack(event) {
+    return editor => {
+        if (editor.dragTrackStart != null) {
+            editor.dragTrackStop = [event.clientX, event.clientY]
+        }
+    }
+}
+
+function clearDragTrack(editor) {
+    editor.dragTrackStart = null
+    editor.dragTrackStop = null
 }
 
 function mouseUp(event) {
@@ -2005,7 +2050,7 @@ function mouseUp(event) {
             modifyDiagram(editor.draggerFlags, identity)(editor)
             editor.dragger = null
         } else {
-            clearDragTrail(editor)
+            clearDragTrack(editor)
         }
     }
 }
@@ -2026,11 +2071,8 @@ function mouseMove(event) {
                     event.clientX + editor.dragOffsetX,
                     event.clientY + editor.dragOffsetY,
                     event.ctrlKey))(editor)
-        } else if (event.buttons == 1) {
-            editor.dragTrail.xs.push(editor.mouseX)
-            editor.dragTrail.ys.push(editor.mouseY)
         } else {
-            clearDragTrail(editor)
+            updateDragTrack(event)(editor)
         }
     }
 }
@@ -2187,7 +2229,7 @@ function error(msg) {
 // keep the state as a global to make debugging easier
 function initEditor() {
     let editor = {}
-    Object.assign(editor, INITIAL_EDITOR)
+    Object.assign(editor, newEditor())
     function update(...changes) {
         const n = changes.length
         for (let i = 0; i < n; ++i) {
