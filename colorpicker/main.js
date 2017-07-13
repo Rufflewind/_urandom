@@ -21,6 +21,15 @@ function leadingZeros(n, s) {
     return Array(n - s.length + 1).join("0") + s;
 }
 
+function signedLeadingZeros(n, s) {
+    s = String(s);
+    if (s[0] == "-") {
+        return "-" + Array(n - s.length + 2).join("0") + s.slice(1);
+    } else {
+        return "+" + Array(n - s.length + 1).join("0") + s;
+    }
+}
+
 function labToJch(lab) {
     var j = lab[0] * 100.0;
     var c = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]) * 100.0;
@@ -38,6 +47,52 @@ function jchToLab(jch) {
         jch[0] / 100.0,
         r * Math.cos(t),
         r * Math.sin(t)
+    ];
+}
+
+function cabToJch(cab) {
+    var x = cab[1];
+    var y = cab[2];
+    var h = Math.atan2(y, x);
+    if (h < 0.0) {
+        h += 2 * Math.PI;
+    }
+    return [
+        100.0 * (1.0 - Math.sqrt(x * x + y * y)),
+        100.0 * cab[0],
+        h * 180.0 / Math.PI
+    ];
+}
+
+function inpToLab(inp, maxChroma) {
+    return [
+        inp[2],
+        (2.0 * inp[0] - 1.0) * maxChroma,
+        (2.0 * inp[1] - 1.0) * maxChroma
+    ];
+}
+
+function labToInp(lab, maxChroma) {
+    return [
+        (lab[1] / maxChroma + 1.0) / 2.0,
+        (lab[2] / maxChroma + 1.0) / 2.0,
+        lab[0]
+    ];
+}
+
+function inpToCab(inp, maxChroma) {
+    return [
+        maxChroma * inp[2],
+        2.0 * inp[0] - 1.0,
+        2.0 * inp[1] - 1.0
+    ];
+}
+
+function cabToInp(cab, maxChroma) {
+    return [
+        (cab[1] + 1.0) / 2.0,
+        (cab[2] + 1.0) / 2.0,
+        cab[0] / maxChroma,
     ];
 }
 
@@ -101,38 +156,6 @@ function circularMask(ctx, width, height) {
     ctx.clip();
 }
 
-function inpToLab(inp, maxChroma) {
-    return [
-        inp[2],
-        (2.0 * inp[0] - 1.0) * maxChroma,
-        (2.0 * inp[1] - 1.0) * maxChroma
-    ];
-}
-
-function labToInp(lab, maxChroma) {
-    return [
-        (lab[1] / maxChroma + 1.0) / 2.0,
-        (lab[2] / maxChroma + 1.0) / 2.0,
-        lab[0]
-    ];
-}
-
-function inpToCab(inp, maxChroma) {
-    return [
-        maxChroma * inp[2],
-        2.0 * inp[0] - 1.0,
-        2.0 * inp[1] - 1.0
-    ];
-}
-
-function cabToInp(cab, maxChroma) {
-    return [
-        (cab[1] + 1.0) / 2.0,
-        (cab[2] + 1.0) / 2.0,
-        cab[0] / maxChroma,
-    ];
-}
-
 var VIEW_SRGB = {
     mask: function(ctx) {},
     fromSrgb: trivialConverter,
@@ -142,9 +165,10 @@ var VIEW_SRGB = {
 var VIEW_LAB_HCL = {
     mask: circularMask,
     display: function(lab) {
-        return "(L=" + lab[0].toFixed(2)
-             + ", a=" + (lab[1] > 0 ? "+" : "") + lab[1].toFixed(2)
-             + ", b=" + (lab[2] > 0 ? "+" : "") + lab[2].toFixed(2) + ")";
+        return "(L=" + leadingZeros(3, (lab[0] * 100.0).toFixed(0))
+             + ", a=" + signedLeadingZeros(3, (lab[1] * 100.0).toFixed(0))
+             + ", b=" + signedLeadingZeros(3, (lab[2] * 100.0).toFixed(0))
+             + ")";
     },
     transform: inpToLab,
     untransform: labToInp,
@@ -168,8 +192,8 @@ var VIEW_LAB_HLC = {
         }
         h *= 180.0 / Math.PI;
         return "(H=" + leadingZeros(3, h.toFixed(0))
-             + "\xb0, C=" + cab[0].toFixed(2)
-             + ", L=" + (1.0 - r).toFixed(2) + ")";
+             + "\xb0, C=" + leadingZeros(3, (cab[0] * 100.0).toFixed(0))
+             + ", L=" + leadingZeros(3, ((1.0 - r) * 100.0).toFixed(0)) + ")";
     },
     transform: inpToCab,
     untransform: cabToInp,
@@ -210,7 +234,7 @@ var VIEW_CAM02_HCL = {
         var jch = labToJch(lab);
         return "(J=" + leadingZeros(3, jch[0].toFixed(0))
              + ", C=" + leadingZeros(3, jch[1].toFixed(0))
-             + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + ")";
+             + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + "\xb0)";
     },
     transform: inpToLab,
     untransform: labToInp,
@@ -230,25 +254,16 @@ var VIEW_CAM02_HCL = {
 var VIEW_CAM02_HLC = {
     mask: circularMask,
     display: function(lab) {
-        var jch = labToJch(lab);
+        var jch = cabToJch(lab);
         return "(J=" + leadingZeros(3, jch[0].toFixed(0))
              + ", C=" + leadingZeros(3, jch[1].toFixed(0))
-             + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + ")";
+             + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + "\xb0)";
     },
     transform: inpToCab,
     untransform: cabToInp,
     toSrgb: function(cab) {
-        var x = cab[1];
-        var y = cab[2];
-        var h = Math.atan2(y, x);
-        if (h < 0.0) {
-            h += 2 * Math.PI;
-        }
-        var jch = {
-            J: 100.0 * (1.0 - Math.sqrt(x * x + y * y)),
-            C: 100.0 * cab[0],
-            h: h * 180.0 / Math.PI
-        };
+        var jch = cabToJch(cab);
+        jch = {J: jch[0], C: jch[1], h: jch[2]};
         var rgb = xyz.toRgb(cam.toXyz(jch));
         var inGamut = clipRgb(rgb);
         return {value: rgb, inGamut: inGamut};
@@ -360,10 +375,8 @@ ColorState.prototype.get = function(view) {
     return {value: r2.value, inGamut: r1.inGamut && r2.inGamut};
 };
 
+
 function setCursor(e) {
-    if (!(e.buttons & 1)) {
-        return;
-    }
     var rx = e.offsetX / canvas.clientWidth;
     var ry = e.offsetY / canvas.clientHeight;
     var sliderValue = slider.value / slider.max;
@@ -372,19 +385,41 @@ function setCursor(e) {
     redraw(false);
 }
 
+var mouseDown = false;
 var canvas = document.getElementById("canvas");
-canvas.addEventListener("mousedown", setCursor);
-canvas.addEventListener("mousemove", setCursor);
+canvas.addEventListener("mousedown", function(e) {
+    if (e.buttons & 1) {
+        e.preventDefault();
+        mouseDown = true;
+        setCursor(e);
+    }
+});
+canvas.addEventListener("mousemove", function(e) {
+    if (mouseDown) {
+        e.preventDefault();
+        setCursor(e);
+    }
+});
 canvas.addEventListener("mouseup", function() {
     currentColorState.save();
+    mouseDown = false;
 });
 
 var currentHash = "";
-window.addEventListener("hashchange", function() {
-    if (window.location.hash != currentHash) {
-        currentColorState.set(VIEW_SRGB, hexToRgb(window.location.hash));
-        redraw(true);
+function updateHash() {
+    if (window.location.hash == currentHash) {
+        return false;
     }
+    var rgb = hexToRgb(window.location.hash);
+    if (rgb == null) {
+        return false;
+    }
+    currentColorState.set(VIEW_SRGB, rgb);
+    return true;
+}
+window.addEventListener("hashchange", function() {
+    updateHash();
+    redraw(true);
 });
 
 document.getElementById("view-lab-hcl")
@@ -420,9 +455,9 @@ slider.addEventListener("change", function(e) {
 });
 
 var maxChromaInput = document.getElementById("max-chroma");
-var maxChroma = Number(maxChromaInput.value);
+var maxChroma = Number(maxChromaInput.value) / 100.0;
 maxChromaInput.addEventListener("input", function(e) {
-    maxChroma = Number(maxChromaInput.value);
+    maxChroma = Number(maxChromaInput.value) / 100.0;
     redraw(true);
 });
 
@@ -446,6 +481,9 @@ colorText.addEventListener("keydown", function(e) {
 
 var currentColorState = new ColorState(VIEW_SRGB, [0.65, 0.65, 0.65]);
 var view = VIEW_LAB_HCL;
+if (updateHash()) {
+    currentColorState.save();
+}
 
 var ctx = canvas.getContext("2d");
 var width = 400;

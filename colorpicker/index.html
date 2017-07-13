@@ -4,67 +4,30 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>CIELAB and CIECAM02 color picker</title>
-    <style>
-      html {
-          font-family: "Fira Sans", "Helvetica Neue", Helvetica, "Noto Sans", Arial, sans-serif;
-      }
-      main {
-          display: table;
-          padding: 10px;
-          width: 300px;
-          height: 0;
-      }
-      #resize {
-          overflow: hidden;
-          padding: 10px;
-          resize: both;
-          width: 300px;
-          height: 300px;
-          user-select: none;
-      }
-      #canvas {
-          display: table-row;
-          height: 100%;
-          width: 100%;
-          cursor: crosshair;
-      }
-      #slider {
-          display: table-row;
-          width: 100%;
-          height: 40px;
-      }
-      input {
-          font-family: monospace;
-      }
-      #preview {
-          display: inline-block;
-          border: 1px solid black;
-          width: 50px;
-          height: 50px;
-      }
-      #display {
-          font-family: monospace;
-      }
-    </style>
+    <link rel="stylesheet" href="style.css"/>
   </head>
   <body>
-    <h1><a href="https://en.wikipedia.org/wiki/Lab_color_space">CIELAB</a> and <a href="https://en.wikipedia.org/wiki/CIECAM02">CIECAM02</a> color picker</h1>
+    <h1>CIE<a href="https://en.wikipedia.org/wiki/Lab_color_space">LAB</a>&amp;<a href="https://en.wikipedia.org/wiki/CIECAM02">CAM02</a> color picker</h1>
     <main>
       <div id="resize">
         <canvas id="canvas"></canvas>
       </div>
       <input id="slider" type="range" value="50" step="1" min="0" max="100"/>
-      <input id="color" type="text"/>
-      <input id="max-chroma" type="number" value="0.75" step="0.05" min="0" max="10"/>
+        <input id="color" type="text"/>
+      <label>Max chroma:
+        <input id="max-chroma" type="number" value="75" step="1" min="0" max="999"/>
+      </label>
       <div id="preview"></div>
       <div id="display"></div>
     </main>
-    <form>
-      <p><label><input id="view-lab-hcl" type="radio" name="view" checked="checked"/> (chroma, hue) vs lightness (CIELAB)</label></p>
-      <p><label><input id="view-lab-hlc" type="radio" name="view"/> (lightness, hue) vs chroma (CIELAB)</label></p>
-      <p><label><input id="view-cam02-hcl" type="radio" name="view"/> (chroma, hue) vs lightness (CIECAM02)</label></p>
-      <p><label><input id="view-cam02-hlc" type="radio" name="view"/> (lightness, hue) vs chroma (CIECAM02)</label></p>
+    <form id="mode">
+      <p><label><input id="view-lab-hcl" type="radio" name="view" checked="checked"/> LAB: chroma-hue-lightness</label></p>
+      <p><label><input id="view-lab-hlc" type="radio" name="view"/> LAB: lightness-hue-chroma</label></p>
+      <p><label><input id="view-cam02-hcl" type="radio" name="view"/> CAM02: chroma-hue-lightness</label></p>
+      <p><label><input id="view-cam02-hlc" type="radio" name="view"/> CAM02: lightness-hue-chroma</label></p>
     </form>
+    <p><small><a href="https://github.com/baskerville/ciecam02">Powered by baskerville/ciecam02.</a></small></p>
+    <p><small><a href="https://github.com/Rufflewind/_urandom/tree/master/colorpicker">[Source code]</a></small></p>
     <script src="script.js"></script>
   </body>
 </html>
