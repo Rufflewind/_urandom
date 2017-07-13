@@ -310,9 +310,16 @@ function redraw(full) {
     }
     drawScheduled = true;
     window.requestAnimationFrame(function() {
-        var hex = rgbToHex(currentColorState.get(VIEW_SRGB).value);
+        var rgb = currentColorState.get(VIEW_SRGB).value;
+        var hex = rgbToHex(rgb);
         colorText.value = hex;
         document.getElementById("preview").style.backgroundColor = hex;
+        document.getElementById("display-rgb").textContent =
+            "rgb("
+            + (rgb[0] * 255.0).toFixed(0) + ", "
+            + (rgb[1] * 255.0).toFixed(0) + ", "
+            + (rgb[2] * 255.0).toFixed(0)
+            + ")";
 
         var raw = currentColorState.get(view).value;
         var inp = view.untransform(raw, maxChroma);

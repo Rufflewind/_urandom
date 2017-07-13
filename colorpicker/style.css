@@ -50,11 +50,13 @@ main {
 #color,
 #max-chroma,
 #preview,
+#display-rgb,
 #display {
     margin: 5px;
 }
 
 input,
+#display-rgb,
 #display {
     padding: 3px;
     font-family: "Fira Mono", monospace;
@@ -76,6 +78,7 @@ input,
     float: right;
 }
 
+#display-rgb,
 #display {
     font-size: 15px;
 }
