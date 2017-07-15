@@ -1,17 +1,18 @@
-"use strict"
-
 //////////////////////////////////////////////////////////////////////////////
-// Utility
+// Utility: Generic
 
 function identity(x) {
     return x
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Utility: Basic math
+
 function sgn(x) {
     return x > 0 ? 1 : x < 0 ? -1 : 0
 }
 
-// Floored modulo
+/** Floored modulo */
 function mod(x, y) {
     return (x % y + y) % y
 }
@@ -27,34 +28,20 @@ function clamp(min, max, x) {
 }
 
 function round(dx, x) {
+    if (!dx) {
+        return x
+    }
     return x + dx / 2 - mod(x + dx / 2, dx)
 }
 
-function roundIf(cond, dx, x) {
-    return cond ? round(dx, x) : x
-}
+//////////////////////////////////////////////////////////////////////////////
+// Utility: Arrays
 
-function sortTwo(x, y) {
-    if (x < y) {
-        return [x, y]
-    } else {
-        return [y, x]
+function arrayEqual(xs, ys, cmp) {
+    if (!cmp) {
+        cmp = defaultCmp
     }
-}
-
-function intercalate(sep, xs) {
-    let ys = []
-    xs.forEach((x, i) => {
-        if (i != 0) {
-            ys.push(sep)
-        }
-        ys.push(x)
-    })
-    return ys
-}
-
-function arrayEqual(xs, ys) {
-    let length = xs.length
+    const length = xs.length
     if (length != ys.length) {
         return false
     }
@@ -66,57 +53,71 @@ function arrayEqual(xs, ys) {
     return true
 }
 
-let currentId = 0
-const idMap = new WeakMap()
-function id(object) {
-    if (!idMap.has(object)) {
-        idMap.set(object, ++currentId)
+function arrayRemoveMany(xs, indices) {
+    xs = xs.slice()
+    indices = Array.from(indices)
+    // sort in reverse order
+    indices.sort((x, y) => y - x)
+    const n = indices.length
+    for (let i = 0; i < n; ++i) {
+        xs.splice(indices[i], 1)
     }
-    return idMap.get(object)
-}
-
-function deduplicateObject(object, image) {
-    const ks = Object.keys(object)
-    if (ks.length != Object.keys(image).length) {
-        return object
-    }
-    ks.forEach(k => {
-        if (!(image.hasOwnProperty(k) && object[k] === image[k])) {
-            return object
-        }
-    })
-    return image
-}
-
-function arrayRemove(xs, indices) {
-    xs = Array.from(xs)
-    Array.from(indices)
-              .sort((x, y) => y - x)
-              .forEach(i => xs.splice(i, 1))
     return xs
 }
 
-function deepFreeze(object) {
-    if (!Object.isFrozen(object)) {
-        return
+function arrayIntercalate(sep, xs) {
+    const n = xs.length
+    let ys = []
+    for (let i = 0; i < n; ++i) {
+        if (i != 0) {
+            ys.push(sep)
+        }
+        ys.push(x[i])
     }
-    Object.freeze(object)
-    const keys = Object.keys(object)
-    let i = keys.length
-    while (i--) {
-        deepFreeze(object[keys[i]])
+    return ys
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Utility: Objects
+
+// Kind of a hack -- hopefully we won't need this in the future.
+let currentId = 0
+const idMap = new WeakMap()
+function objectId(obj) {
+    if (!idMap.has(obj)) {
+        idMap.set(obj, ++currentId)
     }
+    return idMap.get(obj)
+}
+
+function deduplicateObject(obj, image) {
+    const ks = Object.keys(obj)
+    if (ks.length != Object.keys(image).length) {
+        return obj
+    }
+    ks.forEach(k => {
+        if (!(image.hasOwnProperty(k) && obj[k] === image[k])) {
+            return obj
+        }
+    })
+    return image
 }
 
 function deepClone(x) {
     return JSON.parse(JSON.stringify(x))
 }
 
-// Get random integer within [min, max).
-function getRandomInt(min, max) {
-    min = Math.ceil(min)
-    max = Math.floor(max)
-    return Math.floor(Math.random() * (max - min)) + min
+function deepFreeze(obj) {
+    if (Object.isFrozen(obj)) {
+        return obj
+    }
+    Object.freeze(obj)
+    const keys = Object.keys(obj)
+    let i = keys.length
+    while (i--) {
+        deepFreeze(obj[keys[i]])
+    }
+    return obj
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -163,7 +164,7 @@ function arcInfo(lineLength, arcHeight) {
     }
 }
 
-// Get the height of the arc between 1 and 2 that also passes through 0.
+/** Get the height of the arc between 1 and 2 that also passes through 0. */
 function threePointArc(x0, y0, x1, y1, x2, y2) {
     const ax = x1 - x2
     const ay = y1 - y2
@@ -183,7 +184,7 @@ function threePointArc(x0, y0, x1, y1, x2, y2) {
     return arcHeight
 }
 
-// Choose smoothness = 1 for a Catmull-Rom spline.
+/** Choose smoothness = 1 for a Catmull-Rom spline. */
 function cardinalSpline(xs, ys, smoothness) {
     const length = xs.length
     if (length != ys.length) {
@@ -447,18 +448,136 @@ function applyRendering(rendering) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
-// Superline manipulation
+// Deltas
+//
+// Without qualification, "deltas" refer to Kronecker deltas involving
+// magnitudes (j), not projections (m).
+//
+// Each delta is an array of at least two magnitude variables.
+// Within a given list of deltas, the variables must be all distinct.
 
-const EMPTY_SUPERLINE = {
+/** Merges the given deltas and simplifies the result. */
+function mergeDeltas(...deltaLists) {
+    let finalDeltas = []
+    let finder = {} // {[entry]: [deltas]} (singleton list)
+    deltaLists.forEach(deltas => deltas.forEach(delta => {
+        if (delta.length < 2) {
+            return
+        }
+        let found = null
+        for (let i = 0; i < delta.length; ++i) {
+            found = finder[delta[i]]
+            if (found) {
+                break
+            }
+        }
+        if (found == null) {
+            found = [[]]
+            finalDeltas.push(found[0])
+        }
+        delta.forEach(x => {
+            const exists = finder[x]
+            if (!exists) {
+                found[0].push(x)
+                finder[x] = found
+            } else if (exists[0] != found[0]) {
+                // merge deltas
+                found[0].push(...exists[0])
+                exists[0].splice(0, exists[0].length)
+                exists[0] = found[0]
+            }
+        })
+    }))
+    // remove the husks
+    return Object.freeze(finalDeltas.map(Object.freeze)
+                                    .filter(delta => delta.length > 1))
+}
+
+/** Tests whether the 'subdeltas' is a subset of 'deltas'. */
+function containsDeltas(deltas, subdeltas) {
+    deltas = mergeDeltas(deltas)
+    let finder = {}
+    deltas.forEach(delta => delta.forEach(x =>
+        finder[x] = delta
+    ))
+    for (let j = 0; j < subdeltas.length; ++j) {
+        const subdelta = subdeltas[j]
+        let found = null
+        for (let i = 0; i < subdelta.length; ++i) {
+            found = finder[subdelta[i]]
+            if (found) {
+                break
+            }
+        }
+        if (found) {
+            for (let i = 0; i < subdelta.length; ++i) {
+                if (finder[subdelta[i]] != found) {
+                    return false
+                }
+            }
+        } else {
+            return false
+        }
+    }
+    return true
+}
+
+function findDeltaEntry(deltas, entry) {
+    for (let j = 0; j < deltas.length; ++j) {
+        for (let i = 0; i < deltas[j].length; ++i) {
+            if (deltas[j][i] == entry) {
+                return [j, i]
+            }
+        }
+    }
+    return null
+}
+
+function relatedDeltas(deltas, entry) {
+    const ji = findDeltaEntry(deltas, entry)
+    if (!ji) {
+        return []
+    }
+    const [j, i] = ji
+    return arrayRemoveMany(deltas[j], [i]).map(x => [entry, x])
+}
+
+/** Warning: this may not preserve the diagram! */
+function removeDeltaEntry(deltas, entry) {
+    const ji = findDeltaEntry(deltas, entry)
+    if (!ji) {
+        return deltas
+    }
+    const [j, i] = ji
+    return Object.freeze(Object.assign([], deltas, {
+        [j]: Object.freeze(arrayRemoveMany(deltas[j], [i])),
+    })).filter(delta => delta.length > 1)
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Superlines
+//
+// Superlines are just magnitudes (j).
+
+const EMPTY_SUPERLINE = Object.freeze({
     phase: 0,
     summed: false,
     weight: 0,
-}
+})
 
+/** Convert a superline-like object into a proper superline. */
 function ensureSuperline(superline) {
-    return Object.assign({}, EMPTY_SUPERLINE, superline)
+    return Object.freeze(Object.assign({}, EMPTY_SUPERLINE, superline))
 }
 
+/** Increment the numeric suffix of a string by one.  If there is no suffix,
+    `1` is appended. */
+function newLabel(label) {
+    const match = /^([\s\S]*?)(\d*)$/.exec(label)
+    return match[1] + (Number(match[2]) + 1).toString()
+}
+
+/** Generate `count` fresh superline (j) labels. */
 function availSuperlineLabels(diagram, count) {
     // avoid 0, which might get confused for j = 0
     let counter = 1
@@ -473,52 +592,16 @@ function availSuperlineLabels(diagram, count) {
     return labels
 }
 
-function newLabel(label) {
-    const match = /^([\s\S]*?)(\d*)$/.exec(label)
-    return match[1] + (Number(match[2]) + 1).toString()
-}
-
-function changePhase(superline, phase) {
-    superline.phase = mod(superline.phase + phase, 4)
-}
-
-function mergeSuperlines(superline1, superline2) {
-    superline1 = ensureSuperline(superline1)
-    superline2 = ensureSuperline(superline2)
-    changePhase(superline1, superline2.phase)
-    superline1.weight += superline2.weight
-    superline1.summed |= superline2.summed
-    return superline1
-}
-
-function addDelta(deltas, entries) {
-    if (entries.length < 2) {
-        return deltas
-    }
-    deltas = Array.from(deltas)
-    for (let i = 0; i < deltas.length; ++i) {
-        for (let j = 0; j < entries.length; ++j) {
-            if (deltas[i].includes(entries[j])) {
-                deltas[i] = Array.from(deltas[i])
-                entries.forEach(x => {
-                    if (!deltas[i].includes(x)) {
-                        deltas[i].push(x)
-                    }
-                })
-                return deltas
-            }
-        }
-    }
-    deltas.push(entries)
-    return deltas
-}
-
-function mergeDeltas(...deltass) {
-    let totalDeltas = []
-    deltass.forEach(deltas =>
-        deltas.forEach(entries =>
-            totalDeltas = addDelta(totalDeltas, entries)))
-    return totalDeltas
+function mergeSuperlines(...superlines) {
+    let finalSuperline = Object.assign({}, EMPTY_SUPERLINE)
+    superlines.forEach(superline => {
+        finalSuperline.phase = mod(finalSuperline.phase
+                                 + (superline.phase || 0), 4)
+        finalSuperline.weight += superline.weight || 0
+        finalSuperline.summed = finalSuperline.summed
+                             || superline.summed || false
+    })
+    return Object.freeze(finalSuperline)
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -574,7 +657,7 @@ function joinLines(line1, reverse1, line2, reverse2) {
     if (reverse2) {
         return joinLines(line1, reverse1, reverseLine(line2), false)
     }
-    const superlines = sortTwo(line1.superline, line2.superline)
+    const superlines = [line1.superline, line2.superline].sort(defaultCmp)
     return Object.assign(canonicalizeLine({
         superline: superlines[0],
         direction: line1.direction + line2.direction,
@@ -991,7 +1074,9 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
             (getLineInfo(diagram, lineId1).lineLength
            + getLineInfo(diagram, lineId2).lineLength) / 2
     }
-    changePhase(diagram.superlines[superlineId1], joined.phase)
+    diagram.superlines[superlineId1] = mergeSuperlines(
+        diagram.superlines[superlineId1],
+        {phase: joined.phase})
     diagram.lines[lineId1] = joined.line
     delete diagram.lines[lineId2]
 
@@ -1005,7 +1090,7 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     delete diagram.superlines[superlineId2]
 
     // delete the terminal nodes
-    diagram.nodes = arrayRemove(diagram.nodes, [terminalIndex1, terminalIndex2])
+    diagram.nodes = arrayRemoveMany(diagram.nodes, [terminalIndex1, terminalIndex2])
 
     return diagram
 }
@@ -1025,9 +1110,13 @@ function addW1j(diagram, lineId) {
 }
 
 function add2j(diagram, lineId) {
-    diagram = deepClone(diagram)
-    changePhase(diagram.superlines[diagram.lines[lineId].superline], 2)
-    return diagram
+    const superlineId = diagram.lines[lineId].superline
+    return Object.freeze(Object.assign({}, diagram, {
+        superlines: Object.freeze(Object.assign({}, diagram.superlines, {
+            [superlineId]: mergeSuperlines(diagram.superlines[superlineId],
+                                           {phase: 2})
+        }))
+    }))
 }
 
 function flipW3j(diagram, nodeIndex) {
@@ -1070,7 +1159,7 @@ function deleteNode(diagram, nodeIndex) {
         if (isDanglingSuperline(diagram, superlineId)) {
             delete diagram.superlines[superlineId]
         }
-        diagram.nodes = arrayRemove(diagram.nodes, [nodeIndex, otherIndex])
+        diagram.nodes = arrayRemoveMany(diagram.nodes, [nodeIndex, otherIndex])
     } else {
         let terminals = []
         node.lines.forEach(function(lineId, lineIndex) {
@@ -1096,6 +1185,11 @@ function deleteNode(diagram, nodeIndex) {
         diagram.nodes = terminals.concat(diagram.nodes)
     }
     return diagram
+}
+
+function inferDeltas(diagram) {
+    throw new Error("inferDeltas: not yet implemented")
+    return []
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1185,7 +1279,9 @@ function threeArrowRule(diagram, nodeIndex) {
         }
         const canonicalized = canonicalizeLine(line)
         diagram.lines[lineId] = canonicalized.line
-        changePhase(diagram.superlines[line.superline], canonicalized.phase)
+        diagram.superlines[line.superline] = mergeSuperlines(
+            diagram.superlines[line.superline],
+            {phase: canonicalized.phase})
     })
     return diagram
 }
@@ -1305,7 +1401,7 @@ function deltaIntroRule(diagram, nodeIndex) {
 
     // update nodes and other things
     return Object.freeze(Object.assign({}, diagram, {
-        nodes: Object.freeze(arrayRemove(Object.assign([], diagram.nodes, {
+        nodes: Object.freeze(arrayRemoveMany(Object.assign([], diagram.nodes, {
             [joins[0].nl[0]]: Object.freeze(Object.assign(
                 {}, diagram.nodes[joins[0].nl[0]], {
                     lines: Object.freeze(Object.assign(
@@ -1327,6 +1423,17 @@ function deltaIntroRule(diagram, nodeIndex) {
             [superline1, superline2],
             ["0", cutLine.superline],
         ])
+    }))
+}
+
+function deltaElimRule(diagram, entry) {
+    const inferred = inferDeltas(diagram)
+    const related = relatedDeltas(diagram.deltas, entry)
+    if (!containsDeltas(inferred, related)) {
+        return "cannot remove uninferrable delta entry"
+    }
+    return Object.freeze(Object.assign({}, diagram, {
+        deltas: removeDeltaEntry(diagram.deltas, entry)
     }))
 }
 
@@ -1384,7 +1491,7 @@ function renderArrow(update, diagram, lineId) {
                         let lines = Object.assign({}, diagram.lines)
                         // prevent arrows from getting stuck under nodes
                         lines[lineId] = Object.assign({}, lines[lineId], {
-                            arrowPos: clamp(0.1, 0.9, roundIf(snap, 0.1, pos)),
+                            arrowPos: clamp(0.1, 0.9, round(snap && 0.1, pos)),
                         })
                         return Object.assign({}, diagram, {lines: lines})
                     }))
@@ -1456,17 +1563,17 @@ function renderLine(update, editor, lineId) {
                     const angle = Math.atan2(dy, dx) - Math.PI / 2
                     const height = Math.sqrt(dx * dx + dy * dy)
                     change = {
-                        angle: roundIf(snap, Math.PI / 6, angle),
+                        angle: round(snap && Math.PI / 6, angle),
                         arcHeight: clamp(20.0, Infinity,
-                                         roundIf(snap, 20.0, height)),
+                                         round(snap && 20.0, height)),
                     }
                 } else {
                     change = {
                         angle: info.trueAngle,
-                        arcHeight: roundIf(snap, 20.0,
-                                           threePointArc(x, y,
-                                                         info.x0, info.y0,
-                                                         info.x1, info.y1)),
+                        arcHeight: round(snap && 20.0,
+                                         threePointArc(x, y,
+                                                       info.x0, info.y0,
+                                                       info.x1, info.y1)),
                     }
                 }
                 return setDiagramLineProps(diagram, lineId, change)
@@ -1531,8 +1638,8 @@ function renderLine(update, editor, lineId) {
                         // prevent text from getting stuck under nodes
                         return setDiagramLineProps(diagram, lineId, {
                             textPos: clamp(0.1, 0.9,
-                                           roundIf(snap, 0.1, where.pos)),
-                            textOffset: roundIf(snap, 10.0, where.offset),
+                                           round(snap && 0.1, where.pos)),
+                            textOffset: round(snap && 10.0, where.offset),
                         })
                     }))
                     e.stopPropagation()
@@ -1599,7 +1706,7 @@ function renderNode(update, diagram, nodeIndex, frozen) {
 
     return vnode("svg:g", {
         // prevent hover effects from sticking when nodes change
-        [VNODE_KEY]: id(node),
+        [VNODE_KEY]: objectId(node),
         "class": "node " + node.type,
         transform: `translate(${node.x}, ${node.y})`,
         onmouseover: function(e) {
@@ -1619,8 +1726,8 @@ function renderNode(update, diagram, nodeIndex, frozen) {
                     superficial: node.type == "w3j",
                 }, (diagram, x, y, snap) =>
                     setDiagramNodeProps(diagram, nodeIndex, {
-                        x: roundIf(snap, 20.0, x),
-                        y: roundIf(snap, 20.0, y),
+                        x: round(snap && 20.0, x),
+                        y: round(snap && 20.0, y),
                     })
                 ))
                 e.stopPropagation()
@@ -1704,7 +1811,7 @@ function renderTriangleTableau(update, triangles) {
 function renderDeltaTableau(update, deltas) {
     return deltas.map(delta =>
         vnode("li", {},
-              ...intercalate(
+              ...arrayIntercalate(
                   " = ",
                   Array.from(delta)
                        .map(x => x == "0"
@@ -2323,8 +2430,7 @@ function error(msg) {
     }, 10000)
 }
 
-// keep the state as a global to make debugging easier
-function initEditor() {
+function main() {
     let editor = {}
     Object.assign(editor, newEditor())
     function update(...changes) {
@@ -2336,5 +2442,3 @@ function initEditor() {
     }
     update(loadEditor)
 }
-
-initEditor()
