@@ -172,6 +172,10 @@ g.line:hover path.hit {
     stroke: rgba(227, 189, 46, 0.2);
 }
 
+g.line.tracked path.hit {
+    stroke: rgba(248, 84, 80, 0.4);
+}
+
 g.line path.fg {
     stroke-width: 2;
 }
@@ -269,13 +273,26 @@ g.node.terminal circle.frozen {
     fill: transparent;
 }
 
+svg {
+    isolation: isolate;
+}
+
+#diagram-drag-track {
+    mix-blend-mode: color-dodge;
+    pointer-events: none;
+}
+
 path.drag-track {
     fill: none;
-    stroke: rgba(218, 84, 74, 0.4);
-    stroke-width: 12px;
+    stroke: #f85450;
+    stroke-width: 6px;
+}
+
+circle.drag-track {
+    fill: #f85450;
 }
 
 #drag-track-arrowhead use {
-    fill: rgba(218, 84, 74, 0.4);
+    fill: #f85450;
     transform: scale(0.5, 1);
 }

@@ -96,6 +96,18 @@ function arrayRemove(xs, indices) {
     return xs
 }
 
+function deepFreeze(object) {
+    if (!Object.isFrozen(object)) {
+        return
+    }
+    Object.freeze(object)
+    const keys = Object.keys(object)
+    let i = keys.length
+    while (i--) {
+        deepFreeze(object[keys[i]])
+    }
+}
+
 function deepClone(x) {
     return JSON.parse(JSON.stringify(x))
 }
@@ -449,9 +461,9 @@ const EMPTY_SUPERLINE = {
     weight: 0,
 }
 
-// NOTE: must maintain invariant that terminals precede all other nodes.
-// Also, the order of nodes is critical!  If you move the nodes around,
-// make sure the lines are also reversed.
+function ensureSuperline(superline) {
+    return Object.assign({}, EMPTY_SUPERLINE, superline)
+}
 
 function availSuperlineLabels(diagram, count) {
     // avoid 0, which might get confused for j = 0
@@ -477,15 +489,15 @@ function changePhase(superline, phase) {
 }
 
 function mergeSuperlines(superline1, superline2) {
-    superline1 = Object.assign({}, EMPTY_SUPERLINE, superline1)
-    superline2 = Object.assign({}, EMPTY_SUPERLINE, superline2)
+    superline1 = ensureSuperline(superline1)
+    superline2 = ensureSuperline(superline2)
     changePhase(superline1, superline2.phase)
     superline1.weight += superline2.weight
     superline1.summed |= superline2.summed
     return superline1
 }
 
-function addDelta(deltas, ...entries) {
+function addDelta(deltas, entries) {
     if (entries.length < 2) {
         return deltas
     }
@@ -505,6 +517,14 @@ function addDelta(deltas, ...entries) {
     }
     deltas.push(entries)
     return deltas
+}
+
+function mergeDeltas(...deltass) {
+    let totalDeltas = []
+    deltass.forEach(deltas =>
+        deltas.forEach(entries =>
+            totalDeltas = addDelta(totalDeltas, entries)))
+    return totalDeltas
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -704,6 +724,20 @@ function terminalNode(lineId, variable, x, y) {
     })
 }
 
+function w3jNode(a, b, c, x, y) {
+    let node = {
+        type: "w3j",
+        lines: Object.freeze([a, b, c]),
+    }
+    if (typeof x != "undefined") {
+        node.x = x
+    }
+    if (typeof y != "undefined") {
+        node.y = y
+    }
+    return Object.freeze(node)
+}
+
 function endNodeAndLineIndices(nodes, lineId) {
     let nodeAndLineIndices = []
     if (lineId === undefined || lineId === null) {
@@ -768,6 +802,10 @@ function nearestNodeIndices(nodes, count, x, y) {
 
 //////////////////////////////////////////////////////////////////////////////
 // Diagram manipulation
+//
+// NOTE: must maintain invariant that terminals precede all other nodes.
+// Also, the order of nodes is critical!  If you move the nodes around,
+// make sure the lines are also reversed.
 
 const EMPTY_DIAGRAM = Object.freeze({
     nodes: Object.freeze([]),
@@ -790,12 +828,7 @@ function w3jDiagram(a, b, c, x, y) {
             terminalNode(a, a, x - 50, y + 50),
             terminalNode(b, b, x + 50, y + 50),
             terminalNode(c, c, x, y - 70),
-            {
-                type: "w3j",
-                lines: Object.freeze([a, b, c]),
-                x: x,
-                y: y,
-            },
+            w3jNode(a, b, c, x, y),
         ]),
         lines: Object.freeze({
             [a]: plainLine(a),
@@ -1235,6 +1268,7 @@ function deltaIntroRule(diagram, nodeIndex) {
     line.direction += direction
     const canonicalized = canonicalizeLine(line)
     let lines = Object.assign({}, diagram.lines)
+    const cutLine = lines[node.lines[cutIndex]]
     delete lines[loopLineIndex]
     delete lines[node.lines[cutIndex]]
     delete lines[joins[1].id]
@@ -1280,12 +1314,21 @@ function deltaIntroRule(diagram, nodeIndex) {
         }), [nodeIndex, other[0]])),
         lines: Object.freeze(lines),
         superlines: superlines,
-        deltas: addDelta(addDelta(diagram.deltas,
-                                  superline1,
-                                  superline2),
-                         ZERO_J,
-                         node.lines[cutIndex])
+        deltas: mergeDeltas(diagram.deltas, [
+            [superline1, superline2],
+            [ZERO_J, cutLine.superline],
+        ])
     }))
+}
+
+// variant = false: even partitioning OR keep arrow on the left
+// variant = true: odd partitioning OR keep arrow on the right
+function w3jIntroRule(diagram,
+                      lineId1, lineId2,
+                      reverse1, reverse2,
+                      variant1, variant2) {
+    // NYI
+    return diagram
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1372,7 +1415,8 @@ function renderArrow(update, diagram, lineId) {
     )]
 }
 
-function renderLine(update, diagram, lineId) {
+function renderLine(update, editor, lineId) {
+    const diagram = editor.snapshot.diagram
     const line = diagram.lines[lineId]
     const minTextOffset = 20
     const info = getLineInfo(diagram, lineId)
@@ -1434,7 +1478,10 @@ function renderLine(update, diagram, lineId) {
         {
             // prevent hover effects from sticking when nodes change
             [VNODE_KEY]: lineId,
-            "class": "line",
+            "class": "line "
+                   + (editor.dragTrackStartLine == lineId
+                   || editor.dragTrackStopLine == lineId
+                    ? "tracked " : ""),
             onmouseover: function(e) {
                 update(setHover({
                     type: "line",
@@ -1824,7 +1871,9 @@ function renderEquation(diagram, container) {
                  .join(" ")
     }).join(" ")
     const triangles = diagram.triangles.map(js =>
-        `\\{${js.map(j => renderVariable("j", j)).join(", ")}\}`
+        "\\begin{Bmatrix}"
+      + js.map(j => renderVariable("j", j)).join(" & ")
+      + "\\end{Bmatrix}"
     ).join(" ")
     container.textContent = `\\[${summedVarsStr} ${jDeltas} ${mDeltasStr} `
                           + `${weights} ${phasesStr} ${s}\\]`
@@ -1833,11 +1882,23 @@ function renderEquation(diagram, container) {
 
 function renderDragTrack(start, stop) {
     return [
+        vnode("svg:circle", {
+            "class": "drag-track",
+            cx: start[0],
+            cy: start[1],
+            r: 8,
+        }),
         vnode("svg:path", {
             "class": "drag-track",
             d: `M ${start[0]} ${start[1]} `
              + `L ${stop[0]} ${stop[1]} `,
-            "marker-end": "url(#drag-track-arrowhead)",
+            //"marker-end": "url(#drag-track-arrowhead)",
+        }),
+        vnode("svg:circle", {
+            "class": "drag-track",
+            cx: stop[0],
+            cy: stop[1],
+            r: 8,
         }),
     ]
 }
@@ -1871,6 +1932,8 @@ function newEditor() {
         mouseY: null,
         dragTrackStart: null,
         dragTrackStop: null,
+        dragTrackStartLine: null,
+        dragTrackStopLine: null,
     }
 }
 
@@ -1906,11 +1969,6 @@ function renderEditor(update, editor) {
             attributes: {
                 onhashchange: _ => update(loadEditor),
                 onkeydown: e => update(keyDown.bind(null, e)),
-                onmousedown: e => {
-                    if (e.buttons == 2) {
-                        update(startDragTrack(e))
-                    }
-                },
                 onmousemove: e => update(mouseMove(e)),
                 onmouseup: e => update(mouseUp(e)),
             },
@@ -1925,12 +1983,17 @@ function renderEditor(update, editor) {
             element: document.getElementById("diagram"),
             attributes: {
                 oncontextmenu: function(e) { e.preventDefault() },
+                onmousedown: e => {
+                    if (e.buttons == 2) {
+                        update(startDragTrack(e))
+                    }
+                },
             },
         },
         {
             element: document.getElementById("diagram-lines"),
             children: Object.keys(diagram.lines).map(lineId =>
-                renderLine(update, diagram, lineId)),
+                renderLine(update, editor, lineId)),
         },
         {
             element: document.getElementById("diagram-nodes"),
@@ -2028,20 +2091,41 @@ function setHover(entity) {
 function startDragTrack(event) {
     return editor => {
         editor.dragTrackStart = [event.clientX, event.clientY]
+        if (editor.hover.type == "line") {
+            editor.dragTrackStartLine = editor.hover.lineId
+        }
     }
 }
 
 function updateDragTrack(event) {
     return editor => {
-        if (editor.dragTrackStart != null) {
-            editor.dragTrackStop = [event.clientX, event.clientY]
+        if (editor.dragTrackStart == null) {
+            return
+        }
+        editor.dragTrackStop = [event.clientX, event.clientY]
+        if (editor.dragTrackStartLine != null) {
+            // line-to-line
+            if (editor.hover.type == "line" &&
+                editor.hover.lineId != editor.dragTrackStartLine) {
+                editor.dragTrackStopLine = editor.hover.lineId
+            } else {
+                editor.dragTrackStopLine = null
+            }
         }
     }
 }
 
 function clearDragTrack(editor) {
+    if (editor.dragTrackStopLine != null ) {
+        modifyDiagram({equivalent: true}, diagram =>
+            w3jIntroRule(diagram,
+                         editor.dragTrackStartLine,
+                         editor.dragTrackStopLine))(editor)
+    }
     editor.dragTrackStart = null
     editor.dragTrackStop = null
+    editor.dragTrackStartLine = null
+    editor.dragTrackStopLine = null
 }
 
 function mouseUp(event) {
