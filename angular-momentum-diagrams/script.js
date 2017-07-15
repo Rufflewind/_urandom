@@ -449,12 +449,6 @@ function applyRendering(rendering) {
 //////////////////////////////////////////////////////////////////////////////
 // Superline manipulation
 
-const ZERO_J = {type: "zero"}
-
-function isZeroJ(j) {
-    return typeof j == "object" && j.type == "zero"
-}
-
 const EMPTY_SUPERLINE = {
     phase: 0,
     summed: false,
@@ -898,16 +892,31 @@ function w3jOrientation(diagram, nodeIndex) {
     if (node.type != "w3j") {
         throw new Error("cannot get orientation of generic node")
     }
-    const lines = [0, 1, 2]
-        .map(function(lineIndex) {
+    const lines = node
+        .lines
+        .filter(x => x != "0")
+        .map((_, lineIndex) => {
             const angle = lineAngle(diagram, nodeIndex, lineIndex)
             return [lineIndex, mod(angle, 2 * Math.PI)]
         })
         .sort((line1, line2) => line1[1] - line2[1])
-    if (lines.map(line => mod(line[0] - lines[0][0], 3)).join() == "0,1,2") {
-        return 1
-    } else {
-        return -1
+    switch (lines.length) {
+        case 3:
+            if (lines.map(line => mod(line[0] - lines[0][0], 3)).join() == "0,1,2") {
+                return {nnz: lines.length, orientation: 1}
+            } else {
+                return {nnz: lines.length, orientation: -1}
+            }
+        case 2:
+            const s = node.lines.indexOf("0") == 1 ? -1 : 1
+            if (lines.map(line => mod(line[0] - lines[0][0], 2)).join() == "0,1") {
+                return {nnz: lines.length, orientation: s}
+            } else {
+                return {nnz: lines.length, orientation: -s}
+            }
+            break;
+        default:
+            return {nnz: lines.length}
     }
 }
 
@@ -1316,7 +1325,7 @@ function deltaIntroRule(diagram, nodeIndex) {
         superlines: superlines,
         deltas: mergeDeltas(diagram.deltas, [
             [superline1, superline2],
-            [ZERO_J, cutLine.superline],
+            ["0", cutLine.superline],
         ])
     }))
 }
@@ -1553,20 +1562,24 @@ function renderNode(update, diagram, nodeIndex, frozen) {
 
     if (node.type == "w3j") {
         const circularArrowSize = 30
-        const orientation = w3jOrientation(diagram, nodeIndex) > 0
-                          ? "flipped " : ""
-        gChildren.push(vnode("svg:circle", {
-            "class": orientation,
-            r: 18,
-        }))
-        gChildren.push(vnode("svg:use", {
-            "class": "arrow " + orientation,
-            href: "#clockwise",
-            x: -circularArrowSize / 2,
-            y: -circularArrowSize / 2,
-            width: circularArrowSize,
-            height: circularArrowSize,
-        }))
+        const orientationInfo = w3jOrientation(diagram, nodeIndex)
+        if (orientationInfo.nnz == 3) {
+            const orientation = orientationInfo.orientation > 0 ? "flipped " : ""
+            gChildren.push(vnode("svg:circle", {
+                "class": orientation,
+                r: 18,
+            }))
+            gChildren.push(vnode("svg:use", {
+                "class": "arrow " + orientation,
+                href: "#clockwise",
+                x: -circularArrowSize / 2,
+                y: -circularArrowSize / 2,
+                width: circularArrowSize,
+                height: circularArrowSize,
+            }))
+        } else {
+            throw new Error("degenerate Wigner 3-jm nodes are not yet implemented")
+        }
 
     } else if (node.type == "terminal") {
         const frozenClass = frozen ? "frozen " : ""
@@ -1694,13 +1707,13 @@ function renderDeltaTableau(update, deltas) {
               ...intercalate(
                   " = ",
                   Array.from(delta)
-                       .map(x => isZeroJ(x)
+                       .map(x => x == "0"
                              ? vnode("span", {"class": "zero"}, "0")
                              : String(x)))))
 }
 
 function renderVariable(type, name) {
-    if (type == "j" && isZeroJ(name)) {
+    if (name == "0") {
         return "0"
     }
     return `${type}_{\\text{${name}}}`
