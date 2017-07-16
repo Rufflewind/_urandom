@@ -92,7 +92,7 @@ function cabToInp(cab, maxChroma) {
     return [
         (cab[1] + 1.0) / 2.0,
         (cab[2] + 1.0) / 2.0,
-        cab[0] / maxChroma,
+        cab[0] / maxChroma
     ];
 }
 
@@ -124,17 +124,25 @@ function clipRgb(rgb) {
 
 // https://stackoverflow.com/a/5624139
 function hexToRgb(hex) {
-    var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+    var m;
+    m = /(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(hex);
+    if (m) {
+        var rgb = [parseInt(m[1]) / 255.0,
+                   parseInt(m[2]) / 255.0,
+                   parseInt(m[3]) / 255.0];
+        clipRgb(rgb);
+        return rgb;
+    }
+    hex = hex.replace(/^#?([a-f\d])([a-f\d])([a-f\d])$/i, function(m, r, g, b) {
         return r + r + g + g + b + b;
     });
-    var s = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!s) {
+    m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) {
         return null;
     }
-    return [parseInt(s[1], 16) / 255.0,
-            parseInt(s[2], 16) / 255.0,
-            parseInt(s[3], 16) / 255.0];
+    return [parseInt(m[1], 16) / 255.0,
+            parseInt(m[2], 16) / 255.0,
+            parseInt(m[3], 16) / 255.0];
 }
 
 // https://stackoverflow.com/a/19765382
@@ -223,7 +231,7 @@ var VIEW_LAB_HLC = {
         }
         return {
             value: cab,
-            inGamut: res.inGamut,
+            inGamut: res.inGamut
         };
     }
 };
@@ -429,26 +437,26 @@ window.addEventListener("hashchange", function() {
     redraw(true);
 });
 
-document.getElementById("view-lab-hcl")
-        .addEventListener("change", function() {
-            view = VIEW_LAB_HCL;
+var view;
+var radioViews = {
+    "view-lab-hcl": VIEW_LAB_HCL,
+    "view-lab-hlc": VIEW_LAB_HLC,
+    "view-cam02-hcl": VIEW_CAM02_HCL,
+    "view-cam02-hlc": VIEW_CAM02_HLC
+};
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+for (var id in radioViews) {
+    if (hasOwnProperty.call(radioViews, id)) {
+        var elem = document.getElementById(id);
+        if (elem.checked) {
+            view = radioViews[id];
+        }
+        elem.addEventListener("change", (function(id) {
+            view = radioViews[id];
             redraw(true);
-        });
-document.getElementById("view-lab-hlc")
-        .addEventListener("change", function() {
-            view = VIEW_LAB_HLC;
-            redraw(true);
-        });
-document.getElementById("view-cam02-hcl")
-        .addEventListener("change", function() {
-            view = VIEW_CAM02_HCL;
-            redraw(true);
-        });
-document.getElementById("view-cam02-hlc")
-        .addEventListener("change", function() {
-            view = VIEW_CAM02_HLC;
-            redraw(true);
-        });
+        }).bind(null, id));
+    }
+}
 
 var slider = document.getElementById("slider");
 slider.addEventListener("input", function(e) {
@@ -487,7 +495,6 @@ colorText.addEventListener("keydown", function(e) {
 });
 
 var currentColorState = new ColorState(VIEW_SRGB, [0.65, 0.65, 0.65]);
-var view = VIEW_LAB_HCL;
 if (updateHash()) {
     currentColorState.save();
 }
