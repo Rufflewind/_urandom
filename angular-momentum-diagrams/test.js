@@ -1,43 +1,110 @@
+console.assert(permutSign([2, 1, 3], [2, 1, 3]) == 1)
+
 console.assert(JSON.stringify(mergeDeltas([
-    ["a", "b"],
-    ["c", "d"],
+    [1, 2],
+    [3, 4],
 ])) == JSON.stringify([
-    ["a", "b"],
-    ["c", "d"],
+    [1, 2],
+    [3, 4],
 ]))
 
 console.assert(JSON.stringify(mergeDeltas([
-    ["a", "b"],
-    ["c", "d"],
-    ["b", "c"],
-    ["e", "f"],
+    [1, 2],
+    [3, 4],
+    [2, 3],
+    [5, 6],
 ])) == JSON.stringify([
-    ["a", "b", "c", "d"],
-    ["e", "f"],
+    [1, 2, 3, 4],
+    [5, 6],
 ]))
 
 console.assert(containsDeltas([
-    ["a", "b", "c", "d"],
-    ["e", "f"],
-], [["e", "f"]]))
+    [1, 2, 3, 4],
+    [5, 6],
+], [[5, 6]]))
 
 console.assert(containsDeltas([
-    ["a", "b", "c", "d"],
-    ["e", "f"],
-], [["e", "f"]]))
+    [1, 2, 3, 4],
+    [5, 6],
+], [[5, 6]]))
 
 console.assert(JSON.stringify(removeDeltaEntry([
-    ["a", "b", "c", "d"],
-    ["e", "f"],
-], "f")) == JSON.stringify([
-    ["a", "b", "c", "d"],
+    [1, 2, 3, 4],
+    [5, 6],
+], 6)) == JSON.stringify([
+    [1, 2, 3, 4],
 ]))
 
 console.assert(JSON.stringify(relatedDeltas([
-    ["a", "b", "c", "d"],
-    ["e", "f"],
-], "b")) == JSON.stringify([
-    ["b", "a"],
-    ["b", "c"],
-    ["b", "d"],
+    [1, 2, 3, 4],
+    [5, 6],
+], 2)) == JSON.stringify([
+    [2, 1],
+    [2, 3],
+    [2, 4],
 ]))
+
+//////////////////////////////////////////////////////////////////////////////
+// Diagram.substitute
+
+const d1 = ensureDiagram({
+    nodes: [
+        terminalNode("a", "a", 0, 0),
+        terminalNode("a", "b", 0, 0),
+    ],
+    lines: {
+        a: newLine("a"),
+    },
+    superlines: {
+        a: EMPTY_SUPERLINE,
+    },
+})
+
+assertEq(new Diagram(d1).renameLines({a: "b"}),
+         new Diagram(ensureDiagram({
+             nodes: [
+                 terminalNode("b", "a", 0, 0),
+                 terminalNode("b", "b", 0, 0),
+             ],
+             lines: {
+                 b: newLine("a"),
+             },
+             superlines: {
+                 a: EMPTY_SUPERLINE,
+             },
+         })))
+
+assertEq(new Diagram(EMPTY_DIAGRAM).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
+         new Diagram(EMPTY_DIAGRAM))
+
+assertEq(new Diagram(d1).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
+         new Diagram(d1))
+
+assertEq(new Diagram(d1).substitute(ensureDiagram({
+    nodes: [
+        terminalNode("+a", "a"),
+        terminalNode("+a", "b"),
+    ],
+    lines: {
+        ["+a"]: {superline: "a", direction: 0},
+    },
+    superlines: {
+        a: EMPTY_SUPERLINE,
+    },
+}), ensureDiagram({
+    nodes: [
+        terminalNode("a", "a"),
+        terminalNode("a", "b"),
+    ],
+    lines: {
+        a: {superline: "a", direction: 0},
+    },
+    superlines: {
+        a: EMPTY_SUPERLINE,
+    },
+})), new Diagram(d1))
+
+//TODO: one thing i'm still concerned about is the orientation of the lines
+//TODO: are signed line IDs in patterns really necessary?
+
+document.getElementsByTagName("body")[0].style.background = "black"

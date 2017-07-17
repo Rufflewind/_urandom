@@ -5,6 +5,56 @@ function identity(x) {
     return x
 }
 
+function defaultCmp(x, y) {
+    if (x < y) {
+        return -1
+    } else if (y < x) {
+        return 1
+    } else {
+        return 0
+    }
+}
+
+function lexicalCmp(xs, ys, cmp) {
+    const nx = xs.length
+    const ny = ys.length
+    const n = nx < ny ? nx : ny
+    for (let i = 0; i < n; ++i) {
+        const r = cmp(xs[i], ys[i])
+        if (r) {
+            return r
+        }
+    }
+    return defaultCmp(nx, ny)
+}
+
+function permutSign(xs, ys) {
+    let permut = new Map()
+    for (const [i, y] of ys.entries()) {
+        if (permut.has(y)) {
+            return 0 // not a permutation
+        }
+        permut.set(y, xs[i])
+    }
+    let visited = new Set(xs)
+    let sign = 1
+    while (visited.size) {
+        const x0 = visited.values().next().value
+        visited.delete(x0)
+        let x = x0
+        do {
+            if (!permut.has(x)) {
+                return 0 // not a permutation
+            }
+            x = permut.get(x)
+            visited.delete(x)
+            sign *= -1
+        } while (x != x0)
+        sign *= -1
+    }
+    return sign
+}
+
 //////////////////////////////////////////////////////////////////////////////
 // Utility: Basic math
 
@@ -32,6 +82,50 @@ function round(dx, x) {
         return x
     }
     return x + dx / 2 - mod(x + dx / 2, dx)
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Utility: Iterators
+
+function* range(start, stop) {
+    for (let i = start; i < stop; ++i) {
+        yield i
+    }
+}
+
+function* map(f, xs, start) {
+    start = start || 0
+    for (const x of xs) {
+        yield f(x, start)
+        start += 1
+    }
+}
+
+function* filter(f, xs) {
+    for (const x of xs) {
+        if (f(x)) {
+            yield x
+        }
+    }
+}
+
+function* take(n, xs) {
+    let i = 0
+    for (const x of xs) {
+        if (i >= n) {
+            break
+        }
+        yield x
+        i += 1
+    }
+}
+
+function sum(xs) {
+    let s = 0
+    for (const x of xs) {
+        s += x
+    }
+    return s
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -72,7 +166,7 @@ function arrayIntercalate(sep, xs) {
         if (i != 0) {
             ys.push(sep)
         }
-        ys.push(x[i])
+        ys.push(xs[i])
     }
     return ys
 }
@@ -118,6 +212,67 @@ function deepFreeze(obj) {
         deepFreeze(obj[keys[i]])
     }
     return obj
+}
+
+function deepDiff(x, y) {
+    if (x === y) {
+        return null
+    }
+    if (typeof x != typeof y) {
+        return {type: "typeMismatch", left: x, right: y}
+    }
+
+    const xIsArray = Array.isArray(x)
+    const yIsArray = Array.isArray(y)
+    if (xIsArray || yIsArray) {
+        if (xIsArray != yIsArray) {
+            return {type: "typeMismatch", left: x, right: y}
+        }
+        const nx = x.length
+        const ny = y.length
+        if (nx != ny) {
+            return {type: "lengthMismatch", left: nx, right: ny}
+        }
+        for (const [i, xi] of x.entries()) {
+            const diff = deepDiff(xi, y[i])
+            if (diff) {
+                return {type: "propertyValueMismatch", prop: i, diff: diff}
+            }
+        }
+        return null
+    }
+
+    if (typeof x == "object") {
+        const xProto = Object.getPrototypeOf(x)
+        const yProto = Object.getPrototypeOf(y)
+        if (xProto != yProto) {
+            return {type: "prototypeMismatch", left: xProto, right: yProto}
+        }
+        for (const k of Object.keys(x)) {
+            if (!y.hasOwnProperty(k)) {
+                return {type: "missingProperty", left: k}
+            }
+            const diff = deepDiff(x[k], y[k])
+            if (diff) {
+                return {type: "propertyValueMismatch", prop: k, diff: diff}
+            }
+        }
+        for (const k of Object.keys(y)) {
+            if (!x.hasOwnProperty(k)) {
+                return {type: "missingProperty", right: k}
+            }
+        }
+        return null
+    }
+    return {type: "notEqual", left: x, right: y}
+}
+
+function assertEq(x, y) {
+    const diff = deepDiff(x, y)
+    if (diff != null) {
+        console.log(x, y, diff)
+    }
+    console.assert(diff == null)
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -275,7 +430,7 @@ function vnodeAmendAttributes(attrs, elem) {
             listeners.push([event, v])
         } else if (v == null) {
             elem.removeAttribute(k, v)
-        } else if (typeof(k) == "symbol") {
+        } else if (typeof k == "symbol") {
             let symbols = elem[VNODE_SYMBOLS]
             if (!symbols) {
                 elem[VNODE_SYMBOLS] = {}
@@ -302,7 +457,7 @@ function vnodeRenderAttributes(attrs, elem) {
             if (!attrs.hasOwnProperty(name) && oldAttr.ns == null) {
                 oldAttrs.removeNamedItem(name)
             } else {
-                ++i
+                i += 1
             }
         }
     }
@@ -339,7 +494,7 @@ function vnodeRenderChildren(children, elem) {
                         elem.removeChild(oldChild)
                     } else {
                         elem.insertBefore(fragment, oldChild)
-                        ++j
+                        j += 1
                     }
                     oldChild = oldChildren[j]
                 }
@@ -356,7 +511,7 @@ function vnodeRenderChildren(children, elem) {
                     : (oldChild.namespaceURI == child.namespace &&
                        oldChild.nodeName == child.name)) {
                     elem.insertBefore(fragment, oldChild)
-                    ++j
+                    j += 1
                     child.renderTo(oldChild)
                     continue
                 } else {
@@ -365,10 +520,10 @@ function vnodeRenderChildren(children, elem) {
             }
             child = child.create()
             child[VNODE_KEY] = key
-        } else if (typeof(child) == "string") {
+        } else if (typeof child == "string") {
             if (oldChild instanceof Text) {
                 elem.insertBefore(fragment, oldChild)
-                ++j
+                j += 1
                 if (oldChild.nodeValue != child) {
                     oldChild.nodeValue = child
                 }
@@ -386,7 +541,7 @@ function vnodeRenderChildren(children, elem) {
             oldChild instanceof Text) {
             elem.removeChild(oldChild)
         } else {
-            ++j
+            j += 1
         }
     }
     elem.appendChild(fragment)
@@ -440,6 +595,9 @@ function vnode(name, attributes, ...children) {
 function applyRendering(rendering) {
     rendering.forEach(spec => {
         const elem = spec.element
+        if (!elem) {
+            throw new Error("invalid elem")
+        }
         if (spec.attributes) {
             vnodeAmendAttributes(spec.attributes, elem)
         }
@@ -577,19 +735,23 @@ function newLabel(label) {
     return match[1] + (Number(match[2]) + 1).toString()
 }
 
-/** Generate `count` fresh superline (j) labels. */
-function availSuperlineLabels(diagram, count) {
-    // avoid 0, which might get confused for j = 0
-    let counter = 1
-    let labels = []
-    while (labels.length < count) {
-        while (diagram.superlines.hasOwnProperty(counter.toString())) {
-            counter += 1
+/** Generate `count` fresh labels. */
+function availLabels(obj) {
+    // avoid "0", which is reserved for the actual zero
+    return filter(i => !obj.hasOwnProperty(i),
+                  map(i => i.toString(),
+                      range(1, Number.POSITIVE_INFINITY)))
+}
+
+/** Generate `count` fresh superline labels. */
+function availSuperlineLabels(diagram) {
+    let labels = Object.assign({}, diagram.superline)
+    for (const delta of diagram.deltas) {
+        for (const x of delta) {
+            labels[x] = true
         }
-        labels.push(counter.toString())
-        counter += 1
     }
-    return labels
+    return availLabels(labels)
 }
 
 function mergeSuperlines(...superlines) {
@@ -598,10 +760,31 @@ function mergeSuperlines(...superlines) {
         finalSuperline.phase = mod(finalSuperline.phase
                                  + (superline.phase || 0), 4)
         finalSuperline.weight += superline.weight || 0
-        finalSuperline.summed = finalSuperline.summed
-                             || superline.summed || false
+        if (superline.summed != null) {
+            finalSuperline.summed = superline.summed
+        }
     })
     return Object.freeze(finalSuperline)
+}
+
+function mergeSuperlineLists(...superlineLists) {
+    let finalSuperlines = {}
+    for (const superlines of superlineLists) {
+        for (const id of Object.keys(superlines)) {
+            const finalSuperline = finalSuperlines[id]
+            let superline = superlines[id]
+            if (finalSuperline) {
+                superline = mergeSuperlines(finalSuperline, superline)
+            }
+            finalSuperlines[id] = superline
+        }
+    }
+    for (const id of Object.keys(finalSuperlines)) {
+        if (id.phase == 0 && id.weight == 0 && !id.summed) {
+            delete finalSuperlines[id]
+        }
+    }
+    return Object.freeze(finalSuperlines)
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -617,59 +800,129 @@ function mergeSuperlines(...superlines) {
 //   textOffset: -INF to INF, (+ is downward)
 // }
 //
-// The angle is usually ignored, but if the arcHeight/lineLength is too
-// big, then angle is used to break the degeneracy.
+// The angle is usually ignored, but if the ratio of arcHeight to lineLength
+// is too big, then 'angle' is used to break the degeneracy.
+//
+// In general, "pos" refers to a relative position on a line, with 0.0 being
+// the leftmost point and 1.0 the rightmost.
+
+const ZERO_LINE = Object.freeze({
+    superline: "0",
+    direction: 0,
+    arrowPos: 0.5,
+    arcHeight: 0.0,
+    angle: 0.0,
+    textPos: 0.0,
+    textOffset: 0.0,
+})
+
+function newLine(superlineId) {
+    return Object.freeze(Object.assign({}, ZERO_LINE, {superline: superlineId}))
+}
+
+function reverseLineDirection(line) {
+    return Object.freeze(Object.assign({}, line, {direction: -line.direction}))
+}
 
 function reverseLine(line) {
     line = Object.assign({}, line)
-    line.direction *= -1
-    line.arrowPos = 1.0 - line.arrowPos
-    line.arcHeight *= -1
-    line.angle = mod(line.angle + Math.PI, 2 * Math.PI)
-    line.textPos = 1.0 - line.textPos
-    line.textOffset *= -1.0
-    return line
+    line.direction = -line.direction
+    if (line.arrowPos != null) {
+        line.arrowPos = 1.0 - line.arrowPos
+    }
+    if (line.arcHeight != null) {
+        line.arcHeight = -line.arcHeight
+    }
+    if (line.angle != null) {
+        line.angle = mod(line.angle + Math.PI, 2 * Math.PI)
+    }
+    if (line.textPos != null) {
+        line.textPos = 1.0 - line.textPos
+    }
+    if (line.textOffset != null) {
+        line.textOffset = -line.textOffset
+    }
+    return Object.freeze(line)
 }
 
-function plainLine(superlineId) {
-    return {
-        superline: superlineId,
-        direction: 0,
-        arrowPos: 0.5,
-        arcHeight: 0.0,
-        angle: 0.0,
-        textPos: 0.5,
-        textOffset: 0.0,
+function mergeDirections(...directions) {
+    return mod(sum(directions) + 1, 4) - 1
+}
+
+/** Beware: this may result in a noncanonical line!
+  *
+  * Because of averaging, addition isn't quite associative with respect to the
+  * superficial attributes.
+  */
+function concatLines(...lines) {
+    const n = lines.length
+    if (n == 0) {
+        // line "addition" has no identity element (ZERO_LINE doesn't work)
+        throw new Error("must add at least one line")
     }
+    const avgProps = ["arrowPos", "arcHeight",
+                      "textPos", "textOffset"]
+    let finalLine = Object.assign({}, ZERO_LINE)
+    finalLine.arrowPos = 0.0
+    let sinAngle = 0.0
+    let cosAngle = 0.0
+    let numAngles = 0
+    let counts = {}
+    for (const prop of avgProps) {
+        counts[prop] = 0
+    }
+    lines.forEach((line, i) => {
+        if (i == 0) {
+            finalLine.superline = line.superline
+        } else if (finalLine.superline != line.superline) {
+            throw new Error("cannot add lines with different superlines")
+        }
+        finalLine.direction =
+            mergeDirections(finalLine.direction, line.direction)
+        for (const prop of avgProps) {
+            if (line[prop] != null) {
+                finalLine[prop] += line[prop]
+                counts[prop] += 1
+            }
+        }
+        if (line.angle != null) {
+            sinAngle += Math.sin(line.angle)
+            cosAngle += Math.cos(line.angle)
+            numAngles += 1
+        }
+    })
+    for (const prop of avgProps) {
+        if (counts[prop]) {
+            finalLine[prop] /= counts[prop]
+        }
+    }
+    if (numAngles) {
+        finalLine.angle = Math.atan2(sinAngle, cosAngle)
+    }
+    return Object.freeze(finalLine)
 }
 
 function canonicalizeLine(line) {
     return {
-        line: Object.assign({}, line, {direction: line.direction % 2}),
+        line: Object.freeze(Object.assign({}, line, {
+            direction: line.direction % 2,
+        })),
         phase: mod(Math.trunc(line.direction / 2), 2) * 2,
     }
 }
 
 function joinLines(line1, reverse1, line2, reverse2) {
-    if (reverse1) {
-        return joinLines(reverseLine(line1), false, line2, reverse2)
-    }
-    if (reverse2) {
-        return joinLines(line1, reverse1, reverseLine(line2), false)
-    }
+    line1 = (reverse1 ? reverseLine : identity)(line1)
+    line2 = (reverse2 ? reverseLine : identity)(line2)
     const superlines = [line1.superline, line2.superline].sort(defaultCmp)
-    return Object.assign(canonicalizeLine({
-        superline: superlines[0],
-        direction: line1.direction + line2.direction,
-        arrowPos: (line1.arrowPos + line2.arrowPos) / 2,
-        arcHeight: (line1.arcHeight + line2.arcHeight) / 2,
-        angle: Math.atan2(Math.sin(line1.angle) + Math.sin(line2.angle),
-                          Math.cos(line1.angle) + Math.cos(line2.angle)),
-        textPos: (line1.arrowPos + line2.arrowPos) / 2,
-        textOffset: line1.textOffset + line2.textOffset,
-    }), {otherSuperline: superlines[1]})
+    line1 = Object.assign({}, line1, {superline: superlines[0]})
+    line2 = Object.assign({}, line1, {superline: superlines[0]})
+    return Object.assign(canonicalizeLine(concatLines(line1, line2)), {
+        otherSuperline: superlines[1]
+    })
 }
 
+/** Calculate geometric information about a line. */
 function getLineInfo(diagram, lineId) {
     const line = diagram.lines[lineId]
     const ends = endNodeIndices(diagram.nodes, lineId)
@@ -725,6 +978,7 @@ function getLineInfo(diagram, lineId) {
     }
 }
 
+/** Find the closest "pos" on a line. */
 function findPosOnLine(lineInfo, x, y) {
     let pos, offset
     if (lineInfo.line.arcHeight == 0.0) {
@@ -751,6 +1005,8 @@ function findPosOnLine(lineInfo, x, y) {
     }
 }
 
+/** Translate from a relative "pos" to absolute (x, y) coordinates.  `shift`
+    specifies an extra shift in absolute coordinates along the line. */
 function positionOnLine(lineInfo, pos, shift) {
     const arc = lineInfo.arc
     if (lineInfo.line.arcHeight == 0.0) {
@@ -782,6 +1038,7 @@ function positionOnLine(lineInfo, pos, shift) {
 //////////////////////////////////////////////////////////////////////////////
 // Node manipulation
 
+/** Create a terminal node. */
 function terminalNode(lineId, variable, x, y) {
     // every terminal has an associated name for the "m" variable;
     // because this variable is *free*, rules must never change this variable!
@@ -792,24 +1049,30 @@ function terminalNode(lineId, variable, x, y) {
     // on the terminal(s) *supersede* the name of the line itself (lineId); if
     // there are two terminals, then an m-delta is implied (this is how we
     // represent m-deltas)
-    return Object.freeze({
+    let node = {
         type: "terminal",
         lines: Object.freeze([lineId]),
         variable: variable,
-        x: x,
-        y: y,
-    })
+    }
+    if (x != null) {
+        node.x = x
+    }
+    if (y != null) {
+        node.y = y
+    }
+    return Object.freeze(node)
 }
 
+/** Create a Wigner 3-jm node. */
 function w3jNode(a, b, c, x, y) {
     let node = {
         type: "w3j",
         lines: Object.freeze([a, b, c]),
     }
-    if (typeof x != "undefined") {
+    if (x !== undefined) {
         node.x = x
     }
-    if (typeof y != "undefined") {
+    if (y !== undefined) {
         node.y = y
     }
     return Object.freeze(node)
@@ -817,8 +1080,8 @@ function w3jNode(a, b, c, x, y) {
 
 function endNodeAndLineIndices(nodes, lineId) {
     let nodeAndLineIndices = []
-    if (lineId === undefined || lineId === null) {
-        throw new Error("lineId must not be null")
+    if (lineId == null) {
+        throw new Error("lineId must not be null / undefined")
     }
     const numNodes = nodes.length
     for (let nodeIndex = 0; nodeIndex < numNodes; ++nodeIndex) {
@@ -896,11 +1159,15 @@ const EMPTY_DIAGRAM = Object.freeze({
     triangles: Object.freeze([]),
 })
 
+function ensureDiagram(diagram) {
+    return Object.freeze(Object.assign({}, EMPTY_DIAGRAM, diagram))
+}
+
 function w3jDiagram(a, b, c, x, y) {
     if (a == b || b == c || c == a) {
         throw new Error("cannot create w3jDiagram with conflicting labels")
     }
-    return Object.freeze(Object.assign({}, EMPTY_DIAGRAM, {
+    return ensureDiagram({
         nodes: Object.freeze([
             terminalNode(a, a, x - 50, y + 50),
             terminalNode(b, b, x + 50, y + 50),
@@ -908,16 +1175,16 @@ function w3jDiagram(a, b, c, x, y) {
             w3jNode(a, b, c, x, y),
         ]),
         lines: Object.freeze({
-            [a]: plainLine(a),
-            [b]: plainLine(b),
-            [c]: plainLine(c),
+            [a]: newLine(a),
+            [b]: newLine(b),
+            [c]: newLine(c),
         }),
         superlines: Object.freeze({
             [a]: EMPTY_SUPERLINE,
             [b]: EMPTY_SUPERLINE,
             [c]: EMPTY_SUPERLINE,
         }),
-    }))
+    })
 }
 
 function cgDiagram(a, b, c, x, y) {
@@ -985,19 +1252,16 @@ function w3jOrientation(diagram, nodeIndex) {
         .sort((line1, line2) => line1[1] - line2[1])
     switch (lines.length) {
         case 3:
-            if (lines.map(line => mod(line[0] - lines[0][0], 3)).join() == "0,1,2") {
-                return {nnz: lines.length, orientation: 1}
-            } else {
-                return {nnz: lines.length, orientation: -1}
+            return {
+                nnz: lines.length,
+                orientation: permutSign([0, 1, 2],lines),
             }
         case 2:
             const s = node.lines.indexOf("0") == 1 ? -1 : 1
-            if (lines.map(line => mod(line[0] - lines[0][0], 2)).join() == "0,1") {
-                return {nnz: lines.length, orientation: s}
-            } else {
-                return {nnz: lines.length, orientation: -s}
+            return {
+                nnz: lines.length,
+                orientation: permutSign([0, 1], lines) * s,
             }
-            break;
         default:
             return {nnz: lines.length}
     }
@@ -1286,52 +1550,526 @@ function threeArrowRule(diagram, nodeIndex) {
     return diagram
 }
 
-function defaultCmp(x, y) {
-    if (x < y) {
-        return -1
-    } else if (y < x) {
-        return 1
-    } else {
-        return 0
+const MATCH_ANY = Symbol("MATCH_ANY")
+
+/** @returns {Object<lineId, [nodeIndex1, lineIndex1,
+  *                           nodeIndex2, lineIndex2]>} */
+function getLineEnds(diagram) {
+    let lineEnds = {}
+    diagram.nodes.forEach((node, nodeIndex) => {
+        node.lines.forEach((lineId, lineIndex) => {
+            let ends = lineEnds[lineId]
+            if (!ends) {
+                lineEnds[lineId] = [nodeIndex, lineIndex]
+            } else if (ends.length == 2) {
+                if (lexicalCmp([ends[0], ends[1]],
+                               [nodeIndex, lineIndex],
+                               defaultCmp) < 0) {
+                    lineEnds[lineId].push(nodeIndex, lineIndex)
+                } else {
+                    lineEnds[lineId].splice(0, 0, nodeIndex, lineIndex)
+                }
+            } else {
+                throw new Error("line must be connected to exactly 2 nodes")
+            }
+        })
+    })
+    return lineEnds
+}
+
+class DiagramLine {
+    constructor(diagram, id, reversed) {
+        console.assert(diagram)
+        this.diagram = diagram
+        this.id = id
+        this.reversed = Boolean(reversed)
+        Object.freeze(this)
+    }
+
+    get rawLine() {
+        return this.diagram.rawDiagram.lines[this.id]
+    }
+
+    get line() {
+        const f = this.reversed ? reverseLine : identity
+        return f(this.diagram.rawDiagram.lines[this.id])
+    }
+
+    get direction() {
+        return this.rawLine.direction * (this.reversed * 2 - 1)
+    }
+
+    node(end) {
+        const lineEnds = this.diagram._lineEnds[this.id]
+        return new DiagramNode(this.diagram,
+                               lineEnds[(this.reversed + end) % 2 * 2])
+    }
+
+    lineIndex(end) {
+        const lineEnds = this.diagram._lineEnds[this.id]
+        return lineEnds[(this.reversed + end) % 2 * 2 + 1]
+    }
+
+    /** Called automatically when used as the name of a property. */
+    toString() {
+        return (this.reversed ? "-" : "+") + this.id
+    }
+
+    signedRebase(diagram) {
+        return diagram.signedLine(this.id, this.reversed)
+    }
+
+    reverse() {
+        return new DiagramLine(this.diagram, this.id, !this.reversed)
+    }
+
+    concat(...lines) {
+        return concatLines(lines.map(DiagramLine.line))
+    }
+
+    assign(lines, line) {
+        lines[this.id] = this.reversed ? reverseLine(line) : line
+    }
+
+    static removeSign(signedId) {
+        const id = signedId.slice(1)
+        let reversed = false
+        if (signedId[0] == "-") {
+            reversed = !reversed
+        } else if (signedId[0] != "+") {
+            throw new Error(`not a valid signed line ID: ${signedId}`)
+        }
+        return [id, reversed]
     }
 }
 
-function lexicalCmp(xs, ys, cmp) {
-    const nx = xs.length
-    const ny = ys.length
-    const n = nx < ny ? nx : ny
-    for (let i = 0; i < n; ++i) {
-        const r = cmp(xs[i], ys[i])
-        if (r) {
-            return r
+class DiagramNode {
+    constructor(diagram, index) {
+        this.diagram = diagram
+        this.index = index
+        Object.freeze(this)
+    }
+
+    get rawNode() {
+        return this.diagram.rawDiagram.nodes[this.index]
+    }
+
+    get type() {
+        return this.rawNode.type
+    }
+
+    get variable() {
+        if (this.type != "terminal") {
+            throw new Error("node is not a terminal")
+        }
+        return this.rawNode.variable
+    }
+
+    get numLines() {
+        return this.rawNode.lines[lineIndex].length
+    }
+
+    line(index) {
+        return new DiagramLine(this.diagram, this.rawNode.lines[index])
+    }
+
+    lines() {
+        return map(index => this.line(index), range(0, this.numLines))
+    }
+}
+
+class Diagram {
+    constructor(rawDiagram) {
+        this.rawDiagram = rawDiagram || EMPTY_DIAGRAM
+        this._cache = {}
+        Object.freeze(this)
+    }
+
+    static deserialize(s) {
+        return new Diagram(JSON.parse(s))
+    }
+
+    get serialize() {
+        return JSON.stringify(this.rawDiagram)
+    }
+
+    get _lineEnds() {
+        let lineEnds = this._cache.lineEnds
+        if (!lineEnds) {
+            lineEnds = getLineEnds(this.rawDiagram)
+            this._cache.lineEnds = lineEnds
+        }
+        return lineEnds
+    }
+
+    get terminals() {
+        let terminals = this._cache.terminals
+        if (!terminals) {
+            terminals = {}
+            for (const node of this.nodes()) {
+                if (node.type == "terminal") {
+                    if (terminals[node.variable]) {
+                        throw new Error("duplicate terminal variables")
+                    }
+                    terminals[node.variable] = node
+                }
+            }
+            this._cache.terminals = terminals
+        }
+        return terminals
+    }
+
+    terminal(variable) {
+        const node = this.terminals[variable]
+        if (!node) {
+            throw new Error(`can't find terminal with variable = ${variable}`)
+        }
+        return node
+    }
+
+    get numNodes() {
+        return this.rawDiagram.nodes.length
+    }
+
+    node(index) {
+        return new DiagramNode(this, index)
+    }
+
+    * nodes() {
+        const numNodes = this.numNodes
+        for (let index = 0; index < numNodes; ++index) {
+            yield this.node(index)
         }
     }
-    return defaultCmp(nx, ny)
+
+    get lineIds() {
+        return Object.keys(this.rawDiagram.lines)
+    }
+
+    signedLine(signedId, reversed) {
+        return this.line(...DiagramLine.removeSign(signedId))
+    }
+
+    line(id, reversed) {
+        return new DiagramLine(this, id, reversed)
+    }
+
+    lines() {
+        return map(id => this.line(id), this.lineIds)
+    }
+
+    get superlines() {
+        return this.rawDiagram.superlines
+    }
+
+    renameLines(renames) {
+        let newLines = {}
+        for (const lineId of Object.keys(this.rawDiagram.lines)) {
+            const newLineId = renames.hasOwnProperty(lineId)
+                            ? renames[lineId]
+                            : lineId
+            newLines[newLineId] = this.rawDiagram.lines[lineId]
+        }
+        return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
+            nodes: Object.freeze(this.rawDiagram.nodes.map(node =>
+                Object.freeze(Object.assign({}, node, {
+                    lines: Object.freeze(node.lines.map(lineId =>
+                        renames.hasOwnProperty(lineId)
+                      ? renames[lineId]
+                      : lineId
+                    )),
+                }))
+            )),
+            lines: Object.freeze(newLines),
+        })))
+    }
+
+    /** Substitute a portion of this diagram for another subdiagram.
+     *
+     * Patterns are similar to diagrams, but also slightly different:
+     *
+     * - lineIds must refer to existing lines and must be prefixed by `+` or `-`
+     *   to indicate whether it should be treated as reversed
+     * - `line.direction: MATCH_ANY` will absorb any direction
+     */
+    substitute(pattern, replacement) {
+        // legend:
+        //   lowercase = terminal
+        //   uppercase = non-terminal
+        //   numeric = any node
+        //
+        // schematic idea:
+        //
+        // orig: --- X1 --- N1 --- N2 --- X2 ---
+        // patt:     T1 --- N1 --- N2 --- T2
+        // repl:     T1 ------- N3 ------ T2
+        // new:  --- X1 ------- N3 ------ X2 ---
+        //
+        // the interesting/tricky parts occur on the terminals of the pattern;
+        // this is where we have to glue the original diagram to the
+        // replacement subdiagram.
+        //
+        // we have to make sure that the phases on X1-N1 are appropriately
+        // merged into X1-N3 and similarly for N2-X2, and also account for
+        // degenerate cases
+
+        const rawDiagram = this.rawDiagram
+        const pattDiagram = new Diagram(pattern)
+        let replDiagram = new Diagram(replacement)
+
+        // DELTAS
+        // ------
+
+        // (shared with other parts)
+        let deltaMerge = [rawDiagram.deltas, replacement.deltas]
+
+        // match deltas
+        if (!containsDeltas(rawDiagram.deltas, pattern.deltas)) {
+            throw new Error("mismatch in deltas")
+        }
+
+        // LINE RENAMING
+        // -------------
+
+        // (shared with other parts)
+        let newLines = Object.assign({}, rawDiagram.lines)
+
+        // must remove the pattern lines first, because we want to know which
+        // line IDs are available to us
+        for (const pattLine of pattDiagram.lines()) {
+            const lineId = DiagramLine.removeSign(pattLine.id)[0]
+            console.assert(newLines[lineId])
+            delete newLines[lineId]
+        }
+        // rename the replacement diagram to avoid conflicting line IDs
+        // and also replace the dummy Symbols
+        let freshLineIds = availLabels(newLines)
+        let lineRenames = {}
+        for (const line of replDiagram.lines()) {
+            if (typeof line.id == "symbol"
+                || newLines.hasOwnProperty(line.id)) {
+                lineRenames[line.id] = freshLineIds.next().value
+            }
+        }
+        replDiagram = replDiagram.renameLines(lineRenames)
+        for (const line of replDiagram.lines()) {
+            console.assert(!line.reversed)
+            console.assert(!newLines[line.id])
+            if (line.node(0).type != "terminal"
+                && line.node(1).type != "terminal") {
+                newLines[line.id] = line.rawLine
+            }
+            // lines that involve terminals are tricky and will be handled later
+        }
+
+        // SUPERLINES
+        // ----------
+
+        // (shared with other parts)
+        //
+        // note: replacement.superlines can be added here early because the only
+        // noncommutative part of the merge lies in the 'summed' attribute,
+        // which we never use elsewhere in this function
+        let superlineMerge = [rawDiagram.superlines, replacement.superlines]
+
+        // match superlines and adjust phases
+        for (const superlineId of Object.keys(pattern.superlines)) {
+            const pattSuperline = pattern.superlines[superlineId]
+            const superline = rawDiagram.superlines[superlineId]
+            if (pattSuperline.summed != null
+                && superline.summed != pattSuperline.summed) {
+                throw new Error("summedness mismatch in superlines")
+            }
+            superlineMerge.push({
+                [superlineId]: {
+                    weight: -pattSuperline.weight,
+                    phase: -pattSuperline.phase,
+                },
+            })
+        }
+
+        // NODES
+        // -----
+
+        // match nodes and adjust phases
+        for (const pattNode of pattDiagram.nodes()) {
+            if (pattNode.type == "terminal") {
+                continue
+            }
+            if (pattNode.numLines == 0) {
+                throw new Error("singleton nodes are not supported")
+            }
+            const node = pattNode.line(0).signedRebase(this).node(0)
+            if (node.type != pattNode.type) {
+                throw new Error("node type mismatch")
+            }
+            const nodeLines = Array.from(node.rawNode.lines)
+            const pattNodeLines = Array.from(pattNode.rawNode.lines)
+            if (node.type == "w3j") {
+                const sign = permutSign(nodeLines, pattNodeLines)
+                if (sign == 0) {
+                    throw new Error("node lines mismatch")
+                }
+                if (sign < 0) {
+                    superlineMerge.push({
+                        [nodeLines[0]]: {phase: 1},
+                        [nodeLines[1]]: {phase: 1},
+                        [nodeLines[2]]: {phase: 1},
+                    })
+                }
+            } else if (lexicalCmp(nodeLines, pattNodeLines, defaultCmp) != 0) {
+                throw new Error("node lines mismatch")
+            }
+        }
+
+        // LINES
+        // -----
+
+        function canonicalizeLineAndAdjust(lineId) {
+            const line = newLines[lineId]
+            const canonicalized = canonicalizeLine(line)
+            newLines[lineId] = canonicalized.line
+            superlineMerge.push({
+                [line.superline]: {phase: canonicalized.phase},
+            })
+        }
+
+        // match lines and adjust phases
+        let exclReplNodes = {}
+        for (let pattLine of pattDiagram.lines()) {
+            let pattNode0 = pattLine.node(0)
+            let pattNode1 = pattLine.node(1)
+
+            if (pattNode1.type != "terminal") {
+                if (pattNode0.type != "terminal") {
+                    // pattern: nonterminal-to-nonterminal
+                    if (line.superline != pattLine.superline) {
+                        throw new Error("superline ID mismatch in lines")
+                    }
+                    let diffDirection = mergeDirections(line.direction,
+                                                       -pattLine.direction)
+                    if (diffDirection % 2 != 0) {
+                        throw new Error("directedness mismatch in lines")
+                    }
+                    superlineMerge.push({
+                        [line.superline]: {phase: diffDirection},
+                    })
+                    continue
+                }
+
+                // pattern: nonterminal-to-terminal
+                [pattNode0, pattNode1] = [pattNode1, pattNode0]
+                pattLine = pattLine.reverse()
+            }
+
+            const line = pattLine.signedRebase(this)
+            const replNode0 = replDiagram.terminal(pattNode0.variable)
+            const replLine = replNode0.line(0)
+            const replNode1 = replLine.node(1)
+            exclReplNodes[replNode0.index] = true
+            console.assert(!newLines[replLine.id])
+            // FIXME the nweLine[replLine.id] assignments are SUSPICIOUS
+            // (1) they don't use DiagramLine.assign
+            // (2) even if they do, how do you know the ordering is preserved?
+            if (pattNode1.type != "terminal") {
+                // pattern: terminal-to-nonterminal
+                if (replNode1.type == "terminal") {
+                    exclReplNodes[replNode1.index] = true
+                    // replacement: terminal-to-terminal
+                    if (replNode0.index > replNode1.index) {
+                        continue // avoid double-counting
+                    }
+                    const pattLine1 = pattDiagram.terminal(replNode1.variable)
+                                                 .line(0)
+                    const line1 = pattLine1.signedRebase(this)
+                    newLines[replLine.id] = concatLines(
+                        line.line,
+                        pattLine.reverse().line,
+                        replLine.line,
+                        line1.reverse().line,
+                        pattLine1.line)
+                } else {
+                    // replacement: terminal-to-nonterminal
+                    newLines[replLine.id] = concatLines(
+                        line.line,
+                        pattLine.reverse().line,
+                        replLine.line)
+                }
+            } else {
+                // pattern: terminal-to-terminal
+                if (replNode1.type == "terminal") {
+                    // replacement: terminal-to-terminal
+                    if (replNode1.variable != pattNode1.variable) {
+                        throw new Error("mismatch between pattern and "
+                                      + "replacement terminals")
+                    }
+                    newLines[replLine.id] = concatLines(
+                        line.line,
+                        pattLine.reverse().line,
+                        replLine.line)
+                } else {
+                    // replacement: terminal-to-nonterminal
+                    // beware of double-counting!
+                    if (replNode0.index < replNode1.index) {
+                        newLines[replLine.id] = concatLines(
+                            line.line,
+                            pattLine.reverse().line,
+                            replLine.line)
+                    } else {
+                        newLines[replLine.id] = replLine.line
+                    }
+                }
+            }
+            canonicalizeLineAndAdjust(replLine.id)
+        }
+
+        const newNodes = Array.prototype.concat(
+            replacement.nodes.filter(node => {
+                node.type == "terminal" &&
+                !exclReplNodes[node.index]
+            }),
+            arrayRemoveMany(
+                rawDiagram.nodes,
+                Array.from(
+                    map(node => node.line(0)
+                                    .signedRebase(this)
+                                    .node(0)
+                                    .index,
+                        filter(node => node.type != "terminal",
+                               pattDiagram.nodes())))),
+            replacement.nodes.filter(node => node.type != "terminal"))
+
+        return new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
+            nodes: newNodes,
+            lines: newLines,
+            superlines: mergeSuperlineLists(...superlineMerge),
+            deltas: mergeDeltas(...deltaMerge),
+        })))
+    }
+}
+
+function findW3jLoop(diagram, nodeIndex) {
+    const node = diagram.nodes[nodeIndex]
+    if (node.type != "w3j") {
+        return "not a Wigner 3-jm symbol"
+    }
+    const nodeLines = node.lines
+    for (let i = 0; i < 3; ++i) {
+        if (nodeLines[i] == nodeLines[(i + 1) % 3]) {
+            return {
+                cutPort: new Port(diagram, nodeIndex, (i + 2) % 3),
+                loopPort: new Port(diagram, nodeIndex, i),
+            }
+        }
+    }
+    return "no loops found"
 }
 
 function deltaIntroRule(diagram, nodeIndex) {
     const node = diagram.nodes[nodeIndex]
-    if (node.type != "w3j") {
-        return "this node is not a Wigner 3-jm symbol"
-    }
-
-    // check if the node has a loop
-    const nodeLines = node.lines
-    let cutIndex, loopLineIndex, expectedLoopDirection
-    if (nodeLines[0] == nodeLines[1]) {
-        cutIndex = 2
-        expectedLoopDirection = +1
-        loopLineIndex = nodeLines[0]
-    } else if (nodeLines[1] == nodeLines[2]) {
-        cutIndex = 0
-        expectedLoopDirection = +1
-        loopLineIndex = nodeLines[1]
-    } else if (nodeLines[2] == nodeLines[0]) {
-        cutIndex = 1
-        expectedLoopDirection = -1
-        loopLineIndex = nodeLines[2]
-    } else {
-        return "no loops found"
+    const loop = findW3jLoop(diagram, nodeIndex)
+    if (typeof loop != "object") {
+        return loop
     }
 
     // make sure the loop is directed
@@ -1496,11 +2234,11 @@ function renderArrow(update, diagram, lineId) {
                         return Object.assign({}, diagram, {lines: lines})
                     }))
                     e.stopPropagation()
-                } else if (e.buttons == 2) {
+                } else if (e.buttons == 4) {
                     update(modifyDiagram({equivalent: true}, diagram =>
                         flipW1jRule(diagram, lineId)))
                     e.stopPropagation()
-                } else if (e.buttons == 4) {
+                } else if (e.buttons == 2 && e.ctrlKey) {
                     update(modifyDiagram({superficial: true}, diagram => {
                         let lines = Object.assign({}, diagram.lines)
                         lines[lineId] = Object.assign({}, lines[lineId], {
@@ -1579,7 +2317,7 @@ function renderLine(update, editor, lineId) {
                 return setDiagramLineProps(diagram, lineId, change)
             }))
             e.stopPropagation()
-        } else if (e.buttons == 4) {
+        } else if (e.buttons == 2 && e.ctrlKey == true) {
             update(modifyDiagram({superficial: true}, diagram =>
                 info.singular ? diagram : setDiagramLineProps(diagram, lineId, {
                     angle: info.angle,
@@ -1595,9 +2333,11 @@ function renderLine(update, editor, lineId) {
             // prevent hover effects from sticking when nodes change
             [VNODE_KEY]: lineId,
             "class": "line "
-                   + (editor.dragTrackStartLine == lineId
-                   || editor.dragTrackStopLine == lineId
-                    ? "tracked " : ""),
+                   + ((editor.trackStart.type == "line" &&
+                       editor.trackStart.lineId == lineId)
+                   || (editor.trackStop.type == "line" &&
+                       editor.trackStop.lineId == lineId)
+                    ? (editor.trackType + " ") : ""),
             onmouseover: function(e) {
                 update(setHover({
                     type: "line",
@@ -1643,7 +2383,7 @@ function renderLine(update, editor, lineId) {
                         })
                     }))
                     e.stopPropagation()
-                } else if (e.buttons == 4) {
+                } else if (e.buttons == 2 && e.ctrlKey == true) {
                     update(modifyDiagram({superficial: true}, diagram =>
                         setDiagramLineProps(diagram, lineId, {
                             textPos: 0.5,
@@ -1658,7 +2398,8 @@ function renderLine(update, editor, lineId) {
     )
 }
 
-function renderNode(update, diagram, nodeIndex, frozen) {
+function renderNode(update, editor, nodeIndex, frozen) {
+    const diagram = editor.snapshot.diagram
     const node = diagram.nodes[nodeIndex]
     let gChildren = [vnode("svg:title", {},
                            node.type == "w3j"
@@ -1673,7 +2414,11 @@ function renderNode(update, diagram, nodeIndex, frozen) {
         if (orientationInfo.nnz == 3) {
             const orientation = orientationInfo.orientation > 0 ? "flipped " : ""
             gChildren.push(vnode("svg:circle", {
-                "class": orientation,
+                "class": "bg " + orientation,
+                r: 22,
+            }))
+            gChildren.push(vnode("svg:circle", {
+                "class": "fg " + orientation,
                 r: 18,
             }))
             gChildren.push(vnode("svg:use", {
@@ -1707,7 +2452,13 @@ function renderNode(update, diagram, nodeIndex, frozen) {
     return vnode("svg:g", {
         // prevent hover effects from sticking when nodes change
         [VNODE_KEY]: objectId(node),
-        "class": "node " + node.type,
+        "class": "node "
+               + node.type + " "
+               + ((editor.trackStart.type == "node" &&
+                   editor.trackStart.nodeIndex == nodeIndex)
+               || (editor.trackStop.type == "node" &&
+                   editor.trackStop.nodeIndex == nodeIndex)
+                ? (editor.trackType + " ") : ""),
         transform: `translate(${node.x}, ${node.y})`,
         onmouseover: function(e) {
             update(setHover({
@@ -1839,7 +2590,7 @@ function renderEquationLine(diagram, nodeIndex, lineIndex, summedVars) {
     const jm = {
         j: renderVariable("j", diagram.lines[lineId].superline),
         m: otherIndex < nodeIndex && line.direction != 0
-         ? `\\overline{${mNaked}}`
+         ? `-${mNaked}`
          : mNaked,
     }
     if (line.superline.summed) {
@@ -1872,13 +2623,13 @@ function renderEquation(diagram, container) {
             const m2 = renderVariable("m", var2)
             switch (diagram.lines[node.lines[0]].direction) {
                 case 0:
-                    mDeltas.push(`\\delta_{${m1} ${m2}}`)
+                    mDeltas.push(`\\delta_{${m1}, ${m2}}`)
                     break
                 case -1:
-                    mDeltas.push(`\\delta_{${m1} \\overline{${m2}}}`)
+                    mDeltas.push(`\\delta_{${m1}, -${m2}}`)
                     break
                 case 1:
-                    mDeltas.push(`\\delta_{\\overline{${m1}} ${m2}}`)
+                    mDeltas.push(`\\delta_{-${m1}, ${m2}}`)
                     break
                 default:
                     throw new Error(`unnormalized direction: ${direction}`)
@@ -1967,9 +2718,9 @@ function renderEquation(diagram, container) {
         const m = renderVariable("m", name)
         phases.push(`+ ${j} ${line.direction < 0 ? "+" : "-"} ${m}`)
     })
-    let summedVarsStr = Object.keys(summedVars.js).join(" ")
-                      + " "
-                      + Object.keys(summedVars.ms).join(" ")
+    let summedVarsStr =
+        Object.keys(summedVars.js)
+              .concat(Object.keys(summedVars.ms)).join(", ")
     if (summedVarsStr != " ") {
         summedVarsStr = `\\sum_{${summedVarsStr}}`
     }
@@ -2000,22 +2751,21 @@ function renderEquation(diagram, container) {
     MathJax.Hub.Queue(["Typeset", MathJax.Hub])
 }
 
-function renderDragTrack(start, stop) {
+function renderTrack(trackType, start, stop) {
     return [
         vnode("svg:circle", {
-            "class": "drag-track",
+            "class": trackType,
             cx: start[0],
             cy: start[1],
             r: 8,
         }),
         vnode("svg:path", {
-            "class": "drag-track",
+            "class": trackType,
             d: `M ${start[0]} ${start[1]} `
              + `L ${stop[0]} ${stop[1]} `,
-            //"marker-end": "url(#drag-track-arrowhead)",
         }),
         vnode("svg:circle", {
-            "class": "drag-track",
+            "class": trackType,
             cx: stop[0],
             cy: stop[1],
             r: 8,
@@ -2050,10 +2800,9 @@ function newEditor() {
         hover: {type: null},
         mouseX: null,
         mouseY: null,
-        dragTrackStart: null,
-        dragTrackStop: null,
-        dragTrackStartLine: null,
-        dragTrackStopLine: null,
+        trackType: null,
+        trackStart: {type: null, xy: null},
+        trackStop: {type: null, xy: null},
     }
 }
 
@@ -2105,7 +2854,9 @@ function renderEditor(update, editor) {
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: e => {
                     if (e.buttons == 2) {
-                        update(startDragTrack(e))
+                        update(startTrack(e, "track1"))
+                    } else if (e.buttons == 4) {
+                        update(startTrack(e, "track2"))
                     }
                 },
             },
@@ -2118,13 +2869,14 @@ function renderEditor(update, editor) {
         {
             element: document.getElementById("diagram-nodes"),
             children: diagram.nodes.map((_, nodeIndex) =>
-                renderNode(update, diagram, nodeIndex, editor.snapshot.frozen)),
+                renderNode(update, editor, nodeIndex, editor.snapshot.frozen)),
         },
         {
-            element: document.getElementById("diagram-drag-track"),
-            children: editor.dragTrackStop != null
-                    ? renderDragTrack(toSvgCoords(editor.dragTrackStart),
-                                      toSvgCoords(editor.dragTrackStop))
+            element: document.getElementById("diagram-track"),
+            children: editor.trackStop.xy != null
+                    ? renderTrack(editor.trackType,
+                                  toSvgCoords(editor.trackStart.xy),
+                                  toSvgCoords(editor.trackStop.xy))
                     : [],
         },
         {
@@ -2174,14 +2926,13 @@ function modifyDiagram(flags, diagramTransform) {
             return
         }
         const diagram = diagramTransform(editor.snapshot.diagram)
-        if (typeof(diagram) == "string") { // error?
+        if (typeof diagram == "string") { // error?
             error(diagram)
             return
         }
         editor.snapshot = Object.assign({}, editor.snapshot, {
             diagram: diagram,
-            frozen: Boolean(Number(flags.toggleFreeze)
-                          ^ Number(editor.snapshot.frozen)),
+            frozen: flags.toggleFreeze != editor.snapshot.frozen,
         })
         if (!flags.transient) {
             saveEditor(editor)
@@ -2208,44 +2959,58 @@ function setHover(entity) {
     }
 }
 
-function startDragTrack(event) {
+function startTrack(event, trackType) {
     return editor => {
-        editor.dragTrackStart = [event.clientX, event.clientY]
+        editor.trackType = trackType
+        editor.trackStart.xy = [event.clientX, event.clientY]
         if (editor.hover.type == "line") {
-            editor.dragTrackStartLine = editor.hover.lineId
+            editor.trackStart.type = "line"
+            editor.trackStart.lineId = editor.hover.lineId
         }
     }
 }
 
-function updateDragTrack(event) {
+function updateTrack(event) {
     return editor => {
-        if (editor.dragTrackStart == null) {
+        if (editor.trackStart.xy == null) {
             return
         }
-        editor.dragTrackStop = [event.clientX, event.clientY]
-        if (editor.dragTrackStartLine != null) {
+        editor.trackStop.xy = [event.clientX, event.clientY]
+        if (editor.trackStart.type != null) {
             // line-to-line
             if (editor.hover.type == "line" &&
-                editor.hover.lineId != editor.dragTrackStartLine) {
-                editor.dragTrackStopLine = editor.hover.lineId
+                editor.hover.lineId != editor.trackStart.lineId) {
+                editor.trackStop.type = "line"
+                editor.trackStop.lineId = editor.hover.lineId
+            } else if (editor.hover.type == "node") {
+                editor.trackStop.type = "node"
+                editor.trackStop.nodeIndex = editor.hover.nodeIndex
             } else {
-                editor.dragTrackStopLine = null
+                editor.trackStop.type = null
             }
         }
     }
 }
 
-function clearDragTrack(editor) {
-    if (editor.dragTrackStopLine != null ) {
+function clearTrack(editor) {
+    if (editor.trackStop.type == "line") {
         modifyDiagram({equivalent: true}, diagram =>
             w3jIntroRule(diagram,
-                         editor.dragTrackStartLine,
-                         editor.dragTrackStopLine))(editor)
+                         editor.trackStart.lineId,
+                         editor.trackStop.lineId))(editor)
+    } else if (editor.trackStop.type == "node") {
+        /* modifyDiagram({equivalent: true}, diagram =>
+         *     loopIntroRule(diagram,
+         *                   editor.trackStart.lineId,
+         *                   editor.trackStop.xy))(editor)*/
+    } else if (editor.trackStart.type == "line") {
+        modifyDiagram({equivalent: true}, diagram =>
+            loopIntroRule(diagram,
+                          editor.trackStart.lineId,
+                          editor.trackStop.xy))(editor)
     }
-    editor.dragTrackStart = null
-    editor.dragTrackStop = null
-    editor.dragTrackStartLine = null
-    editor.dragTrackStopLine = null
+    editor.trackStart = {type: null, xy: null}
+    editor.trackStop = {type: null, xy: null}
 }
 
 function mouseUp(event) {
@@ -2254,7 +3019,7 @@ function mouseUp(event) {
             modifyDiagram(editor.draggerFlags, identity)(editor)
             editor.dragger = null
         } else {
-            clearDragTrack(editor)
+            clearTrack(editor)
         }
     }
 }
@@ -2276,7 +3041,7 @@ function mouseMove(event) {
                     event.clientY + editor.dragOffsetY,
                     event.ctrlKey))(editor)
         } else {
-            updateDragTrack(event)(editor)
+            updateTrack(event)(editor)
         }
     }
 }
@@ -2324,7 +3089,7 @@ function keyDown(e, editor) {
     // create Clebsch-Gordan coefficient
     if (getModifiers(e) == 0 && e.key == "c") {
         update(modifyDiagram({}, diagram => {
-            const labels = availSuperlineLabels(diagram, 3)
+            const labels = Array.from(take(3, availSuperlineLabels(diagram)))
             return mergeDiagrams(diagram,
                                  cgDiagram(labels[0],
                                            labels[1],
@@ -2339,7 +3104,7 @@ function keyDown(e, editor) {
     // create Wigner 3-jm
     if (getModifiers(e) == 0 && e.key == "w") {
         update(modifyDiagram({}, diagram => {
-            const labels = availSuperlineLabels(diagram, 3)
+            const labels = Array.from(take(3, availSuperlineLabels(diagram)))
             return mergeDiagrams(diagram, w3jDiagram(labels[0],
                                                      labels[1],
                                                      labels[2],
