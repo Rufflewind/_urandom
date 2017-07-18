@@ -660,7 +660,7 @@ function mergeDeltas(...deltaLists) {
                                     .filter(delta => delta.length > 1))
 }
 
-/** Tests whether the 'subdeltas' is a subset of 'deltas'. */
+/** Tests whether the 'subdeltas' is a subset of (implied by) 'deltas'. */
 function containsDeltas(deltas, subdeltas) {
     deltas = mergeDeltas(deltas)
     let finder = {}
@@ -687,6 +687,10 @@ function containsDeltas(deltas, subdeltas) {
         }
     }
     return true
+}
+
+function equalDeltas(deltas1, deltas2) {
+    return containsDeltas(deltas1, deltas2) && containsDeltas(deltas2, deltas1)
 }
 
 function findDeltaEntry(deltas, entry) {
@@ -1657,7 +1661,7 @@ class DiagramLine {
     }
 
     get superline() {
-        throw new Error("DEPRECATED")
+        return this.diagram.superline(this.superlineId)
     }
 
     get superlineId() {
@@ -1834,6 +1838,16 @@ class Diagram {
         return this.rawDiagram.superlines
     }
 
+    superline(superlineId) {
+        return this.superlines[superlineId]
+    }
+
+    isEquallyConstrained(superlineId, deltas) {
+        const related = relatedDeltas(this.rawDiagram.deltas, superlineId)
+        const otherRelated = relatedDeltas(deltas, superlineId)
+        return equalDeltas(related, otherRelated)
+    }
+
     renameLines(renames) {
         let newLines = {}
         for (const lineId of Object.keys(this.rawDiagram.lines)) {
@@ -1867,7 +1881,7 @@ class Diagram {
             delete marked[line.superlineId]
         }
         for (const delta of this.rawDiagram.deltas) {
-            for (const superlineId of deltas) {
+            for (const superlineId of delta) {
                 delete marked[superlineId]
             }
         }
@@ -1996,6 +2010,20 @@ class Diagram {
             if (pattSuperline.summed != null
                 && superline.summed != pattSuperline.summed) {
                 throw new Error("summedness mismatch in superlines")
+            }
+            if (pattSuperline.summed) {
+                if (pattSuperline.weight != superline.weight) {
+                    throw new Error("weight of summed superline must match")
+                }
+                if (pattSuperline.phase != superline.phase) {
+                    throw new Error("phase of summed superline must match")
+                }
+                if (!this.isEquallyConstrained(superlineId,
+                                               replacement.deltas)) {
+                    throw new Error("constraints of summed superline "
+                                  + "must match")
+                }
+                superlineMerge.push({[superlineId]: {summed: false}})
             }
             superlineMerge.push({
                 [superlineId]: {
@@ -2346,17 +2374,6 @@ function loopIntroRule(diagram, lineId, xy1, xy2) {
     }).rawDiagram
 }
 
-function deltaElimRule(diagram, entry) {
-    const inferred = inferDeltas(diagram)
-    const related = relatedDeltas(diagram.deltas, entry)
-    if (!containsDeltas(inferred, related)) {
-        return "cannot remove uninferrable delta entry"
-    }
-    return Object.freeze(Object.assign({}, diagram, {
-        deltas: removeDeltaEntry(diagram.deltas, entry)
-    }))
-}
-
 function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
     diagram = new Diagram(diagram)
     let line1 = diagram.line(lineId1)
@@ -2409,9 +2426,80 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
             $5: {superline: j, direction: 0},
         },
         superlines: {
-            [j]: {weight: 2, summed: true},
+            [j]: {phase: 0, weight: 2, summed: true},
         },
     }).rawDiagram
+}
+
+function w3jElimRule(diagram, lineId) {
+    diagram = new Diagram(diagram)
+    const line = diagram.line(lineId)
+    const superline = line.superline
+    if (!superline.summed) {
+        return `j[${line.superlineId}] must be summed over`
+    }
+    if (superline.phase != 0) {
+        return `j[${line.superlineId}] must not have any phases`
+    }
+    if (superline.weight != 2) {
+        return `weight of j[${line.superlineId}] must be exactly 2`
+    }
+    if (!diagram.isEquallyConstrained(line.superlineId, [])) {
+        return `j[${line.superlineId}] must not be constrained by deltas`
+    }
+    if (line.node(0).type != "w3j" || line.node(1).type != "w3j") {
+        return "expected Wigner 3-j symbols"
+    }
+    const line1 = line.cycNodeLine(0, 1).reverse()
+    const line2 = line.cycNodeLine(1, 1).reverse()
+    const line3 = line.cycNodeLine(0, 2).reverse()
+    const line4 = line.cycNodeLine(1, 2).reverse()
+    if (line1.superlineId != line2.superlineId
+        || line3.superlineId != line4.superlineId) {
+        return "opposing j's don't match"
+    }
+    return diagram.substitute({
+        nodes: [
+            terminalNode(line1.toString(), "a"),
+            terminalNode(line2.toString(), "b"),
+            terminalNode(line3.toString(), "c"),
+            terminalNode(line4.toString(), "d"),
+            w3jNode(line1.toString(), line3.toString(), line.toString()),
+            w3jNode(line2.toString(), line4.toString(), line.toString()),
+        ],
+        lines: {
+            [line1]: {superline: line1.superlineId, direction: 0},
+            [line2]: {superline: line2.superlineId, direction: 0},
+            [line3]: {superline: line3.superlineId, direction: 0},
+            [line4]: {superline: line4.superlineId, direction: 0},
+            [line]: {superline: line.superlineId, direction: 0},
+        },
+        superlines: {
+            [line.superlineId]: {phase: 0, weight: 2, summed: true},
+        },
+    }, {
+        nodes: [
+            terminalNode(line1.id, "a"),
+            terminalNode(line1.id, "b"),
+            terminalNode(line3.id, "c"),
+            terminalNode(line3.id, "d"),
+        ],
+        lines: {
+            [line1.id]: {superline: line1.superlineId, direction: 0},
+            [line3.id]: {superline: line3.superlineId, direction: 0},
+        },
+    }).rawDiagram
+}
+
+function deltaElimRule(diagram, entry) {
+    const inferred = inferDeltas(diagram)
+    const related = relatedDeltas(diagram.deltas, entry)
+    if (!containsDeltas(inferred, related)) {
+        return "cannot remove uninferrable delta entry"
+    }
+    return Object.freeze(Object.assign({}, diagram, {
+        deltas: removeDeltaEntry(diagram.deltas, entry)
+    }))
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -3212,7 +3300,6 @@ function updateTrack(event) {
         }
         editor.trackStop.xy = [event.clientX, event.clientY]
         if (editor.trackStart.type != null) {
-            // line-to-line
             if (editor.hover.type == "line") {
                 editor.trackStop.type = "line"
                 editor.trackStop.lineId = editor.hover.lineId
@@ -3230,30 +3317,50 @@ function clearTrack(editor, event) {
     if (editor.trackStop.xy != null) {
         const stopXy = toSvgCoords(editor.trackStop.xy)
         const startXy = toSvgCoords(editor.trackStart.xy)
-        if (editor.trackStop.type == "line") {
-            if (editor.trackStart.lineId != editor.trackStop.lineId) {
+        if (editor.trackType == "track1") {
+            if (editor.trackStop.type == "line") {
+                if (editor.trackStart.lineId == editor.trackStop.lineId) {
+                    modifyDiagram({equivalent: true}, diagram =>
+                        w3jElimRule(diagram, editor.trackStart.lineId))(editor)
+                    setHover({type: null})(editor)
+                } else {
+                    modifyDiagram({equivalent: true}, diagram =>
+                        glueRule(diagram, editor.trackStart.lineId,
+                                 editor.trackStop.lineId))(editor)
+                    setHover({type: null})(editor)
+                }
+            } else if (editor.trackStop.type == "node") {
                 modifyDiagram({equivalent: true}, diagram =>
-                    w3jIntroRule(diagram,
+                    loopElimRule(diagram,
                                  editor.trackStart.lineId,
-                                 editor.trackStop.lineId,
-                                 event.shiftKey))(editor)
+                                 editor.trackStop.nodeIndex))(editor)
                 setHover({type: null})(editor)
             }
-        } else if (editor.trackStop.type == "node") {
-            modifyDiagram({equivalent: true}, diagram =>
-                loopElimRule(diagram,
-                             editor.trackStart.lineId,
-                             editor.trackStop.nodeIndex))(editor)
-            setHover({type: null})(editor)
-        } else if (editor.trackStart.type == "line") {
-            modifyDiagram({equivalent: true}, diagram =>
-                loopIntroRule(diagram,
-                              editor.trackStart.lineId,
-                              startXy,
-                              stopXy))(editor)
-            setHover({type: null})(editor)
+        } else if (editor.trackType == "track2") {
+            if (editor.trackStop.type == "line") {
+                if (editor.trackStart.lineId == editor.trackStop.lineId) {
+                    modifyDiagram({equivalent: true}, diagram =>
+                        cutRule(diagram, editor.trackStart.lineId))(editor)
+                    setHover({type: null})(editor)
+                } else {
+                    modifyDiagram({equivalent: true}, diagram =>
+                        w3jIntroRule(diagram,
+                                     editor.trackStart.lineId,
+                                     editor.trackStop.lineId,
+                                     event.shiftKey))(editor)
+                    setHover({type: null})(editor)
+                }
+            } else if (editor.trackStart.type == "line") {
+                modifyDiagram({equivalent: true}, diagram =>
+                    loopIntroRule(diagram,
+                                  editor.trackStart.lineId,
+                                  startXy,
+                                  stopXy))(editor)
+                setHover({type: null})(editor)
+            }
         }
     }
+    editor.trackType = null
     editor.trackStart = {type: null, xy: null}
     editor.trackStop = {type: null, xy: null}
 }
