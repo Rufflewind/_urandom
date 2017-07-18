@@ -60,9 +60,7 @@ const d1 = ensureDiagram({
     },
 })
 
-/*
-
-assertEq(new Diagram(d1).renameLines({a: "b"}),
+assertEq(new Diagram(d1).renameLines({a: "b"}).rawDiagram,
          new Diagram(ensureDiagram({
              nodes: [
                  terminalNode("b", "a", 0, 0),
@@ -74,18 +72,18 @@ assertEq(new Diagram(d1).renameLines({a: "b"}),
              superlines: {
                  a: EMPTY_SUPERLINE,
              },
-         })))
+         })).rawDiagram)
 
-assertEq(new Diagram().substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
-         new Diagram())
+assertEq(new Diagram().substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM).rawDiagram,
+         EMPTY_DIAGRAM)
 
-assertEq(new Diagram(d1).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
-         new Diagram(d1))
+assertEq(new Diagram(d1).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM).rawDiagram,
+         d1)
 
-assertEq(new Diagram(d1).substitute(ensureDiagram({
+assertEq(new Diagram(d1).substitute({
     nodes: [
-        terminalNode("+a", "a"),
-        terminalNode("+a", "b"),
+        terminalNode("+a", "x"),
+        terminalNode("+a", "y"),
     ],
     lines: {
         ["+a"]: {superline: "a", direction: 0},
@@ -93,10 +91,10 @@ assertEq(new Diagram(d1).substitute(ensureDiagram({
     superlines: {
         a: EMPTY_SUPERLINE,
     },
-}), ensureDiagram({
+}, {
     nodes: [
-        terminalNode("a", "a"),
-        terminalNode("a", "b"),
+        terminalNode("a", "x"),
+        terminalNode("a", "y"),
     ],
     lines: {
         a: {superline: "a", direction: 0},
@@ -104,39 +102,32 @@ assertEq(new Diagram(d1).substitute(ensureDiagram({
     superlines: {
         a: EMPTY_SUPERLINE,
     },
-})), new Diagram(d1))
+}).rawDiagram, d1)
 
-*/
-
-console.log(new Diagram(d1).substitute(ensureDiagram({
+assertEq(new Diagram(d1).substitute({
     nodes: [
-        terminalNode("+a", "a"),
-        terminalNode("+a", "b"),
+        terminalNode("+a", "x"),
+        terminalNode("+a", "y"),
     ],
     lines: {
-        ["+a"]: {superline: "a", direction: 0},
+        "+a": {superline: "a", direction: 0},
     },
-    superlines: {
-        a: EMPTY_SUPERLINE,
-    },
-}), ensureDiagram({
+}, {
     nodes: [
-        terminalNode("a", "a"),
-        terminalNode("a", "c"),
-        terminalNode("b", "d"),
-        terminalNode("b", "b"),
+        terminalNode("$1", "x"),
+        terminalNode("$2", "y"),
+        w3jNode("$4", "$4", "$3"),
+        w3jNode("$3", "$2", "$1"),
     ],
     lines: {
-        a: {superline: "a", direction: 0},
-        b: {superline: "a", direction: 1},
+        $4: {superline: "0", direction: +1},
+        $3: {superline: "0", direction: 0},
+        $2: {superline: "a", direction: 0},
+        $1: {superline: "a", direction: +1},
     },
     superlines: {
-        a: EMPTY_SUPERLINE,
+        a: {weight: 1},
     },
-})))
-
-// KNOWN BUGS:
-//   - trimming is buggy (arrow on a,b is wrong)
-//   - trimming  O---O  loop causes problems
+}).rawDiagram, {"nodes":[{"type":"terminal","lines":["4"],"variable":"a","x":0,"y":0},{"type":"terminal","lines":["3"],"variable":"b","x":0,"y":0},{"type":"w3j","lines":["1","1","2"]},{"type":"w3j","lines":["2","3","4"]}],"superlines":{"0":{"phase":0,"summed":false,"weight":0},"a":{"phase":0,"summed":false,"weight":1}},"lines":{"1":{"superline":"0","direction":1,"arrowPos":0.5,"arcHeight":0,"angle":0,"textPos":0.5,"textOffset":0},"2":{"superline":"0","direction":0,"arrowPos":0.5,"arcHeight":0,"angle":0,"textPos":0.5,"textOffset":0},"3":{"superline":"a","direction":0,"arrowPos":0.5,"arcHeight":0,"angle":0,"textPos":0.5,"textOffset":0},"4":{"superline":"a","direction":1,"arrowPos":0.5,"arcHeight":0,"angle":0,"textPos":0.5,"textOffset":0}},"deltas":[],"triangles":[]})
 
 document.getElementsByTagName("body")[0].style.background = "black"

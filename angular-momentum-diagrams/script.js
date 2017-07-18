@@ -275,7 +275,7 @@ function deepDiff(x, y) {
 function assertEq(x, y) {
     const diff = deepDiff(x, y)
     if (diff != null) {
-        console.log(x, y, diff)
+        console.warn(x, y, diff)
     }
     console.assert(diff == null)
 }
@@ -435,17 +435,22 @@ function vnodeAmendAttributes(attrs, elem) {
             listeners.push([event, v])
         } else if (v == null) {
             elem.removeAttribute(k, v)
-        } else if (typeof k == "symbol") {
-            let symbols = elem[VNODE_SYMBOLS]
-            if (!symbols) {
-                elem[VNODE_SYMBOLS] = {}
-            }
-            symbols[k] = v
         } else {
             if (elem.getAttribute(k) != v) {
                 elem.setAttribute(k, v)
             }
         }
+    }
+    const symKeys = Object.getOwnPropertySymbols(attrs)
+    i = symKeys.length
+    while (i--) {
+        let symbols = elem[VNODE_SYMBOLS]
+        if (!symbols) {
+            symbols = {}
+            elem[VNODE_SYMBOLS] = symbols
+        }
+        const k = symKeys[i]
+        symbols[k] = attrs[k]
     }
 }
 
@@ -493,7 +498,7 @@ function vnodeRenderChildren(children, elem) {
                 while (oldChild) {
                     if (oldChild instanceof Element ||
                         oldChild instanceof Text) {
-                        if (oldChild[VNODE_KEY] == key) {
+                        if ((oldChild[VNODE_SYMBOLS] || {})[VNODE_KEY] == key) {
                             break
                         }
                         elem.removeChild(oldChild)
@@ -503,7 +508,7 @@ function vnodeRenderChildren(children, elem) {
                     }
                     oldChild = oldChildren[j]
                 }
-            } else if (oldChild && oldChild[VNODE_KEY]) {
+            } else if (oldChild && (oldChild[VNODE_SYMBOLS] || {})[VNODE_KEY]) {
                 // not a candidate for replacement; try again later
                 oldChild = null
             }
@@ -524,7 +529,6 @@ function vnodeRenderChildren(children, elem) {
                 }
             }
             child = child.create()
-            child[VNODE_KEY] = key
         } else if (typeof child == "string") {
             if (oldChild instanceof Text) {
                 elem.insertBefore(fragment, oldChild)
@@ -750,13 +754,17 @@ function availLabels(obj) {
 
 /** Generate `count` fresh superline labels. */
 function availSuperlineLabels(diagram) {
-    let labels = Object.assign({}, diagram.superline)
+    let labels = Object.assign({}, diagram.superlines)
     for (const delta of diagram.deltas) {
         for (const x of delta) {
             labels[x] = true
         }
     }
     return availLabels(labels)
+}
+
+function isEmptySuperline(superline) {
+    return !superline.phase && !superline.summed && !superline.weight
 }
 
 function mergeSuperlines(...superlines) {
@@ -776,6 +784,10 @@ function mergeSuperlineLists(...superlineLists) {
     let finalSuperlines = {}
     for (const superlines of superlineLists) {
         for (const id of Object.keys(superlines)) {
+            if (id == "0") {
+                finalSuperlines[id] = EMPTY_SUPERLINE
+                continue
+            }
             const finalSuperline = finalSuperlines[id]
             let superline = superlines[id]
             if (finalSuperline) {
@@ -817,7 +829,7 @@ const ZERO_LINE = Object.freeze({
     arrowPos: 0.5,
     arcHeight: 0.0,
     angle: 0.0,
-    textPos: 0.0,
+    textPos: 0.5,
     textOffset: 0.0,
 })
 
@@ -861,20 +873,17 @@ function mergeDirections(...directions) {
 }
 
 /** Beware: this may result in a noncanonical line!
-  *
-  * Because of averaging, addition isn't quite associative with respect to the
-  * superficial attributes.
-  */
-function concatLines(...lines) {
+ *
+ * Because of averaging, addition isn't quite associative with respect to the
+ * superficial attributes.
+ *
+ * All lines must agree in superline.
+ */
+function rawConcatLines(...lines) {
     const n = lines.length
-    if (n == 0) {
-        // line "addition" has no identity element (ZERO_LINE doesn't work)
-        throw new Error("must add at least one line")
-    }
     const avgProps = ["arrowPos", "arcHeight",
                       "textPos", "textOffset"]
-    let finalLine = Object.assign({}, ZERO_LINE)
-    finalLine.arrowPos = 0.0
+    let finalLine = {}
     let sinAngle = 0.0
     let cosAngle = 0.0
     let numAngles = 0
@@ -882,18 +891,24 @@ function concatLines(...lines) {
     for (const prop of avgProps) {
         counts[prop] = 0
     }
-    lines.forEach((line, i) => {
+    for (const [i, line] of lines.entries()) {
         if (i == 0) {
             finalLine.superline = line.superline
         } else if (finalLine.superline != line.superline) {
             throw new Error("cannot add lines with different superlines")
         }
         if (line.direction != null) {
+            if (finalLine.direction == null) {
+                finalLine.direction = 0
+            }
             finalLine.direction =
                 mergeDirections(finalLine.direction, line.direction)
         }
         for (const prop of avgProps) {
             if (line[prop] != null) {
+                if (finalLine[prop] == null) {
+                    finalLine[prop] = 0
+                }
                 finalLine[prop] += line[prop]
                 counts[prop] += 1
             }
@@ -903,7 +918,7 @@ function concatLines(...lines) {
             cosAngle += Math.cos(line.angle)
             numAngles += 1
         }
-    })
+    }
     for (const prop of avgProps) {
         if (counts[prop]) {
             finalLine[prop] /= counts[prop]
@@ -913,6 +928,20 @@ function concatLines(...lines) {
         finalLine.angle = Math.atan2(sinAngle, cosAngle)
     }
     return Object.freeze(finalLine)
+}
+
+/** Like `rawConcatLines`, but does canonicalization and converts conflicting
+ * superlines into a delta. */
+function concatLines(...lines) {
+    const canonicalized = canonicalizeLine(rawConcatLines(
+        ...lines.map(line => Object.assign({}, line, {
+            superline: lines[0].superline,
+        }))))
+    return {
+        line: canonicalized.line,
+        phase: canonicalized.phase,
+        delta: lines.map(line => line.superline), // duplicates are fine
+    }
 }
 
 function canonicalizeLine(line) {
@@ -930,7 +959,7 @@ function joinLines(line1, reverse1, line2, reverse2) {
     const superlines = [line1.superline, line2.superline].sort(defaultCmp)
     line1 = Object.assign({}, line1, {superline: superlines[0]})
     line2 = Object.assign({}, line1, {superline: superlines[0]})
-    return Object.assign(canonicalizeLine(concatLines(line1, line2)), {
+    return Object.assign(canonicalizeLine(rawConcatLines(line1, line2)), {
         otherSuperline: superlines[1]
     })
 }
@@ -951,6 +980,10 @@ function getLineInfo(diagram, lineId) {
     const singular = lineLength == 0.0
     const trueAngle = Math.atan2(dy, dx)
     let angle = trueAngle
+    let arcHeight = line.arcHeight
+    // an semiarbitrary sign used to pick a consistent side on lines even
+    // when the line is reversed
+    const halfDisk = mod(line.angle, 2 * Math.PI) < Math.PI ? 1 : -1
     if (singular) {
         // fudge numbers to avoid singularity
         // (epsilon can't be too small or the SVG rendering becomes jittery)
@@ -963,9 +996,12 @@ function getLineInfo(diagram, lineId) {
         y1 = yMid + 0.5 * dy
         lineLength = epsilon
         angle = line.angle
+        arcHeight = arcHeight == 0.0
+                  ? 50.0 * halfDisk
+                  : arcHeight
     }
-    const arc = arcInfo(lineLength, line.arcHeight)
-    const c = (arc.radius - line.arcHeight) / lineLength
+    const arc = arcInfo(lineLength, arcHeight)
+    const c = (arc.radius - arcHeight) / lineLength
     const xCenter = xMid + c * dy
     const yCenter = yMid - c * dx
     const arcEx = {
@@ -987,6 +1023,8 @@ function getLineInfo(diagram, lineId) {
         lineLength: lineLength,
         singular: singular,
         line: line,
+        halfDisk: halfDisk,
+        arcHeight: arcHeight,
         arc: Object.assign(arc, arcEx),
     }
 }
@@ -994,7 +1032,7 @@ function getLineInfo(diagram, lineId) {
 /** Find the closest "pos" on a line. */
 function findPosOnLine(lineInfo, x, y) {
     let pos, offset
-    if (lineInfo.line.arcHeight == 0.0) {
+    if (lineInfo.arcHeight == 0.0) {
         const rx = x - lineInfo.x0
         const ry = y - lineInfo.y0
         pos = (lineInfo.dx * rx + lineInfo.dy * ry)
@@ -1010,7 +1048,7 @@ function findPosOnLine(lineInfo, x, y) {
         const shift = 0.5 * cycle - 0.5 // remove the bias toward pos = 1.0
         pos = mod(rawAngle / (2 * arc.inclination) + shift, cycle) - shift
         offset = (Math.sqrt(rx * rx + ry * ry) - Math.abs(arc.radius))
-        * sgn(lineInfo.line.arcHeight)
+        * sgn(lineInfo.arcHeight)
     }
     return {
         pos: pos,
@@ -1022,7 +1060,7 @@ function findPosOnLine(lineInfo, x, y) {
     specifies an extra shift in absolute coordinates along the line. */
 function positionOnLine(lineInfo, pos, shift) {
     const arc = lineInfo.arc
-    if (lineInfo.line.arcHeight == 0.0) {
+    if (lineInfo.arcHeight == 0.0) {
         const lineLength = lineInfo.lineLength
         const newPos = pos + shift / lineLength
         return {
@@ -1368,7 +1406,8 @@ function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     delete diagram.superlines[superlineId2]
 
     // delete the terminal nodes
-    diagram.nodes = arrayRemoveMany(diagram.nodes, [terminalIndex1, terminalIndex2])
+    diagram.nodes = arrayRemoveMany(diagram.nodes,
+                                    [terminalIndex1, terminalIndex2])
 
     return diagram
 }
@@ -1392,7 +1431,7 @@ function add2j(diagram, lineId) {
     return Object.freeze(Object.assign({}, diagram, {
         superlines: Object.freeze(Object.assign({}, diagram.superlines, {
             [superlineId]: mergeSuperlines(diagram.superlines[superlineId],
-                                           {phase: 2})
+                                           {phase: 2, summed: null})
         }))
     }))
 }
@@ -1487,7 +1526,7 @@ function flipW3jRule(diagram, nodeIndex) {
         diagram.superlines[superlineId] =
             mergeSuperlines(diagram.superlines[superlineId], {
                 phase: 1,
-                summed: false,
+                summed: null,
                 weight: 0,
             })
     })
@@ -1500,7 +1539,7 @@ function trianglePhaseRule(diagram, triangleIndex) {
         diagram.superlines[superlineId] =
             mergeSuperlines(diagram.superlines[superlineId], {
                 phase: 2,
-                summed: false,
+                summed: null,
                 weight: 0,
             })
     })
@@ -1515,7 +1554,7 @@ function flipW1jRule(diagram, lineId) {
         diagram.superlines[superlineId] =
             mergeSuperlines(diagram.superlines[superlineId], {
                 phase: 2,
-                summed: false,
+                summed: null,
                 weight: 0,
             })
     }
@@ -1573,8 +1612,6 @@ function threeArrowRule(diagram, nodeIndex) {
     })
     return diagram
 }
-
-const MATCH_ANY = Symbol("MATCH_ANY")
 
 /** @returns {Object<lineId, [nodeIndex1, lineIndex1,
   *                           nodeIndex2, lineIndex2]>} */
@@ -1663,7 +1700,7 @@ class DiagramLine {
     }
 
     concat(...lines) {
-        return concatLines(lines.map(DiagramLine.line))
+        return rawConcatLines(lines.map(line => line.line))
     }
 
     static removeSign(signedId) {
@@ -1819,6 +1856,30 @@ class Diagram {
         })))
     }
 
+    removeUnusedSuperlines() {
+        let marked = Object.assign({}, this.rawDiagram.superlines)
+        for (const superlineId of Object.keys(marked)) {
+            if (!isEmptySuperline(marked[superlineId])) {
+                delete marked[superlineId]
+            }
+        }
+        for (const line of this.lines()) {
+            delete marked[line.superlineId]
+        }
+        for (const delta of this.rawDiagram.deltas) {
+            for (const superlineId of deltas) {
+                delete marked[superlineId]
+            }
+        }
+        let superlines = Object.assign({}, this.rawDiagram.superlines)
+        for (const superlineId of Object.keys(marked)) {
+            delete superlines[superlineId]
+        }
+        return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
+            superlines: superlines,
+        })))
+    }
+
     /** Substitute a portion of this diagram for another subdiagram.
      *
      * Patterns are similar to diagrams, but also slightly different:
@@ -1864,6 +1925,35 @@ class Diagram {
             throw new Error("mismatch in deltas")
         }
 
+        // SHARED LINES
+        // ------------
+
+        // we allow a limited form of sharing: two pattern lines can map onto
+        // the same original line as long as the orientation is different;
+        // this in turn has the potential to create loops
+        let sharedLines = {}
+        let seenLines = {}
+        for (const pattLine of pattDiagram.lines()) {
+            const id = DiagramLine.removeSign(pattLine.id)[0]
+            const seen = seenLines[id]
+            if (seen) {
+                if (!(seen.node(0).type == "terminal" ||
+                      seen.node(1).type == "terminal")
+                    || !(pattLine.node(0).type == "terminal" ||
+                         pattLine.node(1).type == "terminal")) {
+                    throw new Error("a single internal line cannot "
+                                  + "match multiple lines")
+                }
+                if (sharedLines[pattLine.id] || sharedLines[seen.id]) {
+                    throw new Error("looped lines can only appear twice")
+                }
+                sharedLines[pattLine.id] = seen.id
+                sharedLines[seen.id] = pattLine.id
+                continue
+            }
+            seenLines[id] = pattLine
+        }
+
         // LINE RENAMING
         // -------------
 
@@ -1874,7 +1964,7 @@ class Diagram {
         // line IDs are available to us
         for (const pattLine of pattDiagram.lines()) {
             const lineId = DiagramLine.removeSign(pattLine.id)[0]
-            console.assert(newLines[lineId])
+            console.assert(newLines[lineId] || sharedLines[pattLine.id])
             delete newLines[lineId]
         }
         // rename the replacement diagram to avoid conflicting line IDs
@@ -1888,15 +1978,6 @@ class Diagram {
         }
         replDiagram = replDiagram.renameLines(lineRenames)
         replacement = replDiagram.rawDiagram
-        for (const line of replDiagram.lines()) {
-            console.assert(!line.reversed)
-            console.assert(!newLines[line.id])
-            if (line.node(0).type != "terminal"
-                && line.node(1).type != "terminal") {
-                newLines[line.id] = line.rawLine
-            }
-            // lines that involve terminals are tricky and will be handled later
-        }
 
         // SUPERLINES
         // ----------
@@ -1966,154 +2047,171 @@ class Diagram {
         // -----
 
         // match lines and adjust phases
-        let exclReplNodes = {}
+        for (const pattLine of pattDiagram.lines()) {
+            const pattNode0 = pattLine.node(0)
+            const pattNode1 = pattLine.node(1)
+            const line = pattLine.signedRebase(this)
+            if (line.superlineId != pattLine.superlineId) {
+                throw new Error("superline ID mismatch in lines")
+            }
+            if (pattNode0.type != "terminal"
+                && pattNode1.type != "terminal"
+                && pattLine.direction != null) {
+                const diffDirection = mergeDirections(line.direction,
+                                                     -pattLine.direction)
+                if (diffDirection % 2 != 0) {
+                    throw new Error("directedness mismatch in lines")
+                }
+                superlineMerge.push({
+                    [line.superlineId]: {phase: diffDirection},
+                })
+            }
+        }
+
         let nodes = rawDiagram.nodes.map(node => Object.assign({}, node, {
             lines: node.lines.slice(),
         }))
-        for (let pattLine of pattDiagram.lines()) {
-            let pattNode0 = pattLine.node(0)
-            let pattNode1 = pattLine.node(1)
-            let line = pattLine.signedRebase(this)
-
-            if (pattNode0.type != "terminal") {
-                if (pattNode1.type != "terminal") {
-                    // pattern: nonterminal-to-nonterminal
-                    if (line.superlineId != pattLine.superlineId) {
-                        throw new Error("superline ID mismatch in lines")
-                    }
-                    if (pattLine.direction != null) {
-                        const diffDirection = mergeDirections(
-                            line.direction,
-                            -pattLine.direction)
-                        if (diffDirection % 2 != 0) {
-                            throw new Error("directedness mismatch in lines")
-                        }
-                        superlineMerge.push({
-                            [line.superlineId]: {phase: diffDirection},
-                        })
-                    }
-                    continue
+        let replNodes = replacement.nodes.map(node => Object.assign({}, node, {
+            lines: node.lines.slice(),
+        }))
+        let seenReplLines = {}
+        // find the node that we should join to
+        //
+        // context: this, pattDiagram, nodes, replNodes, seenReplLines
+        const findJoiningNode = replLine => {
+            // There's several cases to consider here.
+            //
+            // In the simplest case, with no shared lines, we have:
+            //
+            // orig  N1 --->---
+            // patt     ---<--- TP
+            // repl     --->--- TR
+            //
+            // A shared line case might look like this:
+            //
+            //          -------------------------
+            //         /                         \
+            //         \                         /
+            // orig     -->---             ------
+            // patt    ---<--- TP1     TP2 --->---
+            // repl    --->--- TR1     TR2 --->---
+            //
+            // This could go on for several jumps, if the node opposite to
+            // TR2 is an anchor too.  It could even loop back to itself.
+            let lines = [replLine.line]
+            while (true) {
+                const replNode = replLine.node(1)
+                const result = {
+                    type: "replacement",
+                    lines: lines,
+                    line: replLine,
+                    lineId: replLine.id,
+                    nodes: replNodes,
                 }
-
-                // pattern: nonterminal-to-terminal
-                [pattNode0, pattNode1] = [pattNode1, pattNode0]
-                pattLine = pattLine.reverse()
-                line = line.reverse()
-            }
-
-            const node0 = line.node(0)
-            const node1 = line.node(1)
-            const replNode0 = replDiagram.terminal(pattNode0.variable)
-            if (!replNode0) {
-                throw new Error("no matching terminal in replacement")
-            }
-            const replLine = replNode0.line(0)
-            const replNode1 = replLine.node(1)
-            exclReplNodes[replNode0.index] = true
-            console.assert(!newLines[replLine.id])
-            let newLineIds = [replLine.id]
-            if (pattNode1.type != "terminal") {
-                // pattern: anchor-to-nonanchor
-                const pattNode1 = pattDiagram.terminal(replNode1.variable)
-                if (replNode1.type == "terminal" && pattNode1) {
-                    // replacement: anchor-to-anchor
-                    exclReplNodes[replNode1.index] = true
-                    if (replNode0.index > replNode1.index) {
-                        continue // avoid double-counting
-                    }
-                    const pattLine1 = pattNode1.line(0)
-                    const line1 = pattLine1.signedRebase(this)
-                    const node1 = line1.node(0)
-                    const f = lexicalCmp([node0.index, line.lineIndex(0)],
-                                         [node1.index, line1.lineIndex(0)],
-                                         defaultCmp) > 0
-                            ? reverseLine : identity
-                    if (line1.superlineId != pattLine1.superlineId) {
-                        throw new Error("superline ID mismatch in lines")
-                    }
-                    function replaceSuperline(l) {
-                        return Object.assign({}, l, {
-                            superline: line.superlineId,
-                        })
-                    }
-                    newLines[replLine.id] = f(concatLines(
-                        line.line,
-                        pattLine.reverse().line,
-                        replaceSuperline(replLine.line),
-                        replaceSuperline(line1.reverse().line),
-                        replaceSuperline(pattLine1.line)))
-                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
-                    nodes[node1.index].lines[line1.lineIndex(0)] = replLine.id
-                    deltaMerge.push([
-                        [line.superlineId,
-                         replLine.superlineId,
-                         line1.superlineId],
-                    ])
-                } else {
-                    // replacement: anchor-to-nonanchor
-                    const f = replNode1.type == "terminal"
-                            ? reverseLine : identity
-                    newLines[replLine.id] = f(concatLines(
-                        line.line,
-                        pattLine.reverse().line,
-                        replLine.line))
-                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
+                if (replNode.type != "terminal") {
+                    return result
                 }
-            } else {
-                // pattern: anchor-to-anchor
-                if (replNode1.type == "terminal"
-                    && replNode1.variable == pattNode1.variable) {
-                    // replacement: anchor-to-anchor
-                    const f = lexicalCmp([node0.index, line.lineIndex(0)],
-                                         [node1.index, line.lineIndex(1)],
-                                         defaultCmp) > 0
-                            ? reverseLine : identity
-                    exclReplNodes[replNode1.index] = true
-                    newLines[replLine.id] = f(concatLines(
-                        line.line,
-                        pattLine.reverse().line,
-                        replLine.line))
-                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
-                    nodes[node1.index].lines[line.lineIndex(1)] = replLine.id
-                } else {
-                    // replacement: anchor-to-nonanchor
-                    const f = replNode1.type == "terminal"
-                            ? reverseLine : identity
-                    // beware of double-counting!
-                    newLines[replLine.id] = f(concatLines(
-                        line.line,
-                        pattLine.reverse().line,
-                        replLine.line))
-                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
-
-                    const replNode2 = replDiagram.terminal(pattNode1.variable)
-                    if (!replNode2) {
-                        throw new Error("no matching terminal in replacement")
-                    }
-                    exclReplNodes[replNode2.index] = true
-                    const replLine2 = replNode2.line(0)
-                    const replNode3 = replLine2.node(1)
-                    const g = replNode3.type == "terminal"
-                            ? reverseLine : identity
-                    newLines[replLine2.id] = g(replLine.line)
-                    nodes[node1.index].lines[line.lineIndex(1)] = replLine2.id
-                    newLineIds.push(replLine2.id)
+                const pattNode = pattDiagram.terminal(replNode.variable)
+                if (!pattNode) {
+                    return result
                 }
+                seenReplLines[replLine.id] = true
+                const pattLine = pattNode.line(0)
+                const line = pattLine.signedRebase(this).reverse()
+                // avoid consuming phases twice if the pattern line is
+                // terminal-to-terminal
+                if (pattLine.node(1).type != "terminal" || !pattLine.reversed) {
+                    lines.push(pattLine.line, line.line)
+                }
+                const otherPattLineId = sharedLines[pattLine.id]
+                if (!otherPattLineId) {
+                    // no shared line, so joining node is from original diagram
+                    return {
+                        type: "original",
+                        lines: lines,
+                        line: line,
+                        lineId: replLine.id,
+                        nodes: nodes,
+                    }
+                }
+                // we have shared line, so joining node comes from elsewhere
+                const otherPattLine = pattDiagram.line(otherPattLineId,
+                                                       pattLine.reversed)
+                const otherPattNode = otherPattLine.node(0)
+                if (otherPattNode.type != "terminal") {
+                    throw new Error("expected terminal node")
+                }
+                lines.push(otherPattLine.reverse().line)
+                replLine = replDiagram.terminal(otherPattNode.variable).line(0)
+                if (seenReplLines[replLine.id]) {
+                    // we found a loop
+                    return {
+                        type: "cycle",
+                        lines: lines,
+                    }
+                }
+                lines.push(replLine)
             }
-            for (const lineId of newLineIds) {
-                const newLine = newLines[lineId]
-                const canonicalized = canonicalizeLine(newLine)
-                newLines[lineId] = canonicalized.line
+        }
+        function getPart(joining) {
+            switch (joining.type) {
+                case "replacement":
+                    return joining.line.node(1).type == "terminal" ? -1 : 1
+                case "original":
+                    return 0
+                default:
+                    throw new Error("joining type not valid here")
+            }
+        }
+        for (const replLine of replDiagram.lines()) {
+            if (seenReplLines[replLine.id]) {
+                continue // avoid double-counting
+            }
+            const joining0 = findJoiningNode(replLine.reverse())
+            if (joining0.type == "cycle") {
+                // special case: cycle
+                const combined = concatLines(...joining0.lines)
+                deltaMerge.push([combined.delta])
+                if (combined.line.direction % 2) {
+                    throw new Error("directed loops are forbidden")
+                }
                 superlineMerge.push({
-                    [newLine.superline]: {phase: canonicalized.phase},
+                    [combined.line.superline]: {
+                        phase: combined.phase,
+                        weight: 2,
+                    },
                 })
+                continue
             }
+            const joining1 = findJoiningNode(replLine)
+            const lineId = joining0.lineId
+            const nodeIndex0 = joining0.line.node(1).index
+            const nodeIndex1 = joining1.line.node(1).index
+            const lineIndex0 = joining0.line.lineIndex(1)
+            const lineIndex1 = joining1.line.lineIndex(1)
+            const lines = joining0.lines
+                                  .map(reverseLine)
+                                  .reverse()
+                                  .concat(joining1.lines.slice(1))
+            const f = lexicalCmp([getPart(joining0), nodeIndex0, lineIndex0],
+                                 [getPart(joining1), nodeIndex1, lineIndex1],
+                                 defaultCmp) > 0
+                    ? reverseLine : identity
+            joining0.nodes[nodeIndex0].lines[lineIndex0] = lineId
+            joining1.nodes[nodeIndex1].lines[lineIndex1] = lineId
+            const combined = concatLines(...lines)
+            deltaMerge.push([combined.delta])
+            console.assert(!newLines[lineId])
+            newLines[lineId] = ensureLine(f(combined.line))
+            superlineMerge.push({
+                [combined.line.superline]: {phase: combined.phase},
+            })
         }
 
         const newNodes = Array.prototype.concat(
             replacement.nodes.filter((node, nodeIndex) =>
                 node.type == "terminal"
-                && !exclReplNodes[nodeIndex]),
+                && !pattDiagram.terminal(node.variable)),
             arrayRemoveMany(
                 nodes,
                 Array.from(
@@ -2125,15 +2223,12 @@ class Diagram {
                                pattDiagram.nodes())))),
             replacement.nodes.filter(node => node.type != "terminal"))
 
-        for (const lineId of Object.keys(newLines)) {
-            newLines[lineId] = ensureLine(newLines[lineId])
-        }
         return new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
             nodes: newNodes,
             lines: newLines,
             superlines: mergeSuperlineLists(...superlineMerge),
             deltas: mergeDeltas(...deltaMerge),
-        })))
+        }))).removeUnusedSuperlines()
     }
 }
 
@@ -2152,23 +2247,33 @@ function findW3jLoop(node) {
     return "no loops found"
 }
 
-function deltaIntroRule(diagram, nodeIndex) {
+function loopElimRule(diagram, lineId, nodeIndex) {
     diagram = new Diagram(diagram)
-    const node = diagram.node(nodeIndex)
-    const loop = findW3jLoop(node)
+    const loopNode = diagram.line(lineId).node(0)
+    if (loopNode.index != diagram.line(lineId).node(1).index) {
+        return "no loops found"
+    }
+    const loop = findW3jLoop(loopNode)
     if (typeof loop != "object") {
         return loop
     }
     if (loop.loopLine.direction == 0) {
         return "loop must be directed"
     }
-    if (loop.cutLine.node(1).type != "w3j") {
+    const otherNode = loop.cutLine.node(1)
+    if (otherNode.type != "w3j") {
         return "other node is not a Wigner 3-jm symbol"
+    }
+    if (otherNode.index != nodeIndex && loopNode.index != nodeIndex) {
+        return "not sure what you're trying to do"
     }
     const ld = loop.loopLine
     const lc = loop.cutLine
     const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
     const la = loop.cutLine.cycNodeLine(1, 2).reverse()
+    if (la.id == lb.id && la.direction == 0) {
+        return "other loop must be directed too"
+    }
     const md = ld.toString()
     const mc = lc.toString()
     const mb = lb.toString()
@@ -2177,7 +2282,6 @@ function deltaIntroRule(diagram, nodeIndex) {
     const jc = lc.superlineId
     const jb = lb.superlineId
     const ja = la.superlineId
-    const m1 = "$1"
     return diagram.substitute({
         nodes: [
             terminalNode(ma, "a"),
@@ -2204,6 +2308,40 @@ function deltaIntroRule(diagram, nodeIndex) {
         },
         superlines: {
             [jd]: {weight: 1},
+            "0": {},
+        },
+        deltas: [
+            ["0", jc],
+        ],
+    }).rawDiagram
+}
+
+function loopIntroRule(diagram, lineId, xy1, xy2) {
+    diagram = new Diagram(diagram)
+    const line = diagram.line(lineId)
+    return diagram.substitute({
+        nodes: [
+            terminalNode(line.toString(), "a"),
+            terminalNode(line.toString(), "b"),
+        ],
+        lines: {
+            [line]: {superline: line.superlineId, direction: 0},
+        },
+    }, {
+        nodes: [
+            terminalNode("$1", "a"),
+            terminalNode("$2", "b"),
+            w3jNode("$4", "$4", "$3", ...xy2),
+            w3jNode("$3", "$2", "$1", ...xy1),
+        ],
+        lines: {
+            $4: {superline: "0", direction: +1, arcHeight: 50.0},
+            $3: {superline: "0", direction: 0},
+            $2: {superline: line.superlineId, direction: 0},
+            $1: {superline: line.superlineId, direction: +1},
+        },
+        superlines: {
+            [line.superlineId]: {weight: 1},
         },
     }).rawDiagram
 }
@@ -2219,14 +2357,61 @@ function deltaElimRule(diagram, entry) {
     }))
 }
 
-// variant = false: even partitioning OR keep arrow on the left
-// variant = true: odd partitioning OR keep arrow on the right
-function w3jIntroRule(diagram,
-                      lineId1, lineId2,
-                      reverse1, reverse2,
-                      variant1, variant2) {
-    // NYI
-    return diagram
+function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
+    diagram = new Diagram(diagram)
+    let line1 = diagram.line(lineId1)
+    let line2 = diagram.line(lineId2)
+    if (((line1.node(1).rawNode.x - line1.node(0).rawNode.x)
+        * (line2.node(1).rawNode.x - line2.node(0).rawNode.x)
+        + (line1.node(1).rawNode.y - line1.node(0).rawNode.y)
+        * (line2.node(1).rawNode.y - line2.node(0).rawNode.y) < 0)
+        != Boolean(reversed)) {
+        line2 = line2.reverse()
+    }
+    const xy1 = [
+        0.375 * (line1.node(0).rawNode.x + line2.node(0).rawNode.x)
+        + 0.125 * (line1.node(1).rawNode.x + line2.node(1).rawNode.x),
+        0.375 * (line1.node(0).rawNode.y + line2.node(0).rawNode.y)
+        + 0.125 * (line1.node(1).rawNode.y + line2.node(1).rawNode.y),
+    ]
+    const xy2 = [
+        0.375 * (line1.node(1).rawNode.x + line2.node(1).rawNode.x)
+        + 0.125 * (line1.node(0).rawNode.x + line2.node(0).rawNode.x),
+        0.375 * (line1.node(1).rawNode.y + line2.node(1).rawNode.y)
+        + 0.125 * (line1.node(0).rawNode.y + line2.node(0).rawNode.y),
+    ]
+    const j = availSuperlineLabels(diagram.rawDiagram).next().value
+    return diagram.substitute({
+        nodes: [
+            terminalNode(line1.toString(), "a"),
+            terminalNode(line1.toString(), "b"),
+            terminalNode(line2.toString(), "c"),
+            terminalNode(line2.toString(), "d"),
+        ],
+        lines: {
+            [line1]: {superline: line1.superlineId, direction: 0},
+            [line2]: {superline: line2.superlineId, direction: 0},
+        },
+    }, {
+        nodes: [
+            terminalNode("$1", "a"),
+            terminalNode("$2", "b"),
+            terminalNode("$3", "c"),
+            terminalNode("$4", "d"),
+            w3jNode("$1", "$3", "$5", ...xy1),
+            w3jNode("$2", "$4", "$5", ...xy2),
+        ],
+        lines: {
+            $1: {superline: line1.superlineId, direction: 0},
+            $2: {superline: line1.superlineId, direction: 0},
+            $3: {superline: line2.superlineId, direction: 0},
+            $4: {superline: line2.superlineId, direction: 0},
+            $5: {superline: j, direction: 0},
+        },
+        superlines: {
+            [j]: {weight: 2, summed: true},
+        },
+    }).rawDiagram
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -2234,7 +2419,8 @@ function w3jIntroRule(diagram,
 
 function twoJColor(diagram, lineId) {
     const superlineId = diagram.lines[lineId].superline
-    return mod(diagram.superlines[superlineId].phase, 4) >= 2
+    const superline = diagram.superlines[superlineId]
+    return mod(superline.phase, 4) >= 2
 }
 
 function renderArrow(update, diagram, lineId) {
@@ -2320,12 +2506,14 @@ function renderLine(update, editor, lineId) {
     const info = getLineInfo(diagram, lineId)
     const position = positionOnLine(info, line.textPos, 0)
     let textOffset = line.textOffset
-    if (textOffset >= 0 && textOffset < minTextOffset) {
+    if (textOffset == 0) {
+        textOffset = minTextOffset * info.halfDisk
+    } else if (textOffset > 0 && textOffset < minTextOffset) {
         textOffset = minTextOffset
     } else if (textOffset < 0 && textOffset > -minTextOffset) {
         textOffset = -minTextOffset
     }
-    const radius = line.arcHeight ? Math.abs(info.arc.radius) : 0.0
+    const radius = info.arc.radius != Infinity ? Math.abs(info.arc.radius) : 0.0
     const d = `M ${info.x0} ${info.y0} `
             + `A ${radius} ${radius} 0 `
             + `${Number(info.arc.large)} ${Number(info.arc.sweep)} `
@@ -2371,6 +2559,7 @@ function renderLine(update, editor, lineId) {
             e.stopPropagation()
         }
     }
+
     return vnode(
         "svg:g",
         {
@@ -2382,13 +2571,13 @@ function renderLine(update, editor, lineId) {
                    || (editor.trackStop.type == "line" &&
                        editor.trackStop.lineId == lineId)
                     ? (editor.trackType + " ") : ""),
-            onmouseover: function(e) {
+            onmouseenter: function(e) {
                 update(setHover({
                     type: "line",
                     lineId: lineId,
                 }))
             },
-            onmouseout: function(e) {
+            onmouseleave: function(e) {
                 update(setHover({type: null}))
             },
         },
@@ -2480,12 +2669,13 @@ function renderNode(update, editor, nodeIndex, frozen) {
     } else if (node.type == "terminal") {
         const frozenClass = frozen ? "frozen " : ""
         gChildren.push(vnode("svg:circle", {
-            "class": frozenClass,
+            "class": "fg " + frozenClass,
             r: 10,
         }))
 
     } else {
         gChildren.push(vnode("svg:circle", {
+            "class": "fg",
             r: 22,
         }))
         gChildren.push(vnode("svg:text", {
@@ -2504,13 +2694,13 @@ function renderNode(update, editor, nodeIndex, frozen) {
                    editor.trackStop.nodeIndex == nodeIndex)
                 ? (editor.trackType + " ") : ""),
         transform: `translate(${node.x}, ${node.y})`,
-        onmouseover: function(e) {
+        onmouseenter: function(e) {
             update(setHover({
                 type: "node",
                 nodeIndex: nodeIndex,
             }))
         },
-        onmouseout: function(e) {
+        onmouseleave: function(e) {
             update(setHover({type: null}))
         },
         onmousedown: function(e) {
@@ -2538,13 +2728,8 @@ function renderNode(update, editor, nodeIndex, frozen) {
                 }
                 e.stopPropagation()
             } else if (e.buttons == 4) {
-                if (e.shiftKey) {
-                    update(modifyDiagram({equivalent: true}, diagram =>
-                        deltaIntroRule(diagram, nodeIndex)))
-                } else {
-                    update(modifyDiagram({equivalent: true}, diagram =>
-                        threeArrowRule(diagram, nodeIndex)))
-                }
+                update(modifyDiagram({equivalent: true}, diagram =>
+                    threeArrowRule(diagram, nodeIndex)))
                 e.stopPropagation()
             }
         },
@@ -2586,7 +2771,10 @@ function renderJTableau(update, superlines) {
         return vnode(
             "tr", {},
             vnode("td", {"class": "summed"}, superline.summed ? "\u2211" : ""),
-            vnode("td", {"class": "name"}, superlineId),
+            vnode("td", {"class": "name"},
+                  superlineId == "0"
+                ? vnode("span", {"class": "zero"}, "0")
+                : superlineId),
             vnode("td", {"class": "phase"}, ...phase),
             vnode("td", {"class": "weight"}, weight),
         )
@@ -2870,6 +3058,9 @@ function loadEditor(editor) {
 }
 
 function toSvgCoords(p) {
+    if (!p) {
+        return p
+    }
     const rect = document.getElementById("diagram").getBoundingClientRect()
     return [p[0] - rect.left, p[1] - rect.top]
 }
@@ -3035,25 +3226,33 @@ function updateTrack(event) {
     }
 }
 
-function clearTrack(editor) {
-    if (editor.trackStop.xy == null) {
-    } else if (editor.trackStop.type == "line") {
-        if (editor.trackStart.lineId != editor.trackStop.lineId) {
+function clearTrack(editor, event) {
+    if (editor.trackStop.xy != null) {
+        const stopXy = toSvgCoords(editor.trackStop.xy)
+        const startXy = toSvgCoords(editor.trackStart.xy)
+        if (editor.trackStop.type == "line") {
+            if (editor.trackStart.lineId != editor.trackStop.lineId) {
+                modifyDiagram({equivalent: true}, diagram =>
+                    w3jIntroRule(diagram,
+                                 editor.trackStart.lineId,
+                                 editor.trackStop.lineId,
+                                 event.shiftKey))(editor)
+                setHover({type: null})(editor)
+            }
+        } else if (editor.trackStop.type == "node") {
             modifyDiagram({equivalent: true}, diagram =>
-                w3jIntroRule(diagram,
+                loopElimRule(diagram,
                              editor.trackStart.lineId,
-                             editor.trackStop.lineId))(editor)
+                             editor.trackStop.nodeIndex))(editor)
+            setHover({type: null})(editor)
+        } else if (editor.trackStart.type == "line") {
+            modifyDiagram({equivalent: true}, diagram =>
+                loopIntroRule(diagram,
+                              editor.trackStart.lineId,
+                              startXy,
+                              stopXy))(editor)
+            setHover({type: null})(editor)
         }
-    } else if (editor.trackStop.type == "node") {
-        /* modifyDiagram({equivalent: true}, diagram =>
-         *     loopIntroRule(diagram,
-         *                   editor.trackStart.lineId,
-         *                   editor.trackStop.xy))(editor)*/
-    } else if (editor.trackStart.type == "line") {
-        modifyDiagram({equivalent: true}, diagram =>
-            loopIntroRule(diagram,
-                          editor.trackStart.lineId,
-                          editor.trackStop.xy))(editor)
     }
     editor.trackStart = {type: null, xy: null}
     editor.trackStop = {type: null, xy: null}
@@ -3065,7 +3264,7 @@ function mouseUp(event) {
             modifyDiagram(editor.draggerFlags, identity)(editor)
             editor.dragger = null
         } else {
-            clearTrack(editor)
+            clearTrack(editor, event)
         }
     }
 }

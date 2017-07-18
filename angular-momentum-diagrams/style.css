@@ -90,6 +90,10 @@ main,
     overflow: auto;
 }
 
+#tableau {
+    margin: 2px 6px;
+}
+
 #tableau .summed {
     width: 1em;
 }
@@ -141,7 +145,7 @@ main,
     cursor: default;
 }
 
-#delta-tableau .zero {
+#tableau-wrapper .zero {
     color: #2966c6;
     font-weight: bold;
 }
