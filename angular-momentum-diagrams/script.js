@@ -1,3 +1,5 @@
+"use strict"
+
 //////////////////////////////////////////////////////////////////////////////
 // Utility: Generic
 
@@ -154,6 +156,9 @@ function arrayRemoveMany(xs, indices) {
     indices.sort((x, y) => y - x)
     const n = indices.length
     for (let i = 0; i < n; ++i) {
+        if (indices[i] >= xs.length) {
+            throw new Error("index out of range")
+        }
         xs.splice(indices[i], 1)
     }
     return xs
@@ -817,7 +822,11 @@ const ZERO_LINE = Object.freeze({
 })
 
 function newLine(superlineId) {
-    return Object.freeze(Object.assign({}, ZERO_LINE, {superline: superlineId}))
+    return ensureLine({superline: superlineId})
+}
+
+function ensureLine(line) {
+    return Object.freeze(Object.assign({}, ZERO_LINE, line))
 }
 
 function reverseLineDirection(line) {
@@ -826,7 +835,9 @@ function reverseLineDirection(line) {
 
 function reverseLine(line) {
     line = Object.assign({}, line)
-    line.direction = -line.direction
+    if (line.direction != null) {
+        line.direction = -line.direction
+    }
     if (line.arrowPos != null) {
         line.arrowPos = 1.0 - line.arrowPos
     }
@@ -877,8 +888,10 @@ function concatLines(...lines) {
         } else if (finalLine.superline != line.superline) {
             throw new Error("cannot add lines with different superlines")
         }
-        finalLine.direction =
-            mergeDirections(finalLine.direction, line.direction)
+        if (line.direction != null) {
+            finalLine.direction =
+                mergeDirections(finalLine.direction, line.direction)
+        }
         for (const prop of avgProps) {
             if (line[prop] != null) {
                 finalLine[prop] += line[prop]
@@ -1250,11 +1263,12 @@ function w3jOrientation(diagram, nodeIndex) {
             return [lineIndex, mod(angle, 2 * Math.PI)]
         })
         .sort((line1, line2) => line1[1] - line2[1])
+        .map(([x, _]) => x)
     switch (lines.length) {
         case 3:
             return {
                 nnz: lines.length,
-                orientation: permutSign([0, 1, 2],lines),
+                orientation: permutSign([0, 1, 2], lines),
             }
         case 2:
             const s = node.lines.indexOf("0") == 1 ? -1 : 1
@@ -1514,6 +1528,12 @@ function threeArrowRule(diagram, nodeIndex) {
     if (node.type != "w3j") {
         return diagram
     }
+    const loop = findW3jLoop(new Diagram(diagram).node(nodeIndex))
+    let loopId = null
+    if (typeof loop == "object") {
+        loopId = loop.loopLine.id
+    }
+
     let direction = 0
     // figure out the direction that would minimize the phase change
     node.lines.forEach(function(lineId, lineIndex) {
@@ -1535,12 +1555,16 @@ function threeArrowRule(diagram, nodeIndex) {
         direction = direction / Math.abs(direction)
     }
     node.lines.forEach(function(lineId, lineIndex) {
-        let line = diagram.lines[lineId]
+        let line = Object.assign({}, diagram.lines[lineId])
         if (isLeftOfLine(diagram.nodes, nodeIndex, lineIndex)) {
             line.direction += direction
         } else {
             line.direction -= direction
         }
+        diagram.lines[lineId] = line
+    })
+    node.lines.forEach(function(lineId, lineIndex) {
+        const line = diagram.lines[lineId]
         const canonicalized = canonicalizeLine(line)
         diagram.lines[lineId] = canonicalized.line
         diagram.superlines[line.superline] = mergeSuperlines(
@@ -1595,7 +1619,18 @@ class DiagramLine {
         return f(this.diagram.rawDiagram.lines[this.id])
     }
 
+    get superline() {
+        throw new Error("DEPRECATED")
+    }
+
+    get superlineId() {
+        return this.line.superline
+    }
+
     get direction() {
+        if (this.rawLine.direction == null) {
+            return null
+        }
         return this.rawLine.direction * (this.reversed * 2 - 1)
     }
 
@@ -1608,6 +1643,10 @@ class DiagramLine {
     lineIndex(end) {
         const lineEnds = this.diagram._lineEnds[this.id]
         return lineEnds[(this.reversed + end) % 2 * 2 + 1]
+    }
+
+    cycNodeLine(end, offset) {
+        return this.node(end).line((this.lineIndex(end) + offset) % 3)
     }
 
     /** Called automatically when used as the name of a property. */
@@ -1627,12 +1666,8 @@ class DiagramLine {
         return concatLines(lines.map(DiagramLine.line))
     }
 
-    assign(lines, line) {
-        lines[this.id] = this.reversed ? reverseLine(line) : line
-    }
-
     static removeSign(signedId) {
-        const id = signedId.slice(1)
+        const id = signedId.substr(1)
         let reversed = false
         if (signedId[0] == "-") {
             reversed = !reversed
@@ -1666,11 +1701,14 @@ class DiagramNode {
     }
 
     get numLines() {
-        return this.rawNode.lines[lineIndex].length
+        return this.rawNode.lines.length
     }
 
     line(index) {
-        return new DiagramLine(this.diagram, this.rawNode.lines[index])
+        const lineId = this.rawNode.lines[index]
+        const lineEnd = this.diagram._lineEnds[lineId]
+        const reversed = lineEnd[2] == this.index && lineEnd[3] == index
+        return new DiagramLine(this.diagram, lineId, reversed)
     }
 
     lines() {
@@ -1720,11 +1758,7 @@ class Diagram {
     }
 
     terminal(variable) {
-        const node = this.terminals[variable]
-        if (!node) {
-            throw new Error(`can't find terminal with variable = ${variable}`)
-        }
-        return node
+        return this.terminals[variable]
     }
 
     get numNodes() {
@@ -1747,7 +1781,8 @@ class Diagram {
     }
 
     signedLine(signedId, reversed) {
-        return this.line(...DiagramLine.removeSign(signedId))
+        const [id, sign] = DiagramLine.removeSign(signedId)
+        return this.line(id, sign != Boolean(reversed))
     }
 
     line(id, reversed) {
@@ -1775,8 +1810,8 @@ class Diagram {
                 Object.freeze(Object.assign({}, node, {
                     lines: Object.freeze(node.lines.map(lineId =>
                         renames.hasOwnProperty(lineId)
-                      ? renames[lineId]
-                      : lineId
+                                                              ? renames[lineId]
+                                                              : lineId
                     )),
                 }))
             )),
@@ -1793,17 +1828,16 @@ class Diagram {
      * - `line.direction: MATCH_ANY` will absorb any direction
      */
     substitute(pattern, replacement) {
-        // legend:
-        //   lowercase = terminal
-        //   uppercase = non-terminal
-        //   numeric = any node
-        //
         // schematic idea:
         //
         // orig: --- X1 --- N1 --- N2 --- X2 ---
         // patt:     T1 --- N1 --- N2 --- T2
         // repl:     T1 ------- N3 ------ T2
         // new:  --- X1 ------- N3 ------ X2 ---
+        //
+        // anchor = a node that where gluing occurs;
+        //   for 'pattern', all terminals are anchors
+        //   for 'replacement', only terminals that match the pattern are
         //
         // the interesting/tricky parts occur on the terminals of the pattern;
         // this is where we have to glue the original diagram to the
@@ -1813,6 +1847,8 @@ class Diagram {
         // merged into X1-N3 and similarly for N2-X2, and also account for
         // degenerate cases
 
+        pattern = ensureDiagram(pattern)
+        replacement = ensureDiagram(replacement)
         const rawDiagram = this.rawDiagram
         const pattDiagram = new Diagram(pattern)
         let replDiagram = new Diagram(replacement)
@@ -1842,16 +1878,16 @@ class Diagram {
             delete newLines[lineId]
         }
         // rename the replacement diagram to avoid conflicting line IDs
-        // and also replace the dummy Symbols
+        // and also replace the dummy line IDs
         let freshLineIds = availLabels(newLines)
         let lineRenames = {}
         for (const line of replDiagram.lines()) {
-            if (typeof line.id == "symbol"
-                || newLines.hasOwnProperty(line.id)) {
+            if (line.id.startsWith("$") || newLines.hasOwnProperty(line.id)) {
                 lineRenames[line.id] = freshLineIds.next().value
             }
         }
         replDiagram = replDiagram.renameLines(lineRenames)
+        replacement = replDiagram.rawDiagram
         for (const line of replDiagram.lines()) {
             console.assert(!line.reversed)
             console.assert(!newLines[line.id])
@@ -1906,8 +1942,12 @@ class Diagram {
             const nodeLines = Array.from(node.rawNode.lines)
             const pattNodeLines = Array.from(pattNode.rawNode.lines)
             if (node.type == "w3j") {
-                const sign = permutSign(nodeLines, pattNodeLines)
-                if (sign == 0) {
+                const uniqueLines = permutSign(nodeLines, nodeLines)
+                const sign = permutSign(
+                    nodeLines,
+                    pattNodeLines.map(signedId =>
+                        DiagramLine.removeSign(signedId)[0]))
+                if (uniqueLines && sign == 0) {
                     throw new Error("node lines mismatch")
                 }
                 if (sign < 0) {
@@ -1925,111 +1965,157 @@ class Diagram {
         // LINES
         // -----
 
-        function canonicalizeLineAndAdjust(lineId) {
-            const line = newLines[lineId]
-            const canonicalized = canonicalizeLine(line)
-            newLines[lineId] = canonicalized.line
-            superlineMerge.push({
-                [line.superline]: {phase: canonicalized.phase},
-            })
-        }
-
         // match lines and adjust phases
         let exclReplNodes = {}
+        let nodes = rawDiagram.nodes.map(node => Object.assign({}, node, {
+            lines: node.lines.slice(),
+        }))
         for (let pattLine of pattDiagram.lines()) {
             let pattNode0 = pattLine.node(0)
             let pattNode1 = pattLine.node(1)
+            let line = pattLine.signedRebase(this)
 
-            if (pattNode1.type != "terminal") {
-                if (pattNode0.type != "terminal") {
+            if (pattNode0.type != "terminal") {
+                if (pattNode1.type != "terminal") {
                     // pattern: nonterminal-to-nonterminal
-                    if (line.superline != pattLine.superline) {
+                    if (line.superlineId != pattLine.superlineId) {
                         throw new Error("superline ID mismatch in lines")
                     }
-                    let diffDirection = mergeDirections(line.direction,
-                                                       -pattLine.direction)
-                    if (diffDirection % 2 != 0) {
-                        throw new Error("directedness mismatch in lines")
+                    if (pattLine.direction != null) {
+                        const diffDirection = mergeDirections(
+                            line.direction,
+                            -pattLine.direction)
+                        if (diffDirection % 2 != 0) {
+                            throw new Error("directedness mismatch in lines")
+                        }
+                        superlineMerge.push({
+                            [line.superlineId]: {phase: diffDirection},
+                        })
                     }
-                    superlineMerge.push({
-                        [line.superline]: {phase: diffDirection},
-                    })
                     continue
                 }
 
                 // pattern: nonterminal-to-terminal
                 [pattNode0, pattNode1] = [pattNode1, pattNode0]
                 pattLine = pattLine.reverse()
+                line = line.reverse()
             }
 
-            const line = pattLine.signedRebase(this)
+            const node0 = line.node(0)
+            const node1 = line.node(1)
             const replNode0 = replDiagram.terminal(pattNode0.variable)
+            if (!replNode0) {
+                throw new Error("no matching terminal in replacement")
+            }
             const replLine = replNode0.line(0)
             const replNode1 = replLine.node(1)
             exclReplNodes[replNode0.index] = true
             console.assert(!newLines[replLine.id])
-            // FIXME the nweLine[replLine.id] assignments are SUSPICIOUS
-            // (1) they don't use DiagramLine.assign
-            // (2) even if they do, how do you know the ordering is preserved?
+            let newLineIds = [replLine.id]
             if (pattNode1.type != "terminal") {
-                // pattern: terminal-to-nonterminal
-                if (replNode1.type == "terminal") {
+                // pattern: anchor-to-nonanchor
+                const pattNode1 = pattDiagram.terminal(replNode1.variable)
+                if (replNode1.type == "terminal" && pattNode1) {
+                    // replacement: anchor-to-anchor
                     exclReplNodes[replNode1.index] = true
-                    // replacement: terminal-to-terminal
                     if (replNode0.index > replNode1.index) {
                         continue // avoid double-counting
                     }
-                    const pattLine1 = pattDiagram.terminal(replNode1.variable)
-                                                 .line(0)
+                    const pattLine1 = pattNode1.line(0)
                     const line1 = pattLine1.signedRebase(this)
-                    newLines[replLine.id] = concatLines(
+                    const node1 = line1.node(0)
+                    const f = lexicalCmp([node0.index, line.lineIndex(0)],
+                                         [node1.index, line1.lineIndex(0)],
+                                         defaultCmp) > 0
+                            ? reverseLine : identity
+                    if (line1.superlineId != pattLine1.superlineId) {
+                        throw new Error("superline ID mismatch in lines")
+                    }
+                    function replaceSuperline(l) {
+                        return Object.assign({}, l, {
+                            superline: line.superlineId,
+                        })
+                    }
+                    newLines[replLine.id] = f(concatLines(
                         line.line,
                         pattLine.reverse().line,
-                        replLine.line,
-                        line1.reverse().line,
-                        pattLine1.line)
+                        replaceSuperline(replLine.line),
+                        replaceSuperline(line1.reverse().line),
+                        replaceSuperline(pattLine1.line)))
+                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
+                    nodes[node1.index].lines[line1.lineIndex(0)] = replLine.id
+                    deltaMerge.push([
+                        [line.superlineId,
+                         replLine.superlineId,
+                         line1.superlineId],
+                    ])
                 } else {
-                    // replacement: terminal-to-nonterminal
-                    newLines[replLine.id] = concatLines(
+                    // replacement: anchor-to-nonanchor
+                    const f = replNode1.type == "terminal"
+                            ? reverseLine : identity
+                    newLines[replLine.id] = f(concatLines(
                         line.line,
                         pattLine.reverse().line,
-                        replLine.line)
+                        replLine.line))
+                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
                 }
             } else {
-                // pattern: terminal-to-terminal
-                if (replNode1.type == "terminal") {
-                    // replacement: terminal-to-terminal
-                    if (replNode1.variable != pattNode1.variable) {
-                        throw new Error("mismatch between pattern and "
-                                      + "replacement terminals")
-                    }
-                    newLines[replLine.id] = concatLines(
+                // pattern: anchor-to-anchor
+                if (replNode1.type == "terminal"
+                    && replNode1.variable == pattNode1.variable) {
+                    // replacement: anchor-to-anchor
+                    const f = lexicalCmp([node0.index, line.lineIndex(0)],
+                                         [node1.index, line.lineIndex(1)],
+                                         defaultCmp) > 0
+                            ? reverseLine : identity
+                    exclReplNodes[replNode1.index] = true
+                    newLines[replLine.id] = f(concatLines(
                         line.line,
                         pattLine.reverse().line,
-                        replLine.line)
+                        replLine.line))
+                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
+                    nodes[node1.index].lines[line.lineIndex(1)] = replLine.id
                 } else {
-                    // replacement: terminal-to-nonterminal
+                    // replacement: anchor-to-nonanchor
+                    const f = replNode1.type == "terminal"
+                            ? reverseLine : identity
                     // beware of double-counting!
-                    if (replNode0.index < replNode1.index) {
-                        newLines[replLine.id] = concatLines(
-                            line.line,
-                            pattLine.reverse().line,
-                            replLine.line)
-                    } else {
-                        newLines[replLine.id] = replLine.line
+                    newLines[replLine.id] = f(concatLines(
+                        line.line,
+                        pattLine.reverse().line,
+                        replLine.line))
+                    nodes[node0.index].lines[line.lineIndex(0)] = replLine.id
+
+                    const replNode2 = replDiagram.terminal(pattNode1.variable)
+                    if (!replNode2) {
+                        throw new Error("no matching terminal in replacement")
                     }
+                    exclReplNodes[replNode2.index] = true
+                    const replLine2 = replNode2.line(0)
+                    const replNode3 = replLine2.node(1)
+                    const g = replNode3.type == "terminal"
+                            ? reverseLine : identity
+                    newLines[replLine2.id] = g(replLine.line)
+                    nodes[node1.index].lines[line.lineIndex(1)] = replLine2.id
+                    newLineIds.push(replLine2.id)
                 }
             }
-            canonicalizeLineAndAdjust(replLine.id)
+            for (const lineId of newLineIds) {
+                const newLine = newLines[lineId]
+                const canonicalized = canonicalizeLine(newLine)
+                newLines[lineId] = canonicalized.line
+                superlineMerge.push({
+                    [newLine.superline]: {phase: canonicalized.phase},
+                })
+            }
         }
 
         const newNodes = Array.prototype.concat(
-            replacement.nodes.filter(node => {
-                node.type == "terminal" &&
-                !exclReplNodes[node.index]
-            }),
+            replacement.nodes.filter((node, nodeIndex) =>
+                node.type == "terminal"
+                && !exclReplNodes[nodeIndex]),
             arrayRemoveMany(
-                rawDiagram.nodes,
+                nodes,
                 Array.from(
                     map(node => node.line(0)
                                     .signedRebase(this)
@@ -2039,6 +2125,9 @@ class Diagram {
                                pattDiagram.nodes())))),
             replacement.nodes.filter(node => node.type != "terminal"))
 
+        for (const lineId of Object.keys(newLines)) {
+            newLines[lineId] = ensureLine(newLines[lineId])
+        }
         return new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
             nodes: newNodes,
             lines: newLines,
@@ -2048,17 +2137,15 @@ class Diagram {
     }
 }
 
-function findW3jLoop(diagram, nodeIndex) {
-    const node = diagram.nodes[nodeIndex]
+function findW3jLoop(node) {
     if (node.type != "w3j") {
         return "not a Wigner 3-jm symbol"
     }
-    const nodeLines = node.lines
     for (let i = 0; i < 3; ++i) {
-        if (nodeLines[i] == nodeLines[(i + 1) % 3]) {
+        if (node.line(i).id == node.line((i + 1) % 3).id) {
             return {
-                cutPort: new Port(diagram, nodeIndex, (i + 2) % 3),
-                loopPort: new Port(diagram, nodeIndex, i),
+                cutLine: node.line((i + 2) % 3),
+                loopLine: node.line(i),
             }
         }
     }
@@ -2066,102 +2153,59 @@ function findW3jLoop(diagram, nodeIndex) {
 }
 
 function deltaIntroRule(diagram, nodeIndex) {
-    const node = diagram.nodes[nodeIndex]
-    const loop = findW3jLoop(diagram, nodeIndex)
+    diagram = new Diagram(diagram)
+    const node = diagram.node(nodeIndex)
+    const loop = findW3jLoop(node)
     if (typeof loop != "object") {
         return loop
     }
-
-    // make sure the loop is directed
-    const loopSuperlineId = diagram.lines[loopLineIndex].superline
-    let loopPhase
-    switch (diagram.lines[loopLineIndex].direction * expectedLoopDirection) {
-        case 1:
-            loopPhase = 0
-            break
-        case -1:
-            loopPhase = 2
-            break
-        default:
-            return "loop must be directed"
+    if (loop.loopLine.direction == 0) {
+        return "loop must be directed"
     }
-
-    const other = otherNodeAndLineIndex(diagram.nodes, nodeIndex, cutIndex)
-    const otherNode = diagram.nodes[other[0]]
-    if (otherNode.type != "w3j") {
+    if (loop.cutLine.node(1).type != "w3j") {
         return "other node is not a Wigner 3-jm symbol"
     }
-
-    // join the lines (this part is really messy)
-    const joins = [0, 1, 2]
-        .filter(i => i != other[1])
-        .map(lineIndex => ({
-            lineIndex: lineIndex,
-            id: otherNode.lines[lineIndex],
-            line: diagram.lines[otherNode.lines[lineIndex]],
-            end: isLeftOfLine(diagram.nodes, other[0], lineIndex),
-            nl: otherNodeAndLineIndex(diagram.nodes, other[0], lineIndex),
-        }))
-        .sort((x, y) => lexicalCmp(x.nl, y.nl, defaultCmp))
-    const joined = joinLines(joins[0].line, joins[0].end,
-                             joins[1].line, !joins[1].end)
-    const direction = mod(joins[1].lineIndex - joins[0].lineIndex, 3) == 1
-                    ? 1 : -1
-    let line = joined.line
-    line.direction += direction
-    const canonicalized = canonicalizeLine(line)
-    let lines = Object.assign({}, diagram.lines)
-    const cutLine = lines[node.lines[cutIndex]]
-    delete lines[loopLineIndex]
-    delete lines[node.lines[cutIndex]]
-    delete lines[joins[1].id]
-    lines[joins[0].id] = canonicalized.line
-
-    // update the phase on the loop superline
-    let superlines = Object.assign({}, diagram.superlines)
-    superlines[loopSuperlineId] = mergeSuperlines(superlines[loopSuperlineId], {
-        phase: loopPhase,
-        weight: 1,
-    })
-
-    // join the other two superlines
-    const superline1 = joined.line.superline
-    const superline2 = joined.otherSuperline
-    if (superline1 != superline2) {
-        superlines[superline1] = mergeSuperlines(diagram.superlines[superline1],
-                                                 diagram.superlines[superline2])
-        superlines[superline2] = EMPTY_SUPERLINE
-    }
-    superlines[superline1] = mergeSuperlines(superlines[superline1], {
-        phase: joined.phase + canonicalized.phase,
-        weight: -1,
-    })
-
-    // update nodes and other things
-    return Object.freeze(Object.assign({}, diagram, {
-        nodes: Object.freeze(arrayRemoveMany(Object.assign([], diagram.nodes, {
-            [joins[0].nl[0]]: Object.freeze(Object.assign(
-                {}, diagram.nodes[joins[0].nl[0]], {
-                    lines: Object.freeze(Object.assign(
-                        [], diagram.nodes[joins[0].nl[0]].lines, {
-                            [joins[0].nl[1]]: joins[0].id,
-                        })),
-                })),
-            [joins[1].nl[0]]: Object.freeze(Object.assign(
-                {}, diagram.nodes[joins[1].nl[0]], {
-                    lines: Object.freeze(Object.assign(
-                        [], diagram.nodes[joins[1].nl[0]].lines, {
-                            [joins[1].nl[1]]: joins[0].id,
-                        })),
-                })),
-        }), [nodeIndex, other[0]])),
-        lines: Object.freeze(lines),
-        superlines: superlines,
-        deltas: mergeDeltas(diagram.deltas, [
-            [superline1, superline2],
-            ["0", cutLine.superline],
-        ])
-    }))
+    const ld = loop.loopLine
+    const lc = loop.cutLine
+    const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
+    const la = loop.cutLine.cycNodeLine(1, 2).reverse()
+    const md = ld.toString()
+    const mc = lc.toString()
+    const mb = lb.toString()
+    const ma = la.toString()
+    const jd = ld.superlineId
+    const jc = lc.superlineId
+    const jb = lb.superlineId
+    const ja = la.superlineId
+    const m1 = "$1"
+    return diagram.substitute({
+        nodes: [
+            terminalNode(ma, "a"),
+            terminalNode(mb, "b"),
+            w3jNode(md, md, mc),
+            w3jNode(mc, mb, ma),
+        ],
+        lines: {
+            [md]: {superline: jd, direction: +1},
+            [mc]: {superline: jc, direction: null},
+            [mb]: {superline: jb, direction: 0},
+            [ma]: {superline: ja, direction: +1},
+        },
+        superlines: {
+            [ja]: {weight: 1},
+        },
+    }, {
+        nodes: [
+            terminalNode("$1", "a"),
+            terminalNode("$1", "b"),
+        ],
+        lines: {
+            $1: {superline: jb, direction: 0},
+        },
+        superlines: {
+            [jd]: {weight: 1},
+        },
+    }).rawDiagram
 }
 
 function deltaElimRule(diagram, entry) {
@@ -2932,7 +2976,7 @@ function modifyDiagram(flags, diagramTransform) {
         }
         editor.snapshot = Object.assign({}, editor.snapshot, {
             diagram: diagram,
-            frozen: flags.toggleFreeze != editor.snapshot.frozen,
+            frozen: Boolean(flags.toggleFreeze) != editor.snapshot.frozen,
         })
         if (!flags.transient) {
             saveEditor(editor)
@@ -2978,8 +3022,7 @@ function updateTrack(event) {
         editor.trackStop.xy = [event.clientX, event.clientY]
         if (editor.trackStart.type != null) {
             // line-to-line
-            if (editor.hover.type == "line" &&
-                editor.hover.lineId != editor.trackStart.lineId) {
+            if (editor.hover.type == "line") {
                 editor.trackStop.type = "line"
                 editor.trackStop.lineId = editor.hover.lineId
             } else if (editor.hover.type == "node") {
@@ -2993,11 +3036,14 @@ function updateTrack(event) {
 }
 
 function clearTrack(editor) {
-    if (editor.trackStop.type == "line") {
-        modifyDiagram({equivalent: true}, diagram =>
-            w3jIntroRule(diagram,
-                         editor.trackStart.lineId,
-                         editor.trackStop.lineId))(editor)
+    if (editor.trackStop.xy == null) {
+    } else if (editor.trackStop.type == "line") {
+        if (editor.trackStart.lineId != editor.trackStop.lineId) {
+            modifyDiagram({equivalent: true}, diagram =>
+                w3jIntroRule(diagram,
+                             editor.trackStart.lineId,
+                             editor.trackStop.lineId))(editor)
+        }
     } else if (editor.trackStop.type == "node") {
         /* modifyDiagram({equivalent: true}, diagram =>
          *     loopIntroRule(diagram,

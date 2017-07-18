@@ -60,6 +60,8 @@ const d1 = ensureDiagram({
     },
 })
 
+/*
+
 assertEq(new Diagram(d1).renameLines({a: "b"}),
          new Diagram(ensureDiagram({
              nodes: [
@@ -74,8 +76,8 @@ assertEq(new Diagram(d1).renameLines({a: "b"}),
              },
          })))
 
-assertEq(new Diagram(EMPTY_DIAGRAM).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
-         new Diagram(EMPTY_DIAGRAM))
+assertEq(new Diagram().substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
+         new Diagram())
 
 assertEq(new Diagram(d1).substitute(EMPTY_DIAGRAM, EMPTY_DIAGRAM),
          new Diagram(d1))
@@ -104,7 +106,37 @@ assertEq(new Diagram(d1).substitute(ensureDiagram({
     },
 })), new Diagram(d1))
 
-//TODO: one thing i'm still concerned about is the orientation of the lines
-//TODO: are signed line IDs in patterns really necessary?
+*/
+
+console.log(new Diagram(d1).substitute(ensureDiagram({
+    nodes: [
+        terminalNode("+a", "a"),
+        terminalNode("+a", "b"),
+    ],
+    lines: {
+        ["+a"]: {superline: "a", direction: 0},
+    },
+    superlines: {
+        a: EMPTY_SUPERLINE,
+    },
+}), ensureDiagram({
+    nodes: [
+        terminalNode("a", "a"),
+        terminalNode("a", "c"),
+        terminalNode("b", "d"),
+        terminalNode("b", "b"),
+    ],
+    lines: {
+        a: {superline: "a", direction: 0},
+        b: {superline: "a", direction: 1},
+    },
+    superlines: {
+        a: EMPTY_SUPERLINE,
+    },
+})))
+
+// KNOWN BUGS:
+//   - trimming is buggy (arrow on a,b is wrong)
+//   - trimming  O---O  loop causes problems
 
 document.getElementsByTagName("body")[0].style.background = "black"
