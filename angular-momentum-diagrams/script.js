@@ -771,6 +771,7 @@ function isEmptySuperline(superline) {
     return !superline.phase && !superline.summed && !superline.weight
 }
 
+/** Avoid using this function because it doesn't handle zero lines. */
 function mergeSuperlines(...superlines) {
     let finalSuperline = Object.assign({}, EMPTY_SUPERLINE)
     superlines.forEach(superline => {
@@ -968,14 +969,7 @@ function joinLines(line1, reverse1, line2, reverse2) {
     })
 }
 
-/** Calculate geometric information about a line. */
-function getLineInfo(diagram, lineId) {
-    const line = diagram.lines[lineId]
-    const ends = endNodeIndices(diagram.nodes, lineId)
-    let x0 = diagram.nodes[ends[0]].x
-    let y0 = diagram.nodes[ends[0]].y
-    let x1 = diagram.nodes[ends[1]].x
-    let y1 = diagram.nodes[ends[1]].y
+function getLineInfoBetween(x0, y0, x1, y1, line) {
     const xMid = (x0 + x1) / 2
     const yMid = (y0 + y1) / 2
     let dx = x1 - x0
@@ -987,7 +981,8 @@ function getLineInfo(diagram, lineId) {
     let arcHeight = line.arcHeight
     // an semiarbitrary sign used to pick a consistent side on lines even
     // when the line is reversed
-    const halfDisk = mod(line.angle, 2 * Math.PI) < Math.PI ? 1 : -1
+    const halfDisk = mod(line.angle + Math.PI / 2, 2 * Math.PI) < Math.PI
+                   ? -1 : 1
     if (singular) {
         // fudge numbers to avoid singularity
         // (epsilon can't be too small or the SVG rendering becomes jittery)
@@ -1002,7 +997,7 @@ function getLineInfo(diagram, lineId) {
         angle = line.angle
         arcHeight = arcHeight == 0.0
                   ? 50.0 * halfDisk
-                  : arcHeight
+                  : sgn(arcHeight) * clamp(50.0, Infinity, Math.abs(arcHeight))
     }
     const arc = arcInfo(lineLength, arcHeight)
     const c = (arc.radius - arcHeight) / lineLength
@@ -1031,6 +1026,17 @@ function getLineInfo(diagram, lineId) {
         arcHeight: arcHeight,
         arc: Object.assign(arc, arcEx),
     }
+}
+
+/** Calculate geometric information about a line. */
+function getLineInfo(diagram, lineId) {
+    const line = diagram.lines[lineId]
+    const ends = endNodeIndices(diagram.nodes, lineId)
+    let x0 = diagram.nodes[ends[0]].x
+    let y0 = diagram.nodes[ends[0]].y
+    let x1 = diagram.nodes[ends[1]].x
+    let y1 = diagram.nodes[ends[1]].y
+    return getLineInfoBetween(x0, y0, x1, y1, line)
 }
 
 /** Find the closest "pos" on a line. */
@@ -1325,15 +1331,8 @@ function w3jOrientation(diagram, nodeIndex) {
 
 function mergeDiagrams(diagram1, diagram2) {
     let diagram = deepClone(diagram1)
-    Object.keys(diagram2.superlines).forEach(function(superlineId) {
-        const self = diagram2.superlines[superlineId]
-        if (diagram.superlines.hasOwnProperty(superlineId)) {
-            diagram.superlines[superlineId] =
-                mergeSuperlines(diagram.superlines[superlineId], self)
-        } else {
-            diagram.superlines[superlineId] = self
-        }
-    })
+    diagram.superlines = mergeSuperlineLists(diagram1.superlines,
+                                             diagram2.superlines)
     let renames = {}
     Object.keys(diagram2.lines).forEach(function(lineId) {
         let newLineId = lineId
@@ -1360,60 +1359,40 @@ function mergeDiagrams(diagram1, diagram2) {
 }
 
 function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
-    if (diagram.nodes[terminalIndex1].type != "terminal" ||
-        diagram.nodes[terminalIndex2].type != "terminal") {
-        throw new Error("cannot join non-terminals")
+    diagram = new Diagram(diagram)
+    const terminal1 = diagram.node(terminalIndex1)
+    const terminal2 = diagram.node(terminalIndex2)
+    if (terminal1.type != "terminal" || terminal2.type != "terminal") {
+        throw "cannot join non-terminals"
     }
-    let other1 = otherNodeAndLineIndex(diagram.nodes, terminalIndex1, 0)
-    let other2 = otherNodeAndLineIndex(diagram.nodes, terminalIndex2, 0)
-    if (lexicalCmp(other1, other2, defaultCmp) > 0) {
-        // we only handle cases where LEFT < RIGHT
-        ;[terminalIndex2, terminalIndex1] = [terminalIndex1, terminalIndex2]
-        ;[other2, other1] = [other1, other2]
+    const line1 = terminal1.line(0)
+    const line2 = terminal2.line(0)
+    let newDiagram = deepClone(diagram.rawDiagram)
+    if (line1.id == line2.id) {
+        if (line1.direction != 0) {
+            return "cannot form a directed loop"
+        }
+        newDiagram.superlines[line1.superlineId].weight += 2
+    } else {
+        // TODO can we abstract out this pattern? we do this a lot
+        const combined = concatLines(line1.reverse().line, line2.line)
+        const f = lexicalCmp([line1.node(1).index, line1.lineIndex(1)],
+                             [line2.node(1).index, line2.lineIndex(1)],
+                             defaultCmp) > 0
+                ? reverseLine : identity
+        newDiagram.lines[line1.id] = f(combined.line)
+        newDiagram.superlines[line1.superlineId] = mergeSuperlines(
+            line2.superline,
+            line1.superline,
+            {phase: combined.phase})
+        line2.rawAssign(newDiagram, 1, line1.id)
+        newDiagram.superlines[line2.superlineId] = EMPTY_SUPERLINE
+        newDiagram.deltas = mergeDeltas(newDiagram.deltas, [combined.delta])
     }
-    diagram = deepClone(diagram)
-    let lineId1 = diagram.nodes[terminalIndex1].lines[0]
-    let lineId2 = diagram.nodes[terminalIndex2].lines[0]
-    if (lineId1 == lineId2) {
-        // FIXME loops are not yet implemented
-        error("Cannot join terminals sharing the same line (not yet implemented)")
-        return diagram
-    }
-
-    // merge the lines (be careful with orientation)
-    let line1 = diagram.lines[lineId1]
-    let line2 = diagram.lines[lineId2]
-    line1.angle = getLineInfo(diagram, lineId1).angle
-    line2.angle = getLineInfo(diagram, lineId2).angle
-    let joined = joinLines(line1, other1[0] > terminalIndex1,
-                           line2, terminalIndex2 > other2[0])
-    let superlineId1 = joined.line.superline
-    let superlineId2 = joined.otherSuperline
-    if (other1[0] == other2[0] && joined.line.arcHeight == 0.0) {
-        joined.line.arcHeight =
-            (getLineInfo(diagram, lineId1).lineLength
-           + getLineInfo(diagram, lineId2).lineLength) / 2
-    }
-    diagram.superlines[superlineId1] = mergeSuperlines(
-        diagram.superlines[superlineId1],
-        {phase: joined.phase})
-    diagram.lines[lineId1] = joined.line
-    delete diagram.lines[lineId2]
-
-    // join with other node
-    diagram.nodes[other2[0]].lines[other2[1]] = lineId1
-
-    // equate superlines and merge their factors
-    diagram.superlines[superlineId1] =
-        mergeSuperlines(diagram.superlines[superlineId1],
-                        diagram.superlines[superlineId2])
-    delete diagram.superlines[superlineId2]
-
-    // delete the terminal nodes
-    diagram.nodes = arrayRemoveMany(diagram.nodes,
-                                    [terminalIndex1, terminalIndex2])
-
-    return diagram
+    delete newDiagram.lines[line2.id]
+    newDiagram.nodes = arrayRemoveMany(newDiagram.nodes,
+                                       [terminal1.index, terminal2.index])
+    return new Diagram(newDiagram).removeUnusedSuperlines().rawDiagram
 }
 
 function addW1j(diagram, lineId) {
@@ -1431,13 +1410,10 @@ function addW1j(diagram, lineId) {
 }
 
 function add2j(diagram, lineId) {
-    const superlineId = diagram.lines[lineId].superline
-    return Object.freeze(Object.assign({}, diagram, {
-        superlines: Object.freeze(Object.assign({}, diagram.superlines, {
-            [superlineId]: mergeSuperlines(diagram.superlines[superlineId],
-                                           {phase: 2, summed: null})
-        }))
-    }))
+    diagram = new Diagram(diagram)
+    return diagram.substitute({}, {
+        [diagram.line(lineId).superlineId]: {phase: 2}
+    }).rawDiagram
 }
 
 function flipW3j(diagram, nodeIndex) {
@@ -1525,42 +1501,32 @@ function flipW3jRule(diagram, nodeIndex) {
         return diagram
     }
     diagram = deepClone(flipW3j(diagram, nodeIndex))
-    diagram.nodes[nodeIndex].lines.forEach(function(lineId) {
-        const superlineId = diagram.lines[lineId].superline
-        diagram.superlines[superlineId] =
-            mergeSuperlines(diagram.superlines[superlineId], {
-                phase: 1,
-                summed: null,
-                weight: 0,
-            })
-    })
+    diagram.nodes[nodeIndex].lines.forEach(lineId =>
+        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+            [diagram.lines[lineId].superline]: {phase: 1},
+        }))
     return diagram
 }
 
 function trianglePhaseRule(diagram, triangleIndex) {
     diagram = deepClone(diagram)
-    diagram.triangles[triangleIndex].forEach(function(superlineId) {
-        diagram.superlines[superlineId] =
-            mergeSuperlines(diagram.superlines[superlineId], {
-                phase: 2,
-                summed: null,
-                weight: 0,
-            })
-    })
+    diagram.nodes[nodeIndex].lines.forEach(lineId =>
+        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+            [diagram.lines[lineId].superline]: {phase: 2},
+        }))
     return diagram
 }
 
 function flipW1jRule(diagram, lineId) {
-    if (diagram.lines[lineId].direction) {
+    if (diagram.lines[lineId].superline == "0") {
+        diagram = deepClone(diagram)
+        diagram.lines[lineId].direction =
+            (diagram.lines[lineId].direction + 2) % 3 - 1
+    } else if (diagram.lines[lineId].direction) {
         diagram = deepClone(diagram)
         diagram.lines[lineId].direction *= -1
-        const superlineId = diagram.lines[lineId].superline
-        diagram.superlines[superlineId] =
-            mergeSuperlines(diagram.superlines[superlineId], {
-                phase: 2,
-                summed: null,
-                weight: 0,
-            })
+        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+            [diagram.lines[lineId].superline]: {phase: 2}})
     }
     return diagram
 }
@@ -1610,9 +1576,9 @@ function threeArrowRule(diagram, nodeIndex) {
         const line = diagram.lines[lineId]
         const canonicalized = canonicalizeLine(line)
         diagram.lines[lineId] = canonicalized.line
-        diagram.superlines[line.superline] = mergeSuperlines(
-            diagram.superlines[line.superline],
-            {phase: canonicalized.phase})
+        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+            [line.superline]: {phase: canonicalized.phase},
+        })
     })
     return diagram
 }
@@ -1716,6 +1682,10 @@ class DiagramLine {
             throw new Error(`not a valid signed line ID: ${signedId}`)
         }
         return [id, reversed]
+    }
+
+    rawAssign(rawDiagram, end, lineId) {
+        rawDiagram.nodes[this.node(end).index].lines[this.lineIndex(end)] = lineId
     }
 }
 
@@ -1889,6 +1859,9 @@ class Diagram {
         for (const superlineId of Object.keys(marked)) {
             delete superlines[superlineId]
         }
+        if (superlines["0"]) {
+            superlines["0"] = EMPTY_SUPERLINE
+        }
         return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
             superlines: superlines,
         })))
@@ -1958,6 +1931,11 @@ class Diagram {
                     throw new Error("a single internal line cannot "
                                   + "match multiple lines")
                 }
+                if (pattLine.node(0).type == "terminal"
+                    && pattLine.node(1).type == "terminal") {
+                    // this causes ambiguity and breakage
+                    throw new Error("a lone pattern line cannot be shared")
+                }
                 if (sharedLines[pattLine.id] || sharedLines[seen.id]) {
                     throw new Error("looped lines can only appear twice")
                 }
@@ -1997,21 +1975,16 @@ class Diagram {
         // ----------
 
         // (shared with other parts)
-        //
-        // note: replacement.superlines can be added here early because the only
-        // noncommutative part of the merge lies in the 'summed' attribute,
-        // which we never use elsewhere in this function
-        let superlineMerge = [rawDiagram.superlines, replacement.superlines]
+        let superlineMerge = [rawDiagram.superlines]
 
         // match superlines and adjust phases
         for (const superlineId of Object.keys(pattern.superlines)) {
             const pattSuperline = pattern.superlines[superlineId]
             const superline = rawDiagram.superlines[superlineId]
-            if (pattSuperline.summed != null
-                && superline.summed != pattSuperline.summed) {
-                throw new Error("summedness mismatch in superlines")
-            }
             if (pattSuperline.summed) {
+                if (!superline.summed) {
+                    throw new Error("expected summed superline")
+                }
                 if (pattSuperline.weight != superline.weight) {
                     throw new Error("weight of summed superline must match")
                 }
@@ -2020,8 +1993,7 @@ class Diagram {
                 }
                 if (!this.isEquallyConstrained(superlineId,
                                                replacement.deltas)) {
-                    throw new Error("constraints of summed superline "
-                                  + "must match")
+                    throw new Error("deltas of summed superline must match")
                 }
                 superlineMerge.push({[superlineId]: {summed: false}})
             }
@@ -2032,6 +2004,22 @@ class Diagram {
                 },
             })
         }
+        // forbid variable capture
+        for (const superlineId of Object.keys(replacement.superlines)) {
+            const replSuperline = replacement.superlines[superlineId]
+            if (replSuperline.summed) {
+                const pattSuperline = pattern.superlines[superlineId]
+                if (pattSuperline) {
+                    if (!pattSuperline.summed) {
+                        throw new Error("summed variable conflicts "
+                                      + "with pattern")
+                    }
+                } else if (rawDiagram.superlines[superlineId]) {
+                    throw new Error("summed variable conflicts with original")
+                }
+            }
+        }
+        superlineMerge.push(replacement.superlines)
 
         // NODES
         // -----
@@ -2491,6 +2479,55 @@ function w3jElimRule(diagram, lineId) {
     }).rawDiagram
 }
 
+function glueRule(diagram, lineId1, lineId2) {
+
+}
+
+function cutRule(diagram, lineId) {
+    diagram = new Diagram(diagram)
+    const line = diagram.line(lineId)
+    if (line1.node(0)) {} ///??
+    const line1 = line.cycNodeLine(0, 1)
+    const line2 = line.cycNodeLine(1, 1)
+    const line3 = line.cycNodeLine(0, 2)
+    const line4 = line.cycNodeLine(1, 2)
+    if (line1.superlineId != line2.superlineId
+        || line3.superlineId != line4.superlineId) {
+        return "opposing j's don't match"
+    }
+    return diagram.substitute({
+        nodes: [
+            terminalNode(line1.toString(), "a"),
+            terminalNode(line2.toString(), "b"),
+            terminalNode(line3.toString(), "c"),
+            terminalNode(line4.toString(), "d"),
+            w3jNode(line1.toString(), line3.toString(), line.toString()),
+            w3jNode(line2.toString(), line4.toString(), line.toString()),
+        ],
+        lines: {
+            [line1]: {superline: line1.superlineId, direction: 0},
+            [line2]: {superline: line2.superlineId, direction: 0},
+            [line3]: {superline: line3.superlineId, direction: 0},
+            [line4]: {superline: line4.superlineId, direction: 0},
+            [line]: {superline: line.superlineId, direction: 0},
+        },
+        superlines: {
+            [line.superlineId]: {phase: 0, weight: 2, summed: true},
+        },
+    }, {
+        nodes: [
+            terminalNode(line1.id, "a"),
+            terminalNode(line1.id, "b"),
+            terminalNode(line3.id, "c"),
+            terminalNode(line3.id, "d"),
+        ],
+        lines: {
+            [line1.id]: {superline: line1.superlineId, direction: 0},
+            [line3.id]: {superline: line3.superlineId, direction: 0},
+        },
+    }).rawDiagram
+}
+
 function deltaElimRule(diagram, entry) {
     const inferred = inferDeltas(diagram)
     const related = relatedDeltas(diagram.deltas, entry)
@@ -2504,12 +2541,6 @@ function deltaElimRule(diagram, entry) {
 
 //////////////////////////////////////////////////////////////////////////////
 // Drawing
-
-function twoJColor(diagram, lineId) {
-    const superlineId = diagram.lines[lineId].superline
-    const superline = diagram.superlines[superlineId]
-    return mod(superline.phase, 4) >= 2
-}
 
 function renderArrow(update, diagram, lineId) {
     const arrowHeadSize = 15
@@ -2552,10 +2583,6 @@ function renderArrow(update, diagram, lineId) {
                         return Object.assign({}, diagram, {lines: lines})
                     }))
                     e.stopPropagation()
-                } else if (e.buttons == 4) {
-                    update(modifyDiagram({equivalent: true}, diagram =>
-                        flipW1jRule(diagram, lineId)))
-                    e.stopPropagation()
                 } else if (e.buttons == 2 && e.ctrlKey) {
                     update(modifyDiagram({superficial: true}, diagram => {
                         let lines = Object.assign({}, diagram.lines)
@@ -2570,12 +2597,12 @@ function renderArrow(update, diagram, lineId) {
         },
         vnode("svg:circle", {
             "class": "hit",
-            r: 25,
+            r: 15,
             cx: rawPosition.x,
             cy: rawPosition.y,
         }),
         vnode("svg:use", {
-            "class": "arrow " + (twoJColor(diagram, lineId) ? "two-j " : ""),
+            "class": "arrow",
             href: "#arrowhead",
             x: -arrowHeadSize,
             y: -arrowHeadSize / 2,
@@ -2590,6 +2617,7 @@ function renderArrow(update, diagram, lineId) {
 function renderLine(update, editor, lineId) {
     const diagram = editor.snapshot.diagram
     const line = diagram.lines[lineId]
+    const superline = diagram.superlines[line.superline]
     const minTextOffset = 20
     const info = getLineInfo(diagram, lineId)
     const position = positionOnLine(info, line.textPos, 0)
@@ -2608,7 +2636,6 @@ function renderLine(update, editor, lineId) {
             + `${info.x1} ${info.y1}`
     const textX = position.x + textOffset * position.normalX
     const textY = position.y + textOffset * position.normalY
-    const twoJ = twoJColor(diagram, lineId) ? "two-j " : ""
     function onmousedown(e) {
         if (e.buttons == 1) {
             update(startDrag(e.offsetX, e.offsetY, {
@@ -2647,13 +2674,16 @@ function renderLine(update, editor, lineId) {
             e.stopPropagation()
         }
     }
-
     return vnode(
         "svg:g",
         {
             // prevent hover effects from sticking when nodes change
             [VNODE_KEY]: lineId,
             "class": "line "
+                   + (line.superline == "0" ? "zero " : "")
+                   + (superline.summed ? "summed " : "")
+                   + (superline.phase % 2 ? "one-j " : "")
+                   + (mod(superline.phase, 4) >= 2 ? "two-j " : "")
                    + ((editor.trackStart.type == "line" &&
                        editor.trackStart.lineId == lineId)
                    || (editor.trackStop.type == "line" &&
@@ -2677,7 +2707,12 @@ function renderLine(update, editor, lineId) {
             onmousedown: onmousedown,
         }),
         vnode("svg:path", {
-            "class": "fg " + twoJ,
+            "class": "fg",
+            d: d,
+            onmousedown: onmousedown,
+        }),
+        vnode("svg:path", {
+            "class": "pith",
             d: d,
             onmousedown: onmousedown,
         }),
@@ -2687,7 +2722,7 @@ function renderLine(update, editor, lineId) {
             onmousedown: onmousedown,
         }),
         vnode("svg:text", {
-            "class": "label " + twoJ,
+            "class": "label",
             x: textX,
             y: textY,
             onmousedown: function(e) {
@@ -2714,7 +2749,7 @@ function renderLine(update, editor, lineId) {
                     e.stopPropagation()
                 }
             },
-        }, line.superline),
+        }, line.superline), // T??
         ...renderArrow(update, diagram, lineId),
     )
 }
@@ -2736,11 +2771,15 @@ function renderNode(update, editor, nodeIndex, frozen) {
             const orientation = orientationInfo.orientation > 0 ? "flipped " : ""
             gChildren.push(vnode("svg:circle", {
                 "class": "bg " + orientation,
-                r: 22,
+                r: 20,
             }))
             gChildren.push(vnode("svg:circle", {
                 "class": "fg " + orientation,
                 r: 18,
+            }))
+            gChildren.push(vnode("svg:circle", {
+                "class": "hit " + orientation,
+                r: 25,
             }))
             gChildren.push(vnode("svg:use", {
                 "class": "arrow " + orientation,
@@ -2758,13 +2797,21 @@ function renderNode(update, editor, nodeIndex, frozen) {
         const frozenClass = frozen ? "frozen " : ""
         gChildren.push(vnode("svg:circle", {
             "class": "fg " + frozenClass,
-            r: 10,
+            r: 8,
+        }))
+        gChildren.push(vnode("svg:circle", {
+            "class": "hit",
+            r: 15,
         }))
 
     } else {
         gChildren.push(vnode("svg:circle", {
             "class": "fg",
-            r: 22,
+            r: 20,
+        }))
+        gChildren.push(vnode("svg:circle", {
+            "class": "hit",
+            r: 25,
         }))
         gChildren.push(vnode("svg:text", {
             "class": "label",
@@ -2805,6 +2852,9 @@ function renderNode(update, editor, nodeIndex, frozen) {
                 ))
                 e.stopPropagation()
             } else if (e.buttons == 2) {
+                if (node.type == "terminal") {
+                    return
+                }
                 if (e.shiftKey) { // do it twice!
                     update(modifyDiagram({equivalent: true}, diagram =>
                         flipW3jRule(
@@ -2816,6 +2866,9 @@ function renderNode(update, editor, nodeIndex, frozen) {
                 }
                 e.stopPropagation()
             } else if (e.buttons == 4) {
+                if (node.type == "terminal") {
+                    return
+                }
                 update(modifyDiagram({equivalent: true}, diagram =>
                     threeArrowRule(diagram, nodeIndex)))
                 e.stopPropagation()
@@ -3239,6 +3292,7 @@ function renderEditor(update, editor) {
 //   equivalent
 //   superficial (implies equivalent)
 //   toggleFreeze (implies superficial)
+//   clearHover
 function modifyDiagram(flags, diagramTransform) {
     return editor => {
         const equivalent = flags.equivalent
@@ -3259,6 +3313,9 @@ function modifyDiagram(flags, diagramTransform) {
         })
         if (!flags.transient) {
             saveEditor(editor)
+        }
+        if (flags.clearHover) {
+            setHover({type: null})(editor)
         }
         const superficial = flags.superficial || flags.toggleFreeze
         editor.staleEquation = !superficial || editor.staleEquation
@@ -3313,53 +3370,59 @@ function updateTrack(event) {
     }
 }
 
-function clearTrack(editor, event) {
-    if (editor.trackStop.xy != null) {
+function finishTrack(editor, event) {
+    if (editor.trackStop.xy == null ||
+        Math.pow(editor.trackStart.xy[0] - editor.trackStop.xy[0], 2) +
+        Math.pow(editor.trackStart.xy[1] - editor.trackStop.xy[1], 2) < 10) {
+        if (editor.trackStart.type == "line") {
+            modifyDiagram({equivalent: true}, diagram =>
+                flipW1jRule(diagram, editor.trackStart.lineId))(editor)
+            return
+        }
+    } else {
         const stopXy = toSvgCoords(editor.trackStop.xy)
         const startXy = toSvgCoords(editor.trackStart.xy)
         if (editor.trackType == "track1") {
             if (editor.trackStop.type == "line") {
                 if (editor.trackStart.lineId == editor.trackStop.lineId) {
-                    modifyDiagram({equivalent: true}, diagram =>
+                    modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         w3jElimRule(diagram, editor.trackStart.lineId))(editor)
-                    setHover({type: null})(editor)
                 } else {
-                    modifyDiagram({equivalent: true}, diagram =>
+                    modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         glueRule(diagram, editor.trackStart.lineId,
                                  editor.trackStop.lineId))(editor)
-                    setHover({type: null})(editor)
                 }
             } else if (editor.trackStop.type == "node") {
-                modifyDiagram({equivalent: true}, diagram =>
+                modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                     loopElimRule(diagram,
                                  editor.trackStart.lineId,
                                  editor.trackStop.nodeIndex))(editor)
-                setHover({type: null})(editor)
             }
         } else if (editor.trackType == "track2") {
             if (editor.trackStop.type == "line") {
                 if (editor.trackStart.lineId == editor.trackStop.lineId) {
-                    modifyDiagram({equivalent: true}, diagram =>
+                    modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         cutRule(diagram, editor.trackStart.lineId))(editor)
-                    setHover({type: null})(editor)
                 } else {
-                    modifyDiagram({equivalent: true}, diagram =>
+                    modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         w3jIntroRule(diagram,
                                      editor.trackStart.lineId,
                                      editor.trackStop.lineId,
                                      event.shiftKey))(editor)
-                    setHover({type: null})(editor)
                 }
             } else if (editor.trackStart.type == "line") {
-                modifyDiagram({equivalent: true}, diagram =>
+                modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                     loopIntroRule(diagram,
                                   editor.trackStart.lineId,
                                   startXy,
                                   stopXy))(editor)
-                setHover({type: null})(editor)
             }
         }
     }
+}
+
+function clearTrack(editor, event) {
+    finishTrack(editor, event)
     editor.trackType = null
     editor.trackStart = {type: null, xy: null}
     editor.trackStop = {type: null, xy: null}
@@ -3476,8 +3539,7 @@ function keyDown(e, editor) {
             if (!(nearest.length == 2 &&
                   diagram.nodes[nearest[0]].type == "terminal" &&
                   diagram.nodes[nearest[1]].type == "terminal")) {
-                error("no nearby terminals found")
-                return diagram
+                return "no nearby terminals found"
             } else {
                 return joinTerminals(diagram, nearest[0], nearest[1])
             }

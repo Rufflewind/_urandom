@@ -1,3 +1,11 @@
+* {
+    --two-j-color: #bb52bd;
+    --zero-color: #a89a9f;
+    --hover-color: rgba(227, 189, 46, 0.2);
+    --w3j-color: #489aed;
+    --w3j-flipped-color: #f06b15;
+}
+
 html, body {
     height: 100vh;
     margin: 0;
@@ -14,7 +22,7 @@ h1, p {
 }
 
 .warning {
-    color: red;
+    color: #f83a30;
 }
 
 #controls {
@@ -31,12 +39,16 @@ h1, p {
 
 #controls a:link,
 #controls a:visited {
-    color: blue;
+    color: #4a94eb;
     text-decoration: none;
 }
 
-#freeze.active {
-    background: #81d930;
+#controls > #freeze {
+    background: #c25625;
+}
+
+#controls > #freeze.active {
+    background: #59e146;
 }
 
 main, #middle-wrapper {
@@ -118,7 +130,7 @@ main,
 }
 
 #tableau .two-j {
-    color: #ac53b3;
+    color: var(--two-j-color);
     font-weight: bold;
 }
 
@@ -146,7 +158,22 @@ main,
 }
 
 #tableau-wrapper .zero {
-    color: #2966c6;
+    color: var(--zero-color);
+    font-weight: bold;
+}
+
+g.line.zero path.fg {
+    stroke: var(--zero-color);
+    font-weight: bold;
+}
+
+g.line.zero text.label {
+    fill: var(--zero-color);
+    font-weight: bold;
+}
+
+g.line.zero use.arrow {
+    fill: var(--zero-color);
     font-weight: bold;
 }
 
@@ -173,27 +200,35 @@ g.line path.hit {
 }
 
 g.line:hover path.hit {
-    stroke: rgba(227, 189, 46, 0.2);
+    stroke: var(--hover-color);
+}
+
+g.arrow:hover circle.hit,
+g.node:hover circle.hit {
+    fill: var(--hover-color);
 }
 
 g.line path.fg {
     stroke-width: 2;
-}
-
-g.line path.fg {
     stroke: #051308;
 }
 
-g.line:hover path.fg {
-    stroke: #737a74;
+g.line path.pith {
+    fill: none;
+    stroke: white;
+    stroke-width: 0;
 }
 
-g.line path.fg.two-j {
-    stroke: #ac53b3;
+g.line.summed path.fg {
+    stroke-width: 6;
 }
 
-g.line:hover path.fg.two-j {
-    stroke: #de9dc1;
+g.line.summed path.pith {
+    stroke-width: 2;
+}
+
+g.line.two-j path.fg {
+    stroke: var(--two-j-color);
 }
 
 g.line text.label {
@@ -203,27 +238,17 @@ g.line text.label {
     font-size: large;
 }
 
-g.line:hover text.label,
-g.line:hover use.arrow {
-    fill: #737a74;
+g.line.one-j path.fg {
+    stroke-dasharray: 2 2;
 }
 
-g.line text.label.two-j,
-g.line use.arrow.two-j {
-    fill: #ac53b3;
-}
-
-g.line:hover text.label.two-j,
-g.line:hover use.arrow.two-j {
-    fill: #de9dc1;
+g.line.two-j text.label,
+g.line.two-j use.arrow {
+    fill: var(--two-j-color);
 }
 
 g.arrow circle.hit {
     fill: transparent;
-}
-
-g.arrow:hover circle.hit {
-    fill: rgba(227, 189, 46, 0.2);
 }
 
 g.node * {
@@ -245,19 +270,11 @@ g.node text.label {
 }
 
 g.node.w3j circle.fg {
-    fill: #2eb0ba;
-}
-
-g.node.w3j:hover circle.fg {
-    fill: #83e3ea;
+    fill: var(--w3j-color);
 }
 
 g.node.w3j circle.fg.flipped {
-    fill: #d98b7c;
-}
-
-g.node.w3j:hover circle.fg.flipped {
-    fill: #edbfb6;
+    fill: var(--w3j-flipped-color);
 }
 
 g.node.w3j use.arrow {
