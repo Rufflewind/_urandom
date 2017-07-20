@@ -499,6 +499,10 @@ function newSparseVectorType(eq, zero) {
             }
         }
 
+        modify(key, f) {
+            this.set(key, f(this.get(key)))
+        }
+
         delete(key) {
             this.data.delete(key)
         }
@@ -572,6 +576,10 @@ function newSparseMatrixType(SparseVector) {
             this.row(i).set(j, x)
         }
 
+        modify(i, j, f) {
+            this.set(i, j, f(this.get(i, j)))
+        }
+
         deleteRow(i) {
             this.data.delete(i)
         }
@@ -617,6 +625,11 @@ function sparseGaussElim(field, matrix, vector) {
     let unconstrained = []
     let pivots = []
 
+    // we care about the keys in vector too!
+    for (const i of vector.keys()) {
+        is.add(i)
+    }
+
     // perform Gaussian elimination to obtain row echelon form;
     // note that we don't bother changing the pivot column to 1 and 0's
     // as we won't really need them afterward
@@ -639,20 +652,18 @@ function sparseGaussElim(field, matrix, vector) {
         is.delete(ip)
         const invXp = field.divide(field.ONE, xp)
         for (const j of js) {
-            matrix.set(ip, j, field.multiply(invXp, matrix.get(ip, j)))
+            matrix.modify(ip, j, x => field.multiply(invXp, x))
         }
-        vector.set(ip, field.multiply(invXp, vector.get(ip)))
+        vector.modify(ip, x => field.multiply(invXp, x))
         for (const i of is) {
             const c = matrix.get(i, jp)
             if (!field.eq(c, field.ZERO)) {
                 for (const j of js) {
-                    matrix.set(i, j, field.subtract(
-                        matrix.get(i, j),
-                        field.multiply(c, matrix.get(ip, j))))
+                    matrix.modify(i, j, x => field.subtract(
+                        x, field.multiply(c, matrix.get(ip, j))))
                 }
-                vector.set(i, field.subtract(
-                    vector.get(i),
-                    field.multiply(c, vector.get(ip))))
+                vector.modify(i, x => field.subtract(
+                    x, field.multiply(c, vector.get(ip))))
             }
         }
     }
@@ -2805,6 +2816,7 @@ function w3jElimRule(diagram, lineId) {
 
 function getAmbientDirections(line0) {
     let lines = new Map()
+    let nodes = new Set()
     let matrix = new RealSparseMatrix()
     let offset = new RealSparseVector()
     let candidates = [line0]
@@ -2827,9 +2839,12 @@ function getAmbientDirections(line0) {
         offset.set(line.id, line.rawLine.direction)
         const line1 = line.cycNodeLine(1, 1)
         const line2 = line.cycNodeLine(1, 2)
-        matrix.set(line.id, node.index, line.reversed ? 1 : -1)
-        matrix.set(line1.id, node.index, line1.reversed ? -1 : 1)
-        matrix.set(line2.id, node.index, line2.reversed ? -1 : 1)
+        if (!nodes.has(node.index)) {
+            matrix.modify(line.id, node.index, x => x + (line.reversed ? 1 : -1))
+            matrix.modify(line1.id, node.index, x => x + (line1.reversed ? -1 : 1))
+            matrix.modify(line2.id, node.index, x => x + (line2.reversed ? -1 : 1))
+        }
+        nodes.add(node.index)
         candidates.push(line1, line2)
     }
     // don't care about line0 because it's a zero line
@@ -2840,7 +2855,9 @@ function getAmbientDirections(line0) {
     for (const lineId of lines.keys()) {
         target.set(lineId, 1 - Math.abs(offset.get(lineId)))
     }
-    const result = sparseGaussElim(GF2_FIELD, matrix.map(Math.abs), target)
+    const result = sparseGaussElim(GF2_FIELD,
+                                   matrix.map(x => mod(x, 2)),
+                                   target)
     if (!result) {
         return "diagram is non-orientable"
     }
@@ -3622,6 +3639,12 @@ function renderEditor(update, editor) {
                 onkeydown: e => update(keyDown.bind(null, e)),
                 onmousemove: e => update(mouseMove(e)),
                 onmouseup: e => update(mouseUp(e)),
+            },
+        },
+        {
+            element: document.getElementsByTagName("body")[0],
+            attributes: {
+                "class": editor.snapshot.frozen ? "frozen" : "",
             },
         },
         {

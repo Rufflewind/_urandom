@@ -139,6 +139,10 @@ main,
     background: #f9f9f9;
 }
 
+body.frozen #help {
+    background: #c2fa9e;
+}
+
 #equation {
     background: #f9f9f9;
     box-sizing: border-box;
@@ -217,8 +221,7 @@ g.line path.fg {
 
 g.line path.pith {
     fill: none;
-    stroke: white;
-    stroke-width: 0;
+    stroke: none;
 }
 
 g.line.summed path.fg {
@@ -226,6 +229,7 @@ g.line.summed path.fg {
 }
 
 g.line.summed path.pith {
+    stroke: white;
     stroke-width: 2;
 }
 
