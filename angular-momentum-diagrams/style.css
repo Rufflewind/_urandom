@@ -104,6 +104,7 @@ main,
 
 #tableau {
     margin: 2px 6px;
+    white-space: nowrap;
 }
 
 #tableau .summed {
@@ -153,6 +154,7 @@ main,
 
 #diagram,
 #tableau {
+    -moz-user-select: none;
     user-select: none;
     cursor: default;
 }

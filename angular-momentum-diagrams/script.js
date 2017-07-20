@@ -7,6 +7,10 @@ function identity(x) {
     return x
 }
 
+function defaultEq(x, y) {
+    return x == y
+}
+
 function defaultCmp(x, y) {
     if (x < y) {
         return -1
@@ -84,6 +88,10 @@ function round(dx, x) {
         return x
     }
     return x + dx / 2 - mod(x + dx / 2, dx)
+}
+
+function bitXor(x, y) {
+    return x ^ y
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -187,6 +195,15 @@ function objectId(obj) {
         idMap.set(obj, ++currentId)
     }
     return idMap.get(obj)
+}
+
+function getOr(map, key, getDefault) {
+    if (!map.has(key)) {
+        const x = getDefault()
+        map.set(key, x)
+        return x
+    }
+    return map.get(key)
 }
 
 function deduplicateObject(obj, image) {
@@ -389,6 +406,261 @@ function cardinalSpline(xs, ys, smoothness) {
         prevSecantY = secantY
     }
     return d
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Algebra
+
+/** Galois field of order 2. */
+const REAL_FIELD = {
+    ZERO: 0,
+    ONE: 1,
+    add: (x, y) => x + y,
+    subtract: (x, y) => x - y,
+    multiply: (x, y) => x * y,
+    divide: (x, y) => {
+        if (!y) {
+            throw new Error("division by zero")
+        }
+        return x / y
+    },
+    eq: defaultEq,
+}
+
+/** Galois field of order 2. */
+const GF2_FIELD = Object.assign({}, REAL_FIELD, {
+    add: bitXor,
+    subtract: bitXor,
+})
+
+function newSparseVectorType(eq, zero) {
+    eq = eq || defaultEq
+    zero = zero === undefined ? 0 : zero
+    return class SparseVector {
+        constructor(iterable) {
+            this.data = new Map()
+            if (iterable) {
+                for (const [k, v] of iterable) {
+                    this.set(k, v)
+                }
+            }
+        }
+
+        copy() {
+            return new SparseVector(this)
+        }
+
+        [Symbol.iterator]() {
+            return this.data.entries()
+        }
+
+        keys() {
+            return this.data.keys()
+        }
+
+        get(key) {
+            const data = this.data
+            return data.has(key) ? data.get(key) : zero
+        }
+
+        set(key, value) {
+            if (eq(value, zero)) {
+                this.delete(key)
+            } else {
+                this.data.set(key, value)
+            }
+        }
+
+        delete(key) {
+            this.data.delete(key)
+        }
+
+        map(f) {
+            return new SparseVector(map(([k, x]) => [k, f(x, k)], this))
+        }
+
+        toTable(keys) {
+            keys = keys || this.keys()
+            let t = {}
+            for (const k of keys) {
+                t[k] = this.get(k)
+            }
+            return t
+        }
+    }
+}
+
+const RealSparseVector = newSparseVectorType()
+
+function newSparseMatrixType(SparseVector) {
+    SparseVector = SparseVector || RealSparseVector
+    return class SparseMatrix {
+        constructor(iterable) {
+            this.data = new Map()
+            if (iterable) {
+                for (const [i, j, x] of iterable) {
+                    this.set(i, j, x)
+                }
+            }
+        }
+
+        copy() {
+            return new SparseMatrix(this)
+        }
+
+        * [Symbol.iterator]() {
+            for (const [i, row] of this.rows()) {
+                yield* map(([j, x]) => [i, j, x], row)
+            }
+        }
+
+        rows() {
+            return map(i => [i, this.row(i)], this.data.keys())
+        }
+
+        row(i) {
+            return getOr(this.data, i, () => new SparseVector())
+        }
+
+        rowKeys() {
+            return this.data.keys()
+        }
+
+        colKeys() {
+            let js = new Set()
+            for (const row of this.data.values()) {
+                for (const j of row.keys()) {
+                    js.add(j)
+                }
+            }
+            return js
+        }
+
+        get(i, j) {
+            return this.row(i).get(j)
+        }
+
+        set(i, j, x) {
+            this.row(i).set(j, x)
+        }
+
+        deleteRow(i) {
+            this.data.delete(i)
+        }
+
+        map(f) {
+            return new SparseMatrix(map(([i, j, x]) => [i, j, f(x, j, i)], this))
+        }
+
+        toTable(rowKeys, colKeys) {
+            rowKeys = rowKeys || this.rowKeys()
+            colKeys = colKeys || Array.from(this.colKeys())
+            let t = {}
+            for (const i of rowKeys) {
+                t[i] = this.row(i).toTable(colKeys)
+            }
+            return t
+        }
+    }
+}
+
+const RealSparseMatrix = newSparseMatrixType()
+
+function sparseMatrixVectorMultiply(rng, matrix, vector) {
+    let r = new vector.constructor()
+    for (const [i, row] of matrix.rows()) {
+        let s = rng.ZERO
+        for (const [j, x] of row) {
+            s = rng.add(s, rng.multiply(row.get(j), vector.get(j)))
+        }
+        r.set(i, s)
+    }
+    return r
+}
+
+/** Sparse Gaussian elimination over an arbitrary field. */
+function sparseGaussElim(field, matrix, vector) {
+    // we are going to seriously mangle these
+    matrix = matrix.copy()
+    vector = vector.copy()
+
+    let is = new Set(matrix.rowKeys())
+    let js = Array.from(matrix.colKeys()).reverse()
+    let unconstrained = []
+    let pivots = []
+
+    // perform Gaussian elimination to obtain row echelon form;
+    // note that we don't bother changing the pivot column to 1 and 0's
+    // as we won't really need them afterward
+    while (js.length) {
+        const jp = js.pop()
+        let ip = null
+        let xp
+        for (const i of is) {
+            xp = matrix.get(i, jp)
+            if (!field.eq(xp, field.ZERO)) {
+                ip = i
+                break
+            }
+        }
+        if (ip == null) {
+            unconstrained.push(jp)
+            continue
+        }
+        pivots.push([ip, jp])
+        is.delete(ip)
+        const invXp = field.divide(field.ONE, xp)
+        for (const j of js) {
+            matrix.set(ip, j, field.multiply(invXp, matrix.get(ip, j)))
+        }
+        vector.set(ip, field.multiply(invXp, vector.get(ip)))
+        for (const i of is) {
+            const c = matrix.get(i, jp)
+            if (!field.eq(c, field.ZERO)) {
+                for (const j of js) {
+                    matrix.set(i, j, field.subtract(
+                        matrix.get(i, j),
+                        field.multiply(c, matrix.get(ip, j))))
+                }
+                vector.set(i, field.subtract(
+                    vector.get(i),
+                    field.multiply(c, vector.get(ip))))
+            }
+        }
+    }
+
+    // check for consistency
+    for (const i of is) {
+        if (!field.eq(vector.get(i), field.ZERO)) {
+            return null // no solution
+        }
+    }
+
+    let solution = new vector.constructor()
+    for (const j of js) {
+        solution.set(j, field.ZERO)
+    }
+    for (const j of unconstrained) {
+        solution.set(j, field.ZERO) // arbitrarily pick zero
+    }
+
+    // back substitution
+    pivots.reverse()
+    for (const [u, [i, k]] of pivots.entries()) {
+        let s = vector.get(i)
+        for (const [v, [_, j]] of pivots.entries()) {
+            if (v >= u) {
+                break
+            }
+            s = field.subtract(s, matrix.get(i, j) * solution.get(j))
+        }
+        solution.set(k, s)
+    }
+
+    return {
+        solution: solution,
+        unconstrained: unconstrained,
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -742,7 +1014,7 @@ function ensureSuperline(superline) {
 }
 
 /** Increment the numeric suffix of a string by one.  If there is no suffix,
-    `1` is appended. */
+   `1` is appended. */
 function newLabel(label) {
     const match = /^([\s\S]*?)(\d*)$/.exec(label)
     return match[1] + (Number(match[2]) + 1).toString()
@@ -873,6 +1145,10 @@ function reverseLine(line) {
     return Object.freeze(line)
 }
 
+function isLineDirectable(line) {
+    return line.superline == "0" || mod(line.direction, 2) == 1
+}
+
 function mergeDirections(...directions) {
     return mod(sum(directions) + 1, 4) - 1
 }
@@ -950,11 +1226,15 @@ function concatLines(...lines) {
 }
 
 function canonicalizeLine(line) {
+    let direction = line.direction % 2
+    let phase = mod(Math.trunc(line.direction / 2), 2) * 2
+    if (line.superline == "0") {
+        direction = 0
+        phase = 0
+    }
     return {
-        line: Object.freeze(Object.assign({}, line, {
-            direction: line.direction % 2,
-        })),
-        phase: mod(Math.trunc(line.direction / 2), 2) * 2,
+        line: Object.freeze(Object.assign({}, line, {direction: direction})),
+        phase: phase,
     }
 }
 
@@ -1067,7 +1347,7 @@ function findPosOnLine(lineInfo, x, y) {
 }
 
 /** Translate from a relative "pos" to absolute (x, y) coordinates.  `shift`
-    specifies an extra shift in absolute coordinates along the line. */
+ * specifies an extra shift in absolute coordinates along the line. */
 function positionOnLine(lineInfo, pos, shift) {
     const arc = lineInfo.arc
     if (lineInfo.arcHeight == 0.0) {
@@ -1584,7 +1864,7 @@ function threeArrowRule(diagram, nodeIndex) {
 }
 
 /** @returns {Object<lineId, [nodeIndex1, lineIndex1,
-  *                           nodeIndex2, lineIndex2]>} */
+ *                            nodeIndex2, lineIndex2]>} */
 function getLineEnds(diagram) {
     let lineEnds = {}
     diagram.nodes.forEach((node, nodeIndex) => {
@@ -1982,19 +2262,23 @@ class Diagram {
             const pattSuperline = pattern.superlines[superlineId]
             const superline = rawDiagram.superlines[superlineId]
             if (pattSuperline.summed) {
-                if (!superline.summed) {
-                    throw new Error("expected summed superline")
+                if (superlineId != "0") {
+                    if (!superline.summed) {
+                        throw new Error("expected summed superline")
+                    }
+                    if (pattSuperline.weight != superline.weight) {
+                        throw new Error("weight of summed superline must match")
+                    }
+                    if (pattSuperline.phase != superline.phase) {
+                        throw new Error("phase of summed superline must match")
+                    }
+                    if (!this.isEquallyConstrained(superlineId,
+                                                   replacement.deltas)) {
+                        throw new Error("deltas of summed superline must match")
+                    }
                 }
-                if (pattSuperline.weight != superline.weight) {
-                    throw new Error("weight of summed superline must match")
-                }
-                if (pattSuperline.phase != superline.phase) {
-                    throw new Error("phase of summed superline must match")
-                }
-                if (!this.isEquallyConstrained(superlineId,
-                                               replacement.deltas)) {
-                    throw new Error("deltas of summed superline must match")
-                }
+                // FIXME the substituted lines associated with a summed superline must appear
+                // the same number of times!
                 superlineMerge.push({[superlineId]: {summed: false}})
             }
             superlineMerge.push({
@@ -2227,7 +2511,7 @@ class Diagram {
         const newNodes = Array.prototype.concat(
             replacement.nodes.filter((node, nodeIndex) =>
                 node.type == "terminal"
-                && !pattDiagram.terminal(node.variable)),
+                                                     && !pattDiagram.terminal(node.variable)),
             arrayRemoveMany(
                 nodes,
                 Array.from(
@@ -2273,7 +2557,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     if (typeof loop != "object") {
         return loop
     }
-    if (loop.loopLine.direction == 0) {
+    if (!isLineDirectable(loop.loopLine)) {
         return "loop must be directed"
     }
     const otherNode = loop.cutLine.node(1)
@@ -2287,7 +2571,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     const lc = loop.cutLine
     const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
     const la = loop.cutLine.cycNodeLine(1, 2).reverse()
-    if (la.id == lb.id && la.direction == 0) {
+    if (la.id == lb.id && !isLineDirectable(la)) {
         return "other loop must be directed too"
     }
     const md = ld.toString()
@@ -2368,7 +2652,7 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
     let line2 = diagram.line(lineId2)
     if (((line1.node(1).rawNode.x - line1.node(0).rawNode.x)
         * (line2.node(1).rawNode.x - line2.node(0).rawNode.x)
-        + (line1.node(1).rawNode.y - line1.node(0).rawNode.y)
+       + (line1.node(1).rawNode.y - line1.node(0).rawNode.y)
         * (line2.node(1).rawNode.y - line2.node(0).rawNode.y) < 0)
         != Boolean(reversed)) {
         line2 = line2.reverse()
@@ -2479,53 +2763,90 @@ function w3jElimRule(diagram, lineId) {
     }).rawDiagram
 }
 
-function glueRule(diagram, lineId1, lineId2) {
-
+function getAmbientDirections(line0) {
+    let lines = new Map()
+    let matrix = new RealSparseMatrix()
+    let offset = new RealSparseVector()
+    let candidates = [line0]
+    while (candidates.length > 0) {
+        const line = candidates.pop()
+        if (lines.has(line.id)) {
+            if (line.id == line0.id && line.reversed == line0.reversed) {
+                return "subdiagram must be isolated"
+            }
+            continue
+        }
+        const node = line.node(1)
+        if (node.type == "terminal") {
+            return "subdiagram must be closed"
+        }
+        if (node.type != "w3j") {
+            return "subdiagram must contain only 3-jm symbols"
+        }
+        lines.set(line.id, lines)
+        offset.set(line.id, line.rawLine.direction)
+        const line1 = line.cycNodeLine(1, 1)
+        const line2 = line.cycNodeLine(1, 2)
+        matrix.set(line.id, node.index, line.reversed ? 1 : -1)
+        matrix.set(line1.id, node.index, line1.reversed ? -1 : 1)
+        matrix.set(line2.id, node.index, line2.reversed ? -1 : 1)
+        candidates.push(line1, line2)
+    }
+    // don't care about line0 because it's a zero line
+    lines.delete(line0.id)
+    offset.delete(line0.id)
+    matrix.deleteRow(line0.id)
+    const target = new RealSparseVector()
+    for (const lineId of lines.keys()) {
+        target.set(lineId, 1 - Math.abs(offset.get(lineId)))
+    }
+    const result = sparseGaussElim(GF2_FIELD, matrix.map(Math.abs), target)
+    if (!result) {
+        return "diagram is non-orientable"
+    }
+    const ambient = sparseMatrixVectorMultiply(REAL_FIELD, matrix, result.solution)
+    return ambient
 }
 
-function cutRule(diagram, lineId) {
+function cutRule(diagram, lineId, xy1, xy2) {
     diagram = new Diagram(diagram)
     const line = diagram.line(lineId)
-    if (line1.node(0)) {} ///??
-    const line1 = line.cycNodeLine(0, 1)
-    const line2 = line.cycNodeLine(1, 1)
-    const line3 = line.cycNodeLine(0, 2)
-    const line4 = line.cycNodeLine(1, 2)
-    if (line1.superlineId != line2.superlineId
-        || line3.superlineId != line4.superlineId) {
-        return "opposing j's don't match"
+    const ambient1 = getAmbientDirections(line)
+    const ambient2 = getAmbientDirections(line.reverse())
+    if (typeof ambient1 == "string"
+        && typeof ambient2 == "string") {
+        return ambient1
     }
     return diagram.substitute({
         nodes: [
-            terminalNode(line1.toString(), "a"),
-            terminalNode(line2.toString(), "b"),
-            terminalNode(line3.toString(), "c"),
-            terminalNode(line4.toString(), "d"),
-            w3jNode(line1.toString(), line3.toString(), line.toString()),
-            w3jNode(line2.toString(), line4.toString(), line.toString()),
+            terminalNode(line.toString(), "a"),
+            terminalNode(line.toString(), "b"),
         ],
         lines: {
-            [line1]: {superline: line1.superlineId, direction: 0},
-            [line2]: {superline: line2.superlineId, direction: 0},
-            [line3]: {superline: line3.superlineId, direction: 0},
-            [line4]: {superline: line4.superlineId, direction: 0},
             [line]: {superline: line.superlineId, direction: 0},
-        },
-        superlines: {
-            [line.superlineId]: {phase: 0, weight: 2, summed: true},
         },
     }, {
         nodes: [
-            terminalNode(line1.id, "a"),
-            terminalNode(line1.id, "b"),
-            terminalNode(line3.id, "c"),
-            terminalNode(line3.id, "d"),
+            terminalNode("$1", "a"),
+            terminalNode("$2", "b"),
+            w3jNode("$1", "$3", "$3", xy1[0], xy1[1]),
+            w3jNode("$2", "$4", "$4", xy2[0], xy2[1]),
         ],
         lines: {
-            [line1.id]: {superline: line1.superlineId, direction: 0},
-            [line3.id]: {superline: line3.superlineId, direction: 0},
+            $1: {superline: "0", direction: 0},
+            $2: {superline: "0", direction: 0},
+            $3: {superline: "0", direction: +1},
+            $4: {superline: "0", direction: +1},
         },
+        deltas: [
+            ["0", line.superlineId],
+        ],
     }).rawDiagram
+}
+
+function glueRule(diagram, lineId1, lineId2) {
+    throw "NOT YET IMPLEMENTED"
+    return diagram
 }
 
 function deltaElimRule(diagram, entry) {
@@ -2637,8 +2958,9 @@ function renderLine(update, editor, lineId) {
     const textX = position.x + textOffset * position.normalX
     const textY = position.y + textOffset * position.normalY
     function onmousedown(e) {
+        const [x, y] = toSvgCoords([e.clientX, e.clientY])
         if (e.buttons == 1) {
-            update(startDrag(e.offsetX, e.offsetY, {
+            update(startDrag(x, y, {
                 superficial: true,
             }, (diagram, x, y, snap) => {
                 let change
@@ -2759,9 +3081,9 @@ function renderNode(update, editor, nodeIndex, frozen) {
     const node = diagram.nodes[nodeIndex]
     let gChildren = [vnode("svg:title", {},
                            node.type == "w3j"
-                         ? `Wigner[${node.lines.join(" ")}]`
+                         ? `{${node.lines.join(" ")}} #${nodeIndex}`
                          : node.type == "terminal"
-                         ? `m[${node.variable}]`
+                         ? `m[${node.variable}] #${nodeIndex}`
                          : node.type)]
 
     if (node.type == "w3j") {
@@ -3402,7 +3724,8 @@ function finishTrack(editor, event) {
             if (editor.trackStop.type == "line") {
                 if (editor.trackStart.lineId == editor.trackStop.lineId) {
                     modifyDiagram({equivalent: true, clearHover: true}, diagram =>
-                        cutRule(diagram, editor.trackStart.lineId))(editor)
+                        cutRule(diagram, editor.trackStart.lineId,
+                                startXy, stopXy))(editor)
                 } else {
                     modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         w3jIntroRule(diagram,
