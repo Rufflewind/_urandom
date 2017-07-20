@@ -3799,8 +3799,10 @@ function renderEditor(update, editor) {
                 onmousedown: e => {
                     if (e.buttons == 2) {
                         update(startTrack(e, "track1"))
+                        e.stopPropagation()
                     } else if (e.buttons == 4) {
                         update(startTrack(e, "track2"))
+                        e.stopPropagation()
                     }
                 },
             },
