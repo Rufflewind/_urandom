@@ -1534,9 +1534,6 @@ const EMPTY_DIAGRAM = Object.freeze({
 
     // each entry is an array of j's that are equal to each other
     deltas: Object.freeze([]),
-
-    // each entry is an array of the three j's in ascending order
-    triangles: Object.freeze([]),
 })
 
 function ensureDiagram(diagram) {
@@ -1823,15 +1820,6 @@ function flipW3jRule(diagram, nodeIndex) {
     diagram.nodes[nodeIndex].lines.forEach(lineId =>
         diagram.superlines = mergeSuperlineLists(diagram.superlines, {
             [diagram.lines[lineId].superline]: {phase: 1},
-        }))
-    return diagram
-}
-
-function trianglePhaseRule(diagram, triangleIndex) {
-    diagram = deepClone(diagram)
-    diagram.nodes[nodeIndex].lines.forEach(lineId =>
-        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
-            [diagram.lines[lineId].superline]: {phase: 2},
         }))
     return diagram
 }
@@ -3345,16 +3333,6 @@ function renderJTableau(update, superlines) {
     })
 }
 
-function renderTriangleTableau(update, triangles) {
-    return triangles.map((triangle, triangleIndex) => vnode("li", {
-        onmousedown: function(e) {
-            update(modifyDiagram({equivalent: true}, diagram =>
-                trianglePhaseRule(diagram, triangleIndex)))
-            e.stopPropagation()
-        },
-    }, "{" + triangle.join(" ") + "}"))
-}
-
 function renderDeltaTableau(update, deltas) {
     return deltas.map(delta =>
         vnode("li", {},
@@ -3537,11 +3515,6 @@ function renderEquation(diagram, container) {
                  .map(j => `\\delta_{${j0} ${renderVariable("j", j)}}`)
                  .join(" ")
     }).join(" ")
-    const triangles = diagram.triangles.map(js =>
-        "\\begin{Bmatrix}"
-      + js.map(j => renderVariable("j", j)).join(" & ")
-      + "\\end{Bmatrix}"
-    ).join(" ")
     container.textContent = `\\[${summedVarsStr} ${jDeltas} ${mDeltasStr} `
                           + `${weights} ${phasesStr} ${s}\\]`
     MathJax.Hub.Queue(["Typeset", MathJax.Hub])
@@ -3687,11 +3660,6 @@ function renderEditor(update, editor) {
         {
             element: document.getElementById("tableau-body"),
             children: renderJTableau(update, diagram.superlines),
-        },
-        {
-            // triangle rule relations
-            element: document.getElementById("triangle-tableau"),
-            children: renderTriangleTableau(update, diagram.triangles),
         },
         {
             // Kronecker delta relations

@@ -8,7 +8,6 @@ button (middle button).
 Features not yet available:
 - Renaming lines
 - Editing the tableau information
-- Triangular deltas? (Might scrap this)
 
 Layout
 ======
