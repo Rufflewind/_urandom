@@ -197,7 +197,13 @@ function objectId(obj) {
     return idMap.get(obj)
 }
 
-function getOr(map, key, getDefault) {
+function propOr(obj, prop, def) {
+    return obj.hasOwnProperty(prop)
+         ? obj[prop]
+         : def
+}
+
+function cachedGet(map, key, getDefault) {
     if (!map.has(key)) {
         const x = getDefault()
         map.set(key, x)
@@ -439,6 +445,14 @@ function vectorDot(v1, v2) {
     return s
 }
 
+function scalarMultiply(c, v) {
+    v = Array.from(v)
+    for (const i of v.keys()) {
+        v[i] *= c
+    }
+    return v
+}
+
 /** Galois field of order 2. */
 const REAL_FIELD = {
     ZERO: 0,
@@ -551,7 +565,7 @@ function newSparseMatrixType(SparseVector) {
         }
 
         row(i) {
-            return getOr(this.data, i, () => new SparseVector())
+            return cachedGet(this.data, i, () => new SparseVector())
         }
 
         rowKeys() {
@@ -716,6 +730,7 @@ function removeChildren(element) {
 }
 
 const VNODE_KEY = Symbol("VNODE_KEY")
+const VNODE_SUSPEND_CHILDREN = Symbol("VNODE_SUSPEND_CHILDREN")
 const VNODE_SYMBOLS = Symbol("VNODE_SYMBOLS")
 const VNODE_EVENT_LISTENERS = Symbol("VNODE_EVENT_LISTENERS")
 
@@ -735,7 +750,7 @@ function vnodeAmendAttributes(attrs, elem) {
     while (i--) {
         const k = keys[i]
         const v = attrs[k]
-        let m = /on(.+)/.exec(k)
+        let m = /^on(.+)/.exec(k)
         if (m) {
             const event = m[1]
             elem.addEventListener(event, v)
@@ -879,7 +894,9 @@ class Vnode {
     // Note: the behavior is unspecified if the element is of a different name.
     renderTo(elem) {
         vnodeRenderAttributes(this.attributes, elem)
-        vnodeRenderChildren(this.children, elem)
+        if (!this.attributes[VNODE_SUSPEND_CHILDREN]) {
+            vnodeRenderChildren(this.children, elem)
+        }
     }
 
     create() {
@@ -1839,12 +1856,13 @@ function flipW1jRule(diagram, lineId) {
 }
 
 function threeArrowRule(diagram, nodeIndex) {
+    const oldDiagram = new Diagram(diagram)
     diagram = deepClone(diagram)
     let node = diagram.nodes[nodeIndex]
     if (node.type != "w3j") {
         return diagram
     }
-    const loop = findW3jLoop(new Diagram(diagram).node(nodeIndex))
+    const loop = findW3jLoop(oldDiagram.node(nodeIndex))
     let loopId = null
     if (typeof loop == "object") {
         loopId = loop.loopLine.id
@@ -2040,7 +2058,7 @@ class DiagramNode {
 
 class Diagram {
     constructor(rawDiagram) {
-        this.rawDiagram = rawDiagram || EMPTY_DIAGRAM
+        this.rawDiagram = Object.freeze(rawDiagram) || EMPTY_DIAGRAM
         this._cache = {}
         Object.freeze(this)
     }
@@ -2123,6 +2141,10 @@ class Diagram {
         return this.superlines[superlineId]
     }
 
+    hasSuperline(superlineId) {
+        return !!this.superline(superlineId)
+    }
+
     isEquallyConstrained(superlineId, deltas) {
         const related = relatedDeltas(this.rawDiagram.deltas, superlineId)
         const otherRelated = relatedDeltas(deltas, superlineId)
@@ -2140,14 +2162,32 @@ class Diagram {
         const nodes = this.rawDiagram.nodes.map(node =>
             Object.freeze(Object.assign({}, node, {
                 lines: Object.freeze(node.lines.map(lineId =>
-                    renames.hasOwnProperty(lineId) ? renames[lineId] : lineId
+                    propOr(renames, lineId, lineId)
                 ))
             }))
         )
-        return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
+        return new Diagram(Object.assign({}, this.rawDiagram, {
             nodes: Object.freeze(nodes),
             lines: Object.freeze(lines),
-        })))
+        }))
+    }
+
+    renameSuperlines(renames) {
+        return new Diagram(Object.assign({}, this.rawDiagram, {
+            lines: Object.freeze(Object.assign(
+                ...Object.entries(this.rawDiagram.lines)
+                .map(([lineId, line]) => ({
+                    [lineId]: Object.freeze(Object.assign({}, line, {
+                        superline: propOr(renames, line.superline,
+                                          line.superline),
+                    })),
+                })))),
+            superlines: Object.freeze(Object.assign(
+                ...Object.entries(this.rawDiagram.superlines)
+                .map(([superlineId, superline]) => ({
+                    [propOr(renames, superlineId, superlineId)]: superline,
+                })))),
+        }))
     }
 
     removeUnusedSuperlines() {
@@ -2172,9 +2212,9 @@ class Diagram {
         if (superlines["0"]) {
             superlines["0"] = EMPTY_SUPERLINE
         }
-        return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
+        return new Diagram(Object.assign({}, this.rawDiagram, {
             superlines: superlines,
-        })))
+        }))
     }
 
     /** Substitute a portion of this diagram for another subdiagram.
@@ -2289,6 +2329,7 @@ class Diagram {
         let superlineMerge = [rawDiagram.superlines]
 
         // match superlines and adjust phases
+        let summedSuperlines = new Set()
         for (const superlineId of Object.keys(pattern.superlines)) {
             const pattSuperline = pattern.superlines[superlineId]
             const superline = rawDiagram.superlines[superlineId]
@@ -2307,9 +2348,8 @@ class Diagram {
                                                    replacement.deltas)) {
                         throw new Error("deltas of summed superline must match")
                     }
+                    summedSuperlines.add(superlineId)
                 }
-                // FIXME the substituted lines associated with a summed superline must appear
-                // the same number of times!
                 superlineMerge.push({[superlineId]: {summed: false}})
             }
             superlineMerge.push({
@@ -2378,6 +2418,7 @@ class Diagram {
         // -----
 
         // match lines and adjust phases
+        let matchedLineIds = new Set()
         for (const pattLine of pattDiagram.lines()) {
             const pattNode0 = pattLine.node(0)
             const pattNode1 = pattLine.node(1)
@@ -2396,6 +2437,15 @@ class Diagram {
                 superlineMerge.push({
                     [line.superlineId]: {phase: diffDirection},
                 })
+            }
+            matchedLineIds.add(line.id)
+        }
+        // prevent summed superlines from appearing outside the pattern
+        const patternSuperlineSet = new Set(Object.keys(pattern.superlines))
+        for (const line of this.lines()) {
+            if (!matchedLineIds.has(line.id) &&
+                summedSuperlines.has(line.superlineId)) {
+                throw new Error("summed line must not appear outside match")
             }
         }
 
@@ -2541,8 +2591,8 @@ class Diagram {
 
         const newNodes = Array.prototype.concat(
             replacement.nodes.filter((node, nodeIndex) =>
-                node.type == "terminal"
-                                                     && !pattDiagram.terminal(node.variable)),
+                node.type == "terminal" && !pattDiagram.terminal(node.variable)
+            ),
             arrayRemoveMany(
                 nodes,
                 Array.from(
@@ -2554,12 +2604,12 @@ class Diagram {
                                pattDiagram.nodes())))),
             replacement.nodes.filter(node => node.type != "terminal"))
 
-        const newDiagram = new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
+        const newDiagram = new Diagram(Object.assign({}, rawDiagram, {
             nodes: newNodes,
             lines: newLines,
             superlines: mergeSuperlineLists(...superlineMerge),
             deltas: mergeDeltas(...deltaMerge),
-        }))).removeUnusedSuperlines()
+        })).removeUnusedSuperlines()
 
         if (flags.withLineRenames) {
             return {diagram: newDiagram, lineRenames: lineRenames}
@@ -2689,25 +2739,20 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
     diagram = new Diagram(diagram)
     let line1 = diagram.line(lineId1)
     let line2 = diagram.line(lineId2)
-    if (((line1.node(1).rawNode.x - line1.node(0).rawNode.x)
-        * (line2.node(1).rawNode.x - line2.node(0).rawNode.x)
-       + (line1.node(1).rawNode.y - line1.node(0).rawNode.y)
-        * (line2.node(1).rawNode.y - line2.node(0).rawNode.y) < 0)
-        != Boolean(reversed)) {
+    if ((vectorDot(
+        vectorSubtract(line1.node(1).xy, line1.node(0).xy),
+        vectorSubtract(line2.node(1).xy, line2.node(0).xy),
+    ) < 0) != Boolean(reversed)) {
         line2 = line2.reverse()
     }
-    const xy1 = [
-        0.375 * (line1.node(0).rawNode.x + line2.node(0).rawNode.x)
-        + 0.125 * (line1.node(1).rawNode.x + line2.node(1).rawNode.x),
-        0.375 * (line1.node(0).rawNode.y + line2.node(0).rawNode.y)
-        + 0.125 * (line1.node(1).rawNode.y + line2.node(1).rawNode.y),
-    ]
-    const xy2 = [
-        0.375 * (line1.node(1).rawNode.x + line2.node(1).rawNode.x)
-        + 0.125 * (line1.node(0).rawNode.x + line2.node(0).rawNode.x),
-        0.375 * (line1.node(1).rawNode.y + line2.node(1).rawNode.y)
-        + 0.125 * (line1.node(0).rawNode.y + line2.node(0).rawNode.y),
-    ]
+    const xy1 = vectorAdd(
+        scalarMultiply(0.375, vectorAdd(line1.node(0).xy, line2.node(0).xy)),
+        scalarMultiply(0.125, vectorAdd(line1.node(1).xy, line2.node(1).xy)),
+    )
+    const xy2 = vectorAdd(
+        scalarMultiply(0.125, vectorAdd(line1.node(0).xy, line2.node(0).xy)),
+        scalarMultiply(0.375, vectorAdd(line1.node(1).xy, line2.node(1).xy)),
+    )
     const j = availSuperlineLabels(diagram.rawDiagram).next().value
     return diagram.substitute({
         nodes: [
@@ -2758,6 +2803,11 @@ function w3jElimRule(diagram, lineId) {
     if (!diagram.isEquallyConstrained(line.superlineId, [])) {
         return `j[${line.superlineId}] must not be constrained by deltas`
     }
+    for (const otherLine of diagram.lines()) {
+        if (otherLine.id != line.id && otherLine.superlineId == line.superlineId) {
+            return `j[${line.superlineId}] must not appear anywhere else`
+        }
+    }
     if (line.node(0).type != "w3j" || line.node(1).type != "w3j") {
         return "expected Wigner 3-j symbols"
     }
@@ -2807,6 +2857,7 @@ function getAmbientDirections(line0) {
     let nodes = new Set()
     let matrix = new RealSparseMatrix()
     let offset = new RealSparseVector()
+    let zeroLineIds = [line0.id]
     let candidates = [line0]
     while (candidates.length > 0) {
         const line = candidates.pop()
@@ -2823,6 +2874,9 @@ function getAmbientDirections(line0) {
         if (node.type != "w3j") {
             return "subdiagram must contain only 3-jm symbols"
         }
+        if (line.superlineId == "0") {
+            zeroLineIds.push(line.id)
+        }
         lines.set(line.id, lines)
         offset.set(line.id, line.rawLine.direction)
         const line1 = line.cycNodeLine(1, 1)
@@ -2835,10 +2889,12 @@ function getAmbientDirections(line0) {
         nodes.add(node.index)
         candidates.push(line1, line2)
     }
-    // don't care about line0 because it's a zero line
-    lines.delete(line0.id)
-    offset.delete(line0.id)
-    matrix.deleteRow(line0.id)
+    // don't care about zero-lines
+    for (const zeroLineId of zeroLineIds) {
+        lines.delete(zeroLineId)
+        offset.delete(zeroLineId)
+        matrix.deleteRow(zeroLineId)
+    }
     const target = new RealSparseVector()
     for (const lineId of lines.keys()) {
         target.set(lineId, 1 - Math.abs(offset.get(lineId)))
@@ -2855,10 +2911,10 @@ function getAmbientDirections(line0) {
 
 function cutRule(diagram, lineId, xy1, xy2) {
     diagram = new Diagram(diagram)
-    let line = diagram.line(lineId)
-    if (vectorDot(vectorSubtract(xy2, xy1),
-                  line.node(0).xy, line.node(1).xy) > 0) {
-        line = line.reverse()
+    const line = diagram.line(lineId)
+    if (vectorDot(vectorSubtract(xy1, xy2),
+                  vectorSubtract(line.node(0).xy, line.node(1).xy)) < 0) {
+        [xy1, xy2] = [xy2, xy1]
     }
     if (line.superlineId != "0") {
         const ambient1 = getAmbientDirections(line)
@@ -3288,15 +3344,19 @@ function renderNode(update, editor, nodeIndex, frozen) {
     }, ...gChildren)
 }
 
-function renderJTableau(update, superlines) {
-    return Object.keys(superlines).sort((x, y) => {
+function renderJTableau(update, superlines, focus) {
+    return Array.from(new Set(
+        Object.keys(superlines).concat("0")
+    )).sort((x, y) => {
         let d = x.length - y.length
         if (d == 0) {
             d = Number(x > y) - Number(x < y)
         }
         return d
     }).map(superlineId => {
-        const superline = superlines[superlineId]
+        const superline = superlineId == "0"
+                        ? EMPTY_SUPERLINE
+                        : superlines[superlineId]
         let phase
         switch (mod(superline.phase, 4)) {
             case 0:
@@ -3322,13 +3382,108 @@ function renderJTableau(update, superlines) {
                    : ""
         return vnode(
             "tr", {},
-            vnode("td", {"class": "summed"}, superline.summed ? "\u2211" : ""),
-            vnode("td", {"class": "name"},
-                  superlineId == "0"
+            vnode("td", {
+                "class": "summed",
+                onmousedown: function(e) {
+                    if (e.buttons == 1) {
+                        update(modifyDiagram({}, diagram => {
+                            diagram = deepClone(diagram)
+                            if (superlineId == "0") {
+                                return diagram
+                            }
+                            for (const node of diagram.nodes) {
+                                if (node.type != "terminal") {
+                                    continue
+                                }
+                                if (diagram.lines[node.lines[0]].superline ==
+                                    superlineId) {
+                                    return diagram
+                                }
+                            }
+                            diagram.superlines[superlineId].summed =
+                                !diagram.superlines[superlineId].summed
+                            return diagram
+                        }))
+                        e.stopPropagation()
+                    }
+                },
+            }, superline.summed ? "\u2211" : ""),
+            vnode("td", {
+                "class": "name",
+                contenteditable: "true",
+                [VNODE_SUSPEND_CHILDREN]: focus.type == "tableauJName"
+                              && focus.superlineId == superlineId,
+                onfocus: function(e) {
+                    update(setFocus({
+                        type: "tableauJName",
+                        superlineId: superlineId,
+                    }))
+                },
+                onblur: function(e) {
+                    const newSuperlineId = this.textContent
+                    update(editor => {
+                        modifyDiagramWith(diagram => {
+                            diagram = new Diagram(diagram)
+                            if (superlineId == newSuperlineId) {
+                                return ""
+                            }
+                            if (diagram.hasSuperline(newSuperlineId)) {
+                                return "that label is already used"
+                            }
+                            const superline = diagram.superline(superlineId)
+                            return {
+                                equivalent: superline.summed,
+                                diagram: diagram.renameSuperlines({
+                                    [superlineId]: newSuperlineId,
+                                }).rawDiagram,
+                            }
+                        })(editor)
+                        clearFocus(editor)
+                    })
+                },
+            }, superlineId == "0"
                 ? vnode("span", {"class": "zero"}, "0")
                 : superlineId),
-            vnode("td", {"class": "phase"}, ...phase),
-            vnode("td", {"class": "weight"}, weight),
+            vnode("td", {
+                "class": "phase",
+                onmousedown: function(e) {
+                    if (e.buttons == 1) {
+                        update(modifyDiagram({}, diagram => {
+                            return Object.assign({}, diagram, {
+                                superlines: mergeSuperlineLists(
+                                    diagram.superlines,
+                                    {[superlineId]: {phase: 1}}),
+                            })
+                        }))
+                        e.stopPropagation()
+                    }
+                },
+            }, ...phase),
+            vnode("td", {
+                "class": "weight",
+                oncontextmenu: function(e) { e.preventDefault() },
+                onmousedown: function(e) {
+                    if (e.buttons == 1) {
+                        update(modifyDiagram({}, diagram => {
+                            return Object.assign({}, diagram, {
+                                superlines: mergeSuperlineLists(
+                                    diagram.superlines,
+                                    {[superlineId]: {weight: +1}}),
+                            })
+                        }))
+                        e.preventDefault()
+                    } else if (e.buttons == 2) {
+                        update(modifyDiagram({}, diagram => {
+                            return Object.assign({}, diagram, {
+                                superlines: mergeSuperlineLists(
+                                    diagram.superlines,
+                                    {[superlineId]: {weight: -1}}),
+                            })
+                        }))
+                        e.preventDefault()
+                    }
+                },
+            }, weight),
         )
     })
 }
@@ -3566,7 +3721,10 @@ function newEditor() {
         staleEquation: true,
 
         // controls
+        error: "",
+        notice: "Still a WIP.  Please report any bugs you find!",
         hover: {type: null},
+        focus: {type: null},
         mouseX: null,
         mouseY: null,
         trackType: null,
@@ -3604,6 +3762,7 @@ function toSvgCoords(p) {
 
 function renderEditor(update, editor) {
     const diagram = editor.snapshot.diagram
+
     return [
         {
             element: window,
@@ -3619,6 +3778,13 @@ function renderEditor(update, editor) {
             attributes: {
                 "class": editor.snapshot.frozen ? "frozen" : "",
             },
+        },
+        {
+            element: document.getElementById("notice"),
+            attributes: {
+                "class": editor.error ? "warning" : "",
+            },
+            children: [editor.error || editor.notice],
         },
         {
             element: document.getElementById("freeze"),
@@ -3659,7 +3825,7 @@ function renderEditor(update, editor) {
         },
         {
             element: document.getElementById("tableau-body"),
-            children: renderJTableau(update, diagram.superlines),
+            children: renderJTableau(update, diagram.superlines, editor.focus),
         },
         {
             // Kronecker delta relations
@@ -3684,37 +3850,51 @@ function renderEditor(update, editor) {
 //////////////////////////////////////////////////////////////////////////////
 // Actions
 
-// supported boolean flags:
-//   transient
-//   equivalent
-//   superficial (implies equivalent)
-//   toggleFreeze (implies superficial)
-//   clearHover
+/** Supported boolean flags:
+ *   transient,
+ *   equivalent,
+ *   superficial (implies equivalent),
+ *   toggleFreeze (implies superficial),
+ *   clearHover.
+ */
 function modifyDiagram(flags, diagramTransform) {
+    return modifyDiagramWith(diagram => Object.assign(flags, {
+        diagram: diagramTransform(diagram),
+    }))
+}
+
+/** Similar to modifyDiagram, but gets the flags from the result of the
+    transformation. */
+function modifyDiagramWith(transformer) {
     return editor => {
-        const equivalent = flags.equivalent
-                        || flags.superficial
-                        || flags.toggleFreeze
+        const result = transformer(editor.snapshot.diagram)
+        if (typeof result == "string") { // error?
+            setError(editor, result)
+            return
+        }
+        const equivalent = result.equivalent
+                        || result.superficial
+                        || result.toggleFreeze
+        const diagram = result.diagram
         if (editor.snapshot.frozen && !equivalent) {
             // nonequivalent changes are forbidden while frozen
             return
         }
-        const diagram = diagramTransform(editor.snapshot.diagram)
         if (typeof diagram == "string") { // error?
-            error(diagram)
+            setError(editor, diagram)
             return
         }
         editor.snapshot = Object.assign({}, editor.snapshot, {
             diagram: diagram,
-            frozen: Boolean(flags.toggleFreeze) != editor.snapshot.frozen,
+            frozen: Boolean(result.toggleFreeze) != editor.snapshot.frozen,
         })
-        if (!flags.transient) {
+        if (!result.transient) {
             saveEditor(editor)
         }
-        if (flags.clearHover) {
+        if (result.clearHover) {
             setHover({type: null})(editor)
         }
-        const superficial = flags.superficial || flags.toggleFreeze
+        const superficial = result.superficial || result.toggleFreeze
         editor.staleEquation = !superficial || editor.staleEquation
     }
 }
@@ -3730,11 +3910,31 @@ function freshenEquation(container) {
     }
 }
 
+let errorTimeout = 0
+function setError(editor, msg) {
+    editor.error = msg
+    if (errorTimeout) {
+        window.clearTimeout(errorTimeout)
+    }
+    errorTimeout = window.setTimeout(function() {
+        editor.error = ""
+        // FIXME: update???
+    }, 10000)
+}
+
 function setHover(entity) {
     return editor => {
         editor.hover = entity
     }
 }
+
+function setFocus(entity) {
+    return editor => {
+        editor.focus = entity
+    }
+}
+
+const clearFocus = setFocus({type: null})
 
 function startTrack(event, trackType) {
     return editor => {
@@ -3873,6 +4073,11 @@ function keyDown(e, editor) {
     const snapshot = editor.snapshot
     const update = f => f(editor)
 
+    // don't steal focus when editing text
+    if (editor.focus.type != null) {
+        return
+    }
+
     // reload
     if (getModifiers(e) == 0 && e.key == "r") {
         window.location.href = ""
@@ -3889,7 +4094,7 @@ function keyDown(e, editor) {
 
     // mouse events require the position
     if (editor.mouseX === null) {
-        error("Need to move the mouse before doing anything :/")
+        setError(editor, "Need to move the mouse before doing anything :/")
         return
     }
 
@@ -3981,8 +4186,7 @@ function keyDown(e, editor) {
                 (nodes[nearest[0]].type == "terminal" &&
                  nodes[otherNodeIndex(nodes, nearest[0], 0)].type
                     != "terminal")) {
-                error("no nearby nodes found")
-                return diagram
+                return "no nearby nodes found"
             } else {
                 return deleteNode(diagram, nearest[0])
             }
@@ -3994,19 +4198,6 @@ function keyDown(e, editor) {
 
 //////////////////////////////////////////////////////////////////////////////
 // Global stuff
-
-let errorTimeout = 0
-function error(msg) {
-    let notice = document.getElementById("notice")
-    notice.className = "warning"
-    notice.textContent = msg
-    if (errorTimeout) {
-        window.clearTimeout(errorTimeout)
-    }
-    errorTimeout = window.setTimeout(function() {
-        notice.textContent = "\xa0"
-    }, 10000)
-}
 
 function main() {
     let editor = {}

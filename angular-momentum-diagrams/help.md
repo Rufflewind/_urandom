@@ -1,13 +1,14 @@
 This tool is very much a work in progress.  Beware of incomplete features,
-bugs, etc.
+bugs, clunky UX etc.
 
-Right now, there is no plan to make this work on mobile, sorry.  You need a
-relatively modern browser (no IE), and a working mouse with a scroll-wheel
-button (middle button).
+There is no support for mobile platforms, sorry.  You need a relatively modern
+browser (no IE) and a working mouse with a scroll-wheel button (middle
+button).
 
 Features not yet available:
 - Renaming lines
-- Editing the tableau information
+- Editing the tableau information (modifying deltas; merging j's; transporting
+  j over deltas)
 
 Layout
 ======
@@ -53,6 +54,9 @@ Editing
 - <kbd>r</kbd>: reset and clear the entire diagram
      (note if you encounter a bug in the app and <kbd>r</kbd> doesn't work,
       you can still click on this button as a link to reset!)
+
+The tableau is editable too!  You can click on things, etc.  Some of these
+changes are still available (albeit more restricted) while frozen.
 
 Rules
 -----
