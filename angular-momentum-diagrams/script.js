@@ -2808,9 +2808,42 @@ function getAmbientDirections(line0) {
     return ambient
 }
 
+function vectorAdd(v0, ...vs) {
+    v0 = Array.from(v0)
+    for (const v of vs) {
+        for (const [i, vi] of v.entries()) {
+            v0[i] += vi
+        }
+    }
+    return v0
+}
+
+function vectorSubtract(v0, ...vs) {
+    v0 = Array.from(v0)
+    for (const v of vs) {
+        for (const [i, vi] of v.entries()) {
+            v0[i] -= vi
+        }
+    }
+    return v0
+}
+
+function vectorDot(v1, v2) {
+    let s = 0
+    for (const i of v1.keys()) {
+        s += v1[i] * v2[i]
+    }
+    return s
+}
+
 function cutRule(diagram, lineId, xy1, xy2) {
     diagram = new Diagram(diagram)
-    const line = diagram.line(lineId)
+    let line = diagram.line(lineId)
+    if (vectorDot(vectorSubtract(xy2, xy1),
+                  [line.node(0).rawNode.x, line.node(0).rawNode.y],
+                  [line.node(1).rawNode.x, line.node(1).rawNode.y]) > 0) {
+        line = line.reverse()
+    }
     const ambient1 = getAmbientDirections(line)
     const ambient2 = getAmbientDirections(line.reverse())
     if (typeof ambient1 == "string"
