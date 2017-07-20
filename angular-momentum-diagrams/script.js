@@ -411,6 +411,34 @@ function cardinalSpline(xs, ys, smoothness) {
 //////////////////////////////////////////////////////////////////////////////
 // Algebra
 
+function vectorAdd(v0, ...vs) {
+    v0 = Array.from(v0)
+    for (const v of vs) {
+        for (const [i, vi] of v.entries()) {
+            v0[i] += vi
+        }
+    }
+    return v0
+}
+
+function vectorSubtract(v0, ...vs) {
+    v0 = Array.from(v0)
+    for (const v of vs) {
+        for (const [i, vi] of v.entries()) {
+            v0[i] -= vi
+        }
+    }
+    return v0
+}
+
+function vectorDot(v1, v2) {
+    let s = 0
+    for (const i of v1.keys()) {
+        s += v1[i] * v2[i]
+    }
+    return s
+}
+
 /** Galois field of order 2. */
 const REAL_FIELD = {
     ZERO: 0,
@@ -2005,6 +2033,10 @@ class DiagramNode {
     lines() {
         return map(index => this.line(index), range(0, this.numLines))
     }
+
+    get xy() {
+        return [this.rawNode.x, this.rawNode.y]
+    }
 }
 
 class Diagram {
@@ -2099,24 +2131,23 @@ class Diagram {
     }
 
     renameLines(renames) {
-        let newLines = {}
+        let lines = {}
         for (const lineId of Object.keys(this.rawDiagram.lines)) {
             const newLineId = renames.hasOwnProperty(lineId)
                             ? renames[lineId]
                             : lineId
-            newLines[newLineId] = this.rawDiagram.lines[lineId]
+            lines[newLineId] = this.rawDiagram.lines[lineId]
         }
+        const nodes = this.rawDiagram.nodes.map(node =>
+            Object.freeze(Object.assign({}, node, {
+                lines: Object.freeze(node.lines.map(lineId =>
+                    renames.hasOwnProperty(lineId) ? renames[lineId] : lineId
+                ))
+            }))
+        )
         return new Diagram(Object.freeze(Object.assign({}, this.rawDiagram, {
-            nodes: Object.freeze(this.rawDiagram.nodes.map(node =>
-                Object.freeze(Object.assign({}, node, {
-                    lines: Object.freeze(node.lines.map(lineId =>
-                        renames.hasOwnProperty(lineId)
-                                                              ? renames[lineId]
-                                                              : lineId
-                    )),
-                }))
-            )),
-            lines: Object.freeze(newLines),
+            nodes: Object.freeze(nodes),
+            lines: Object.freeze(lines),
         })))
     }
 
@@ -2155,7 +2186,7 @@ class Diagram {
      *   to indicate whether it should be treated as reversed
      * - `line.direction: MATCH_ANY` will absorb any direction
      */
-    substitute(pattern, replacement) {
+    substitute(pattern, replacement, flags) {
         // schematic idea:
         //
         // orig: --- X1 --- N1 --- N2 --- X2 ---
@@ -2175,6 +2206,7 @@ class Diagram {
         // merged into X1-N3 and similarly for N2-X2, and also account for
         // degenerate cases
 
+        flags = flags || {}
         pattern = ensureDiagram(pattern)
         replacement = ensureDiagram(replacement)
         const rawDiagram = this.rawDiagram
@@ -2359,7 +2391,7 @@ class Diagram {
                 && pattLine.direction != null) {
                 const diffDirection = mergeDirections(line.direction,
                                                      -pattLine.direction)
-                if (diffDirection % 2 != 0) {
+                if (line.superlineId != "0" && diffDirection % 2 != 0) {
                     throw new Error("directedness mismatch in lines")
                 }
                 superlineMerge.push({
@@ -2523,12 +2555,18 @@ class Diagram {
                                pattDiagram.nodes())))),
             replacement.nodes.filter(node => node.type != "terminal"))
 
-        return new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
+        const newDiagram = new Diagram(Object.freeze(Object.assign({}, rawDiagram, {
             nodes: newNodes,
             lines: newLines,
             superlines: mergeSuperlineLists(...superlineMerge),
             deltas: mergeDeltas(...deltaMerge),
         }))).removeUnusedSuperlines()
+
+        if (flags.withLineRenames) {
+            return {diagram: newDiagram, lineRenames: lineRenames}
+        } else {
+            return newDiagram
+        }
     }
 }
 
@@ -2557,12 +2595,14 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     if (typeof loop != "object") {
         return loop
     }
-    if (!isLineDirectable(loop.loopLine)) {
+    if (!isLineDirectable(loop.loopLine.rawLine)) {
         return "loop must be directed"
     }
     const otherNode = loop.cutLine.node(1)
     if (otherNode.type != "w3j") {
-        return "other node is not a Wigner 3-jm symbol"
+        diagram = deepClone(diagram.rawDiagram)
+        diagram.lines[loop.cutLine.id].superline = "0"
+        return diagram
     }
     if (otherNode.index != nodeIndex && loopNode.index != nodeIndex) {
         return "not sure what you're trying to do"
@@ -2571,7 +2611,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     const lc = loop.cutLine
     const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
     const la = loop.cutLine.cycNodeLine(1, 2).reverse()
-    if (la.id == lb.id && !isLineDirectable(la)) {
+    if (la.id == lb.id && !isLineDirectable(la.rawLine)) {
         return "other loop must be directed too"
     }
     const md = ld.toString()
@@ -2808,49 +2848,22 @@ function getAmbientDirections(line0) {
     return ambient
 }
 
-function vectorAdd(v0, ...vs) {
-    v0 = Array.from(v0)
-    for (const v of vs) {
-        for (const [i, vi] of v.entries()) {
-            v0[i] += vi
-        }
-    }
-    return v0
-}
-
-function vectorSubtract(v0, ...vs) {
-    v0 = Array.from(v0)
-    for (const v of vs) {
-        for (const [i, vi] of v.entries()) {
-            v0[i] -= vi
-        }
-    }
-    return v0
-}
-
-function vectorDot(v1, v2) {
-    let s = 0
-    for (const i of v1.keys()) {
-        s += v1[i] * v2[i]
-    }
-    return s
-}
-
 function cutRule(diagram, lineId, xy1, xy2) {
     diagram = new Diagram(diagram)
     let line = diagram.line(lineId)
     if (vectorDot(vectorSubtract(xy2, xy1),
-                  [line.node(0).rawNode.x, line.node(0).rawNode.y],
-                  [line.node(1).rawNode.x, line.node(1).rawNode.y]) > 0) {
+                  line.node(0).xy, line.node(1).xy) > 0) {
         line = line.reverse()
     }
-    const ambient1 = getAmbientDirections(line)
-    const ambient2 = getAmbientDirections(line.reverse())
-    if (typeof ambient1 == "string"
-        && typeof ambient2 == "string") {
-        return ambient1
+    if (line.superlineId != "0") {
+        const ambient1 = getAmbientDirections(line)
+        const ambient2 = getAmbientDirections(line.reverse())
+        if (typeof ambient1 == "string"
+            && typeof ambient2 == "string") {
+            return ambient1
+        }
     }
-    return diagram.substitute({
+    const result = diagram.substitute({
         nodes: [
             terminalNode(line.toString(), "a"),
             terminalNode(line.toString(), "b"),
@@ -2866,20 +2879,58 @@ function cutRule(diagram, lineId, xy1, xy2) {
             w3jNode("$2", "$4", "$4", xy2[0], xy2[1]),
         ],
         lines: {
-            $1: {superline: "0", direction: 0},
-            $2: {superline: "0", direction: 0},
-            $3: {superline: "0", direction: +1},
-            $4: {superline: "0", direction: +1},
+            $1: {superline: line.superlineId, direction: 0},
+            $2: {superline: line.superlineId, direction: 0},
+            $3: {superline: "0", direction: 0},
+            $4: {superline: "0", direction: 0},
         },
         deltas: [
             ["0", line.superlineId],
         ],
-    }).rawDiagram
+    }, {withLineRenames: true})
+    diagram = result.diagram.rawDiagram
+    return diagram
 }
 
-function glueRule(diagram, lineId1, lineId2) {
-    throw "NOT YET IMPLEMENTED"
-    return diagram
+function glueRule(diagram, lineId1, lineId2, xy1, xy2) {
+    diagram = new Diagram(diagram)
+    const line1 = diagram.line(lineId1)
+    const line2 = diagram.line(lineId2)
+    if (line1.id == line2.id) {
+        return diagram // not supported (tricky to implement / easy workaround)
+    }
+    return diagram.substitute({
+        nodes: [
+            terminalNode(line1.toString(), "a"),
+            terminalNode(line1.toString(), "b"),
+            terminalNode(line2.toString(), "c"),
+            terminalNode(line2.toString(), "d"),
+        ],
+        lines: {
+            [line1]: {superline: line1.superlineId, direction: +1},
+            [line2]: {superline: line2.superlineId, direction: +1},
+        },
+    }, {
+        nodes: [
+            terminalNode("$1", "a"),
+            terminalNode("$2", "b"),
+            terminalNode("$3", "c"),
+            terminalNode("$4", "d"),
+            w3jNode("$1", "$2", "$5", xy1[0], xy1[1]),
+            w3jNode("$3", "$4", "$5", xy2[0], xy2[1]),
+        ],
+        lines: {
+            $1: {superline: line1.superlineId, direction: 0},
+            $2: {superline: line1.superlineId, direction: 0},
+            $3: {superline: line2.superlineId, direction: 0},
+            $4: {superline: line2.superlineId, direction: 0},
+            $5: {superline: "0", direction: 0},
+        },
+        superlines: {
+            [line1.superlineId]: {weight: +1},
+            [line2.superlineId]: {weight: +1},
+        },
+    }).rawDiagram
 }
 
 function deltaElimRule(diagram, entry) {
@@ -3745,7 +3796,8 @@ function finishTrack(editor, event) {
                 } else {
                     modifyDiagram({equivalent: true, clearHover: true}, diagram =>
                         glueRule(diagram, editor.trackStart.lineId,
-                                 editor.trackStop.lineId))(editor)
+                                 editor.trackStop.lineId,
+                                 startXy, stopXy))(editor)
                 }
             } else if (editor.trackStop.type == "node") {
                 modifyDiagram({equivalent: true, clearHover: true}, diagram =>
