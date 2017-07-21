@@ -55,6 +55,10 @@ h1, p {
     background: #59e146;
 }
 
+#controls > #ambient.active {
+    background: #f4c233;
+}
+
 main, #middle-wrapper {
     display: table;
     table-layout: fixed;
@@ -215,7 +219,7 @@ g.line.zero text.label {
     font-weight: bold;
 }
 
-g.line.zero use.arrow {
+g.line.zero .arrowhead {
     fill: var(--zero-color);
     font-weight: bold;
 }
@@ -270,10 +274,6 @@ g.line.summed path.pith {
     stroke-width: 2;
 }
 
-g.line.two-j path.fg {
-    stroke: var(--two-j-color);
-}
-
 g.line text.label {
     fill: #051308;
     alignment-baseline: middle;
@@ -285,9 +285,20 @@ g.line.one-j path.fg {
     stroke-dasharray: 18 2;
 }
 
-g.line.two-j text.label,
-g.line.two-j use.arrow {
+g.line.two-j text.label {
     fill: var(--two-j-color);
+}
+
+g.arrow.ambient .arrowhead {
+    opacity: 0.35;
+}
+
+g.arrow.bad .arrowhead {
+    fill: #e74551;
+}
+
+g.arrow.bad circle.arrowhead {
+    opacity: .7;
 }
 
 g.arrow circle.hit {

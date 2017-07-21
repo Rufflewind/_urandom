@@ -686,10 +686,12 @@ function sparseGaussElim(field, matrix, vector) {
         }
     }
 
-    // check for consistency
+    // check for consistency among remaining rows
+    let consistent = true
     for (const i of is) {
         if (!field.eq(vector.get(i), field.ZERO)) {
-            return null // no solution
+            consistent = false // no consistent solution
+            break
         }
     }
 
@@ -715,6 +717,7 @@ function sparseGaussElim(field, matrix, vector) {
     }
 
     return {
+        consistent: consistent,
         solution: solution,
         unconstrained: unconstrained,
     }
@@ -737,6 +740,10 @@ const VNODE_KEY = Symbol("VNODE_KEY")
 const VNODE_SUSPEND_CHILDREN = Symbol("VNODE_SUSPEND_CHILDREN")
 const VNODE_SYMBOLS = Symbol("VNODE_SYMBOLS")
 const VNODE_EVENT_LISTENERS = Symbol("VNODE_EVENT_LISTENERS")
+
+function vnodeGetSymbol(elem, key) {
+    return (event.target[VNODE_SYMBOLS] || {})[key]
+}
 
 function vnodeAmendAttributes(attrs, elem) {
     let listeners = elem[VNODE_EVENT_LISTENERS]
@@ -1841,14 +1848,14 @@ function inferDeltas(diagram) {
         const loop = findW3jLoop(node)
         if (typeof loop == "object") {
             if (loop.loopLine.direction % 2) {
-                knownZeros.add(loop.cutLine.id)
+                knownZeros.add(loop.cutLine.superlineId)
             }
         }
         if (node.type == "w3j") {
             for (const line of node.lines()) {
-                if (knownZeros.has(line.id)) {
-                    deltas.push([line.cycNodeLine(0, 1).id,
-                                 line.cycNodeLine(0, 2).id])
+                if (knownZeros.has(line.superlineId)) {
+                    deltas.push([line.cycNodeLine(0, 1).superlineId,
+                                 line.cycNodeLine(0, 2).superlineId])
                     break
                 }
             }
@@ -2697,7 +2704,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     if (typeof loop != "object") {
         return loop
     }
-    if (!isLineDirectable(loop.loopLine.rawLine)) {
+    if (!isLineDirectable(loop.loopLine.line)) {
         return "loop must be directed"
     }
     const otherNode = loop.cutLine.node(1)
@@ -2713,7 +2720,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     const lc = loop.cutLine
     const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
     const la = loop.cutLine.cycNodeLine(1, 2).reverse()
-    if (la.id == lb.id && !isLineDirectable(la.rawLine)) {
+    if (la.id == lb.id && !isLineDirectable(la.line)) {
         // other loop must be directed too if we want to eliminate it
         diagram = deepClone(diagram.rawDiagram)
         diagram.lines[loop.cutLine.id].superline = "0"
@@ -2750,7 +2757,7 @@ function loopElimRule(diagram, lineId, nodeIndex) {
         ],
         lines: {
             $1: {superline: jb, direction: 0,
-                 arcHeight: -8 * lb.rawLine.arcHeight}, // empirically works...
+                 arcHeight: -8 * lb.line.arcHeight}, // empirically works...
         },
         superlines: {
             [jd]: {weight: 1},
@@ -2787,9 +2794,9 @@ function loopIntroRule(diagram, lineId, xy1, xy2) {
                  angle: angle - 0.5 * Math.PI, arcHeight: 50.0},
             $3: {superline: "0", direction: 0},
             $2: {superline: line.superlineId, direction: 0,
-                 arcHeight: -line.rawLine.arcHeight / 4},
+                 arcHeight: -line.line.arcHeight / 4},
             $1: {superline: line.superlineId, direction: +1,
-                 arcHeight: -line.rawLine.arcHeight / 2},
+                 arcHeight: -line.line.arcHeight / 2},
         },
         superlines: {
             [line.superlineId]: {weight: 1},
@@ -2918,61 +2925,114 @@ function w3jElimRule(diagram, lineId) {
     }).rawDiagram
 }
 
-function getAmbientDirections(line0) {
-    let lines = new Map()
-    let nodes = new Set()
+function getAmbientDirections(diagram) {
+    // lines we don't care about:
+    // - external lines with no pre-existing direction
+    // - zero lines
+    // however, unlike zero lines, we do still need to *show* the correct
+    // arrows, so we can't toss out those external lines entirely!
+    let excludedLineIds = []
+    let directions = new RealSparseVector()
+    for (const line of diagram.lines()) {
+        if (line.superlineId != "0") {
+            if ((line.node(0).type == "terminal"
+                || line.node(1).type == "terminal")
+                && line.direction % 2 == 0) {
+                excludedLineIds.push(line.id)
+            }
+            directions.set(line.id, 1 - mod(line.direction, 2))
+        }
+    }
     let matrix = new RealSparseMatrix()
-    let offset = new RealSparseVector()
-    let zeroLineIds = [line0.id]
+    for (const node of diagram.nodes()) {
+        if (node.type == "w3j") {
+            for (const line of node.lines()) {
+                if (line.superlineId != "0") {
+                    matrix.modify(line.id, node.index,
+                                  x => x + (line.reversed ? -1 : 1))
+                }
+            }
+        }
+    }
+    let subdirections = directions.copy()
+    let submatrix = matrix.map(x => mod(x, 2))
+    for (const lineId of excludedLineIds) {
+        subdirections.delete(lineId)
+        submatrix.deleteRow(lineId)
+    }
+    const result = sparseGaussElim(GF2_FIELD, submatrix, subdirections)
+    const ambient = sparseMatrixVectorMultiply(REAL_FIELD, matrix,
+                                               result.solution.map(x => -x))
+    return {
+        orientable: result.consistent,
+        directions: ambient,
+        target: subdirections,
+    }
+}
+
+function getConnectedSubdiagram(line0) {
+    let closed = true
+    let isolated = true
+    let nodeIndices = new Set()
+    let lines = {}
     let candidates = [line0]
     while (candidates.length > 0) {
         const line = candidates.pop()
-        if (lines.has(line.id)) {
+        if (lines.hasOwnProperty(line.id)) {
             if (line.id == line0.id && line.reversed == line0.reversed) {
-                return "subdiagram must be isolated"
+                isolated = false
             }
             continue
         }
         const node = line.node(1)
         if (node.type == "terminal") {
-            return "subdiagram must be closed"
+            closed = false
         }
-        if (node.type != "w3j") {
-            return "subdiagram must contain only 3-jm symbols"
+        nodeIndices.add(node.index)
+        lines[line.id] = line.rawLine
+        for (const line of node.lines()) {
+            candidates.push(line)
         }
-        if (line.superlineId == "0") {
-            zeroLineIds.push(line.id)
+    }
+    const rawDiagram = line0.diagram.rawDiagram
+    return {
+        closed: closed,
+        isolated: isolated,
+        diagram: Object.assign({}, rawDiagram, {
+            nodes: rawDiagram.nodes.filter((_, nodeIndex) =>
+                nodeIndices.has(nodeIndex)),
+            lines: lines,
+        }),
+    }
+}
+
+function subdiagramOrientability(line0) {
+    const subdiagram = getConnectedSubdiagram(line0)
+    if (!subdiagram.isolated) {
+        return {
+            error: "subdiagram must be isolated",
+            priority: 1,
         }
-        lines.set(line.id, lines)
-        offset.set(line.id, line.rawLine.direction)
-        const line1 = line.cycNodeLine(1, 1)
-        const line2 = line.cycNodeLine(1, 2)
-        if (!nodes.has(node.index)) {
-            matrix.modify(line.id, node.index, x => x + (line.reversed ? 1 : -1))
-            matrix.modify(line1.id, node.index, x => x + (line1.reversed ? -1 : 1))
-            matrix.modify(line2.id, node.index, x => x + (line2.reversed ? -1 : 1))
+    }
+    if (!subdiagram.closed) {
+        return {
+            error: "subdiagram must be closed",
+            priority: 2,
         }
-        nodes.add(node.index)
-        candidates.push(line1, line2)
     }
-    // don't care about zero-lines
-    for (const zeroLineId of zeroLineIds) {
-        lines.delete(zeroLineId)
-        offset.delete(zeroLineId)
-        matrix.deleteRow(zeroLineId)
+    const diagram = Object.assign({}, subdiagram.diagram)
+    diagram.lines = Object.assign({}, diagram.lines)
+    diagram.lines[line0.id] = Object.assign({}, diagram.lines[line0.id], {
+        superline: "0",
+    })
+    const ambient = getAmbientDirections(new Diagram(diagram))
+    if (!ambient.orientable) {
+        return {
+            error: "diagram is non-orientable",
+            priority: 0,
+        }
     }
-    const target = new RealSparseVector()
-    for (const lineId of lines.keys()) {
-        target.set(lineId, 1 - Math.abs(offset.get(lineId)))
-    }
-    const result = sparseGaussElim(GF2_FIELD,
-                                   matrix.map(x => mod(x, 2)),
-                                   target)
-    if (!result) {
-        return "diagram is non-orientable"
-    }
-    const ambient = sparseMatrixVectorMultiply(REAL_FIELD, matrix, result.solution)
-    return ambient
+    return null
 }
 
 function cutRule(diagram, lineId, xy1, xy2) {
@@ -2983,11 +3043,11 @@ function cutRule(diagram, lineId, xy1, xy2) {
         [xy1, xy2] = [xy2, xy1]
     }
     if (line.superlineId != "0") {
-        const ambient1 = getAmbientDirections(line)
-        const ambient2 = getAmbientDirections(line.reverse())
-        if (typeof ambient1 == "string"
-            && typeof ambient2 == "string") {
-            return ambient1
+        let errors = [subdiagramOrientability(line),
+                      subdiagramOrientability(line.reverse())].filter(identity)
+        if (errors.length == 2) {
+            errors.sort((x, y) => x.priority - y.priority)
+            return errors[0].error
         }
     }
     const dxy = vectorSubtract(xy1, xy2)
@@ -3008,8 +3068,10 @@ function cutRule(diagram, lineId, xy1, xy2) {
             w3jNode("$2", "$4", "$4", xy2[0], xy2[1]),
         ],
         lines: {
-            $1: {superline: line.superlineId, direction: 0},
-            $2: {superline: line.superlineId, direction: 0},
+            $1: {superline: line.superlineId, direction: 0,
+                 arcHeight: -0.5 * line.line.arcHeight},
+            $2: {superline: line.superlineId, direction: 0,
+                 arcHeight: -0.25 * line.line.arcHeight},
             $3: {superline: "0", direction: 0,
                  angle: angle + 0.5 * Math.PI, arcHeight: 50},
             $4: {superline: "0", direction: 0,
@@ -3067,10 +3129,19 @@ function glueRule(diagram, lineId1, lineId2, xy1, xy2) {
 //////////////////////////////////////////////////////////////////////////////
 // Drawing
 
-function renderArrow(update, diagram, lineId) {
+function renderArrow(update, diagram, lineId, ambient) {
     const arrowHeadSize = 15
     const line = diagram.lines[lineId]
-    if (line.direction == 0) {
+    let bad = false
+    let expectedDirection = false
+    let direction = line.direction
+    if (ambient) {
+        expectedDirection = ambient.target.get(lineId)
+        const ambientDirection = ambient.directions.get(lineId)
+        bad = !direction == !ambientDirection
+        direction = direction || ambientDirection
+    }
+    if (direction == 0 && !expectedDirection) {
         return []
     }
     if (line.arrowPos < 0.0) {
@@ -3082,18 +3153,17 @@ function renderArrow(update, diagram, lineId) {
     // the coordinate we need is the tip of the arrow (which follows the
     // contour of the line), but we want to try to keep the body of
     // the arrow centered
-    const correction = line.direction * arrowHeadSize / 2
+    const correction = direction * arrowHeadSize / 2
     const position = positionOnLine(info, line.arrowPos, correction)
     const rawPosition = positionOnLine(info, line.arrowPos, 0)
     const angle = position.tangentAngle
-                + Number(line.direction < 0) * Math.PI
-    if (line.direction == 0) {
-        return []
-    }
+                + Number(direction < 0) * Math.PI
     return [vnode(
         "svg:g",
         {
-            "class": "arrow",
+            "class": "arrow "
+                   + (!line.direction ? "ambient " : "")
+                   + (bad ? "bad " : ""),
             onmousedown: function(e) {
                 if (e.buttons == 1) {
                     update(startDrag(rawPosition.x, rawPosition.y, {
@@ -3126,8 +3196,8 @@ function renderArrow(update, diagram, lineId) {
             cx: rawPosition.x,
             cy: rawPosition.y,
         }),
-        vnode("svg:use", {
-            "class": "arrow",
+        direction ? vnode("svg:use", {
+            "class": "arrowhead",
             href: "#arrowhead",
             x: -arrowHeadSize,
             y: -arrowHeadSize / 2,
@@ -3135,11 +3205,16 @@ function renderArrow(update, diagram, lineId) {
             height: arrowHeadSize,
             transform: `translate(${position.x}, ${position.y}),`
                      + `rotate(${angle * 180 / Math.PI})`,
+        }) : vnode("svg:circle", {
+            "class": "arrowhead",
+            cx: position.x,
+            cy: position.y,
+            r: arrowHeadSize / 2,
         }),
     )]
 }
 
-function renderLine(update, editor, lineId) {
+function renderLine(update, editor, lineId, ambient) {
     const diagram = editor.snapshot.diagram
     const line = diagram.lines[lineId]
     const superline = diagram.superlines[line.superline]
@@ -3276,7 +3351,7 @@ function renderLine(update, editor, lineId) {
                 }
             },
         }, line.superline), // T??
-        ...renderArrow(update, diagram, lineId),
+        ...renderArrow(update, diagram, lineId, ambient),
     )
 }
 
@@ -3970,6 +4045,7 @@ const SHIFT = 0x4
 const EMPTY_SNAPSHOT = {
     diagram: EMPTY_DIAGRAM,
     frozen: false,
+    showAmbient: false,
 }
 
 function newEditor() {
@@ -3981,7 +4057,7 @@ function newEditor() {
 
         // controls
         error: "",
-        notice: "Still a WIP.  Please report any bugs you find!",
+        notice: "Work in progress... please report any bugs you find!",
         hover: {type: null},
         focus: {type: null},
         drag: {type: null},
@@ -4023,6 +4099,8 @@ function toSvgCoords(p) {
 
 function renderEditor(update, editor) {
     const diagram = editor.snapshot.diagram
+    const ambient = editor.snapshot.showAmbient
+                 && getAmbientDirections(new Diagram(diagram))
     return [
         {
             element: window,
@@ -4053,6 +4131,12 @@ function renderEditor(update, editor) {
             },
         },
         {
+            element: document.getElementById("ambient"),
+            attributes: {
+                "class": editor.snapshot.showAmbient ? "active" : "",
+            },
+        },
+        {
             element: document.getElementById("diagram"),
             attributes: {
                 oncontextmenu: function(e) { e.preventDefault() },
@@ -4070,7 +4154,7 @@ function renderEditor(update, editor) {
         {
             element: document.getElementById("diagram-lines"),
             children: Object.keys(diagram.lines).map(lineId =>
-                renderLine(update, editor, lineId)),
+                renderLine(update, editor, lineId, ambient)),
         },
         {
             element: document.getElementById("diagram-nodes"),
@@ -4118,6 +4202,7 @@ function renderEditor(update, editor) {
  *   equivalent,
  *   superficial (implies equivalent),
  *   toggleFreeze (implies superficial),
+ *   toggleAmbient (implies superficial),
  *   clearHover.
  */
 function modifyDiagram(flags, diagramTransform) {
@@ -4140,9 +4225,11 @@ function modifyDiagramWith(transformer) {
             setError(editor, result)
             return
         }
+        const superficial = result.superficial
+                         || result.toggleFreeze
+                         || result.toggleAmbient
         const equivalent = result.equivalent
-                        || result.superficial
-                        || result.toggleFreeze
+                        || superficial
         const diagram = result.diagram
         if (editor.snapshot.frozen && !equivalent) {
             // nonequivalent changes are forbidden while frozen
@@ -4155,6 +4242,8 @@ function modifyDiagramWith(transformer) {
         editor.snapshot = Object.assign({}, editor.snapshot, {
             diagram: diagram,
             frozen: Boolean(result.toggleFreeze) != editor.snapshot.frozen,
+            showAmbient: Boolean(result.toggleAmbient) !=
+                editor.snapshot.showAmbient,
         })
         if (!result.transient) {
             saveEditor(editor)
@@ -4162,7 +4251,6 @@ function modifyDiagramWith(transformer) {
         if (result.clearHover) {
             setHover({type: null})(editor)
         }
-        const superficial = result.superficial || result.toggleFreeze
         editor.staleEquation = !superficial || editor.staleEquation
     }
 }
@@ -4187,8 +4275,8 @@ function setError(editor, msg) {
         window.clearTimeout(errorTimeout)
     }
     errorTimeout = window.setTimeout(function() {
-        editor.error = ""
-        // FIXME: update???
+        const update = getUpdate(editor)
+        update(editor => editor.error = "")
     }, 10000)
 }
 
@@ -4208,6 +4296,7 @@ const clearFocus = setFocus({type: null})
 
 function handleDrag(update, canDrag) {
     return {
+        [ENABLE_DRAG]: "true",
         draggable: "true",
         ondragstart: function(e) {
             update(editor => {
@@ -4442,6 +4531,8 @@ function mouseUp(event) {
     }
 }
 
+const ENABLE_DRAG = Symbol("ENABLE_DRAG")
+
 function mouseMove(event) {
     return editor => {
         let svg = document.getElementById("diagram")
@@ -4459,14 +4550,17 @@ function mouseMove(event) {
                     event.clientY + editor.dragOffsetY,
                     event.ctrlKey))(editor)
             event.stopPropagation()
-            // prevent user from selecting things by accident;
-            // we can't do this in mousedown, because that breaks deselection;
-            // we also can't use user-select, because that also breaks deselection
-            // (a textbox might *look* like it's deselected, but middle-click paste
-            // and backspace still works!)
-            event.preventDefault()
         } else {
             updateTrack(event)(editor)
+        }
+        // prevent user from selecting things by accident;
+        // we can't do this in mousedown, because that breaks deselection;
+        // we also can't use user-select, because that also breaks deselection
+        // (a textbox might *look* like it's deselected, but middle-click paste
+        // and backspace still works!);
+        // it also breaks dragging too ... be careful!
+        if (!vnodeGetSymbol(event.target, ENABLE_DRAG)) {
+            event.preventDefault()
         }
     }
 }
@@ -4480,9 +4574,14 @@ function startDrag(x, y, flags, dragger) {
     }
 }
 
+let prevKey
 function keyDown(e, editor) {
     const snapshot = editor.snapshot
     const update = f => f(editor)
+
+    if (prevKey == "\x3a" && e.key == "\x33") {
+        editor.notice = prevKey + e.key
+    }
 
     // don't steal focus when editing text
     if (editor.focus.type != null) {
@@ -4498,14 +4597,20 @@ function keyDown(e, editor) {
 
     // help
     if (getModifiers(e) == SHIFT && e.key == "?") {
-        window.location.href = "help.txt"
+        window.location.href = document.getElementById("help-link").href;
+        e.preventDefault()
+        return
+    }
+
+    // help
+    if (getModifiers(e) == 0 && e.key == "v") {
+        update(modifyDiagram({toggleAmbient: true}, identity))
         e.preventDefault()
         return
     }
 
     // mouse events require the position
     if (editor.mouseX === null) {
-        setError(editor, "Need to move the mouse before doing anything :/")
         return
     }
 
@@ -4605,20 +4710,27 @@ function keyDown(e, editor) {
         e.preventDefault()
         return
     }
+
+    prevKey = e.key
 }
 
 //////////////////////////////////////////////////////////////////////////////
 // Global stuff
 
-function main() {
-    let editor = {}
-    Object.assign(editor, newEditor())
-    function update(...changes) {
+function getUpdate(editor) {
+    return (...changes) => {
+        const update = getUpdate(editor)
         const n = changes.length
         for (let i = 0; i < n; ++i) {
             changes[i](editor)
         }
         applyRendering(renderEditor(update, editor))
     }
+}
+
+function main() {
+    let editor = {}
+    Object.assign(editor, newEditor())
+    const update = getUpdate(editor)
     update(loadEditor)
 }

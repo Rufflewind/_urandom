@@ -1,12 +1,10 @@
 This tool is very much a work in progress.  Beware of incomplete features,
-bugs, clunky UX etc.
+bugs, clunky UX etc.  If something breaks, you can hit the [Back] button of
+your browser to revert to a previous state.
 
 There is no support for mobile platforms, sorry.  You need a relatively modern
 browser (no IE) and a working mouse with a scroll-wheel button (middle
 button).
-
-Features not yet available:
-- Editing the tableau information (transporting j and lines over deltas)
 
 Layout
 ======
@@ -50,8 +48,9 @@ Editing mode
 - <kbd>Right-click</kbd> on a line will add/flip/remove the arrow.
 - <kbd>Middle-click</kbd> on a line will change its j to a fresh value.
 
-The tableau is editable too!  You can click on things, etc.  Some of these
-modifications are still available (albeit more restricted) while frozen.
+The tableau is editable too!  You can click on things, drag phases and weights
+around, etc.  Some of these modifications are still available (albeit more
+restricted) while frozen.
 
 Frozen mode
 -----------
@@ -63,7 +62,7 @@ of the terminals, which remain fixed).  You can drag nodes, lines, arrows, and
 labels using the left mouse button.
 
 Here are the explicit rules that you can use.  Don't worry about the
-phase factors or weights: the editor will automatically adjust them :3
+phase factors or weights: the editor will automatically adjust them!
 
 Minor rules:
 
@@ -121,13 +120,20 @@ appear if the diagrams are not manipulated carefully.  This affects the
 cutting rule, which is invalid for non-orientable diagrams, but the program
 should prevent you from trying to do that on non-orientable diagrams.
 
+If you want to view the diagram in the more traditional form, you can use the
+"view ambient arrows" option, which will show an equivalent diagram where
+every internal line has an arrow, if such a diagram exists...  If the diagram
+is not orientable, it will instead show orientation violations as red arrows
+and/or red circles (those aren't necessarily the places to blame though, since
+orientability is a global rather than local property).
+
 Tableau
 -------
 
 The tableau consists of two parts:
 
   - The upper table:
-      - Leftmost column (usually invisible): whether the j is being summed over.
+      - Leftmost column: whether the j is being summed over.
       - 2nd column: label of the j
       - 3rd column: phase (each dot stands for a single (-1)<sup>j</sup> phase)
       - Rightmost column: sqrt(2 j + 1) weights (only the exponent is shown)
