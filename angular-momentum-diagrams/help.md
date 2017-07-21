@@ -6,14 +6,12 @@ browser (no IE) and a working mouse with a scroll-wheel button (middle
 button).
 
 Features not yet available:
-- Renaming lines
-- Editing the tableau information (modifying deltas; merging j's; transporting
-  j over deltas)
+- Editing the tableau information (transporting j and lines over deltas)
 
 Layout
 ======
 
-The main area shows the diagram, of course.
+The main area shows the diagram.
 
 The right panel shows the tableau, which tracks phases, weights, and other
 tedious details.
@@ -38,28 +36,25 @@ change to the diagram automatically updates the URL, so you can "save"
 diagrams by bookmarking the URL.  You can also send it to other people.  (Be
 aware that the URL can get very very long for complicated diagrams!)
 
-Editing
--------
+Editing mode
+------------
 
 - <kbd>w</kbd>: create a Wigner 3-jm symbol at the location of your cursor
 - <kbd>c</kbd>: create a Clebsch-Gordan coefficient at the location of your cursor
-- <kbd>m</kbd>: create/flip/destroy a Wigner 1-jm symbol on the line at
-     the location of your cursor
-     (this is simply a (-1)<sup>j - m</sup> phase factor)
-- <kbd>j</kbd>: on a line, this will create a (-1)<sup>2 j</sup> phase factor
-     on a Wigner 3-jm node, it will flip the node without changing any phases
 - <kbd>a</kbd>: attach/join two nearby terminals, forming a single line
-- <kbd>x</kbd>: delete a node or a free line
-- <kbd>f</kbd>: turn frozen mode on or off (this disables editing)
+- <kbd>x</kbd>: delete a node or a free line (can be indirectly used to detach lines)
+- <kbd>f</kbd>: switch between editing mode and frozen mode
 - <kbd>r</kbd>: reset and clear the entire diagram
      (note if you encounter a bug in the app and <kbd>r</kbd> doesn't work,
       you can still click on this button as a link to reset!)
+- <kbd>Right-click</kbd> on a line will add/flip/remove the arrow.
+- <kbd>Middle-click</kbd> on a line will change its j to a fresh value.
 
 The tableau is editable too!  You can click on things, etc.  Some of these
-changes are still available (albeit more restricted) while frozen.
+modifications are still available (albeit more restricted) while frozen.
 
-Rules
------
+Frozen mode
+-----------
 
 Rules preserve the meaning of the diagram.
 
@@ -87,28 +82,31 @@ Minor rules:
   This changes the phase by (-1)<sup>2 j</sup>.  On j = 0 lines, this can also
   conjure arrows out of thin air.
 
-Major rules:
+- **Swap j variable**: <kbd>Middle-click</kbd> on a line cycles through the
+  variables that are known to be equal due to Kronecker deltas.
 
-- **Pruning rule:** <kbd>Right-drag</kbd> a loop line onto its neighboring
-  node will the set the opposite line to zero, and try to erase the loop
-  entirely along with the two adjacent 3-jm nodes.
+Major rules (six rules and they come in pairs):
 
-- **Growing rule:** <kbd>Middle-drag</kbd> a line onto empty space will create
-  two 3-jm nodes along with a loop (dual of pruning rule).
-
-- **Gluing rule:** <kbd>Right-drag</kbd> a line onto another line will join
-  the two lines together, creating two 3-jm nodes in the process.
-
-- **Cutting rule:** <kbd>Middle-drag</kbd> a line onto itself will split the
-  diagram into two separate pieces, creating two 3-jm nodes in the process.
-  This only works if at least one of the subdiagrams is orientable.
-
-- **Pinching rule:** <kbd>Middle-drag</kbd> a line onto another line will
+- **(I) Pinching rule:** <kbd>Middle-drag</kbd> a line onto another line will
   introduce a resolution of the identity as two 3-jm nodes, with a summed j in
   between.
 
-- **Prying rule:** <kbd>Right-click</kbd> a summed line onto itself to remove
+- **(I') Prying rule:** <kbd>Right-drag</kbd> a summed line onto itself to remove
   a resolution of the identity, destroying two 3-jm nodes.
+
+- **(II) Pruning rule:** <kbd>Right-drag</kbd> a loop line onto its neighboring
+  node will the set the opposite line to zero, and try to erase the loop
+  entirely along with the two adjacent 3-jm nodes.
+
+- **(II') Growing rule:** <kbd>Middle-drag</kbd> a line onto empty space will create
+  two 3-jm nodes along with a loop (dual of pruning rule).
+
+- **(III) Cutting rule:** <kbd>Middle-drag</kbd> a line onto itself will split the
+  diagram into two separate pieces, creating two 3-jm nodes in the process.
+  This only works if at least one of the subdiagrams is orientable.
+
+- **(III') Gluing rule:** <kbd>Right-drag</kbd> a line onto another line will join
+  the two lines together, creating two 3-jm nodes in the process.
 
 Interpretation
 ==============
@@ -120,9 +118,8 @@ signify variance.  The end result is that the rules are more mechanical and
 have fewer special cases to worry about (no distinction between
 internal/external lines).  The cost is that non-orientable subdiagrams can
 appear if the diagrams are not manipulated carefully.  This affects the
-cutting rule, which does not apply to non-orientable diagrams, but thankfully
-the program should prevent you from trying to do that on non-orientable
-diagrams.
+cutting rule, which is invalid for non-orientable diagrams, but the program
+should prevent you from trying to do that on non-orientable diagrams.
 
 Tableau
 -------

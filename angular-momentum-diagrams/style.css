@@ -88,7 +88,7 @@ main,
 #tableau-container {
     background: #fff9dd;
     vertical-align: top;
-    width: 200px;
+    width: 250px;
 }
 
 #tableau-container td,
@@ -140,6 +140,15 @@ main,
     font-weight: bold;
 }
 
+#delta-tableau li {
+    list-style-type: square;
+}
+
+#delta-tableau li.tip {
+    list-style-type: none;
+    color: #7e5e4f;
+}
+
 #help {
     background: #f9f9f9;
 }
@@ -163,8 +172,6 @@ body.frozen #help {
 
 #diagram,
 #tableau {
-    -moz-user-select: none;
-    user-select: none;
     cursor: default;
 }
 
@@ -250,7 +257,7 @@ g.line text.label {
 }
 
 g.line.one-j path.fg {
-    stroke-dasharray: 2 2;
+    stroke-dasharray: 18 2;
 }
 
 g.line.two-j text.label,

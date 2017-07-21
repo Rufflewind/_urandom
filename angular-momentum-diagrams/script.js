@@ -445,6 +445,10 @@ function vectorDot(v1, v2) {
     return s
 }
 
+function vectorSquare(v) {
+    return vectorDot(v, v)
+}
+
 function scalarMultiply(c, v) {
     v = Array.from(v)
     for (const i of v.keys()) {
@@ -1691,6 +1695,16 @@ function mergeDiagrams(diagram1, diagram2) {
     return diagram
 }
 
+function isSuperlineExposed(diagram, superlineId) {
+    for (const node of diagram.nodes) {
+        if (node.type == "terminal" &&
+            diagram.lines[node.lines[0]].superline == superlineId) {
+            return true
+        }
+    }
+    return false
+}
+
 function joinTerminals(diagram, terminalIndex1, terminalIndex2) {
     diagram = new Diagram(diagram)
     const terminal1 = diagram.node(terminalIndex1)
@@ -2172,6 +2186,19 @@ class Diagram {
         }))
     }
 
+    desumExposedSuperlines() {
+        return new Diagram(Object.assign({}, this.rawDiagram, {
+            superlines: mergeSuperlineLists(
+                this.rawDiagram.superlines,
+                ...Object.entries(this.rawDiagram.superlines)
+                .map(([superlineId, superline]) => (
+                    isSuperlineExposed(this.rawDiagram, superlineId)
+                    ? {[superlineId]: {summed: false}}
+                    : {}
+                ))),
+        }))
+    }
+
     renameSuperlines(renames) {
         return new Diagram(Object.assign({}, this.rawDiagram, {
             lines: Object.freeze(Object.assign(
@@ -2182,18 +2209,22 @@ class Diagram {
                                           line.superline),
                     })),
                 })))),
-            superlines: Object.freeze(Object.assign(
+            superlines: mergeSuperlineLists(
                 ...Object.entries(this.rawDiagram.superlines)
                 .map(([superlineId, superline]) => ({
                     [propOr(renames, superlineId, superlineId)]: superline,
-                })))),
-        }))
+                }))),
+            deltas: mergeDeltas(
+                this.rawDiagram.deltas.map(delta =>
+                    delta.map(superlineId =>
+                        propOr(renames, superlineId, superlineId)))),
+        })).removeUnusedSuperlines().desumExposedSuperlines()
     }
 
     removeUnusedSuperlines() {
         let marked = Object.assign({}, this.rawDiagram.superlines)
         for (const superlineId of Object.keys(marked)) {
-            if (!isEmptySuperline(marked[superlineId])) {
+            if (isEmptySuperline(marked[superlineId])) {
                 delete marked[superlineId]
             }
         }
@@ -3344,16 +3375,29 @@ function renderNode(update, editor, nodeIndex, frozen) {
     }, ...gChildren)
 }
 
+function cmpSuperlineId(x, y) {
+    if (x == "0") {
+        if (y == "0") {
+            return 0
+        }
+        return -1
+    }
+    if (y == "0") {
+        return +1
+    }
+    let d = x.length - y.length
+    if (d == 0) {
+        d = Number(x > y) - Number(x < y)
+    }
+    return d
+}
+
 function renderJTableau(update, superlines, focus) {
     return Array.from(new Set(
         Object.keys(superlines).concat("0")
-    )).sort((x, y) => {
-        let d = x.length - y.length
-        if (d == 0) {
-            d = Number(x > y) - Number(x < y)
-        }
-        return d
-    }).map(superlineId => {
+    )).sort(cmpSuperlineId).map(superlineId => {
+        const focusedName = focus.type == "tableauJName"
+                         && focus.superlineId == superlineId
         const superline = superlineId == "0"
                         ? EMPTY_SUPERLINE
                         : superlines[superlineId]
@@ -3386,23 +3430,21 @@ function renderJTableau(update, superlines, focus) {
                 "class": "summed",
                 onmousedown: function(e) {
                     if (e.buttons == 1) {
-                        update(modifyDiagram({}, diagram => {
+                        update(modifyDiagramWith(diagram => {
                             diagram = deepClone(diagram)
                             if (superlineId == "0") {
-                                return diagram
+                                return ""
                             }
-                            for (const node of diagram.nodes) {
-                                if (node.type != "terminal") {
-                                    continue
-                                }
-                                if (diagram.lines[node.lines[0]].superline ==
-                                    superlineId) {
-                                    return diagram
-                                }
+                            if (isSuperlineExposed(diagram, superlineId)) {
+                                return ""
                             }
                             diagram.superlines[superlineId].summed =
                                 !diagram.superlines[superlineId].summed
-                            return diagram
+                            return {
+                                equivalent: containsDeltas(
+                                    diagram.deltas, [["0", superlineId]]),
+                                diagram: diagram
+                            }
                         }))
                         e.stopPropagation()
                     }
@@ -3410,9 +3452,8 @@ function renderJTableau(update, superlines, focus) {
             }, superline.summed ? "\u2211" : ""),
             vnode("td", {
                 "class": "name",
-                contenteditable: "true",
-                [VNODE_SUSPEND_CHILDREN]: focus.type == "tableauJName"
-                              && focus.superlineId == superlineId,
+                contenteditable: superlineId != "0",
+                [VNODE_SUSPEND_CHILDREN]: focusedName,
                 onfocus: function(e) {
                     update(setFocus({
                         type: "tableauJName",
@@ -3420,19 +3461,22 @@ function renderJTableau(update, superlines, focus) {
                     }))
                 },
                 onblur: function(e) {
-                    const newSuperlineId = this.textContent
+                    let newSuperlineId = this.textContent
+                    newSuperlineId = newSuperlineId.trim()
+                    if (!newSuperlineId) {
+                        newSuperlineId = "0"
+                    }
                     update(editor => {
                         modifyDiagramWith(diagram => {
                             diagram = new Diagram(diagram)
-                            if (superlineId == newSuperlineId) {
+                            if (superlineId == newSuperlineId
+                                || !/^[\w_.]+$/.exec(newSuperlineId)) {
                                 return ""
-                            }
-                            if (diagram.hasSuperline(newSuperlineId)) {
-                                return "that label is already used"
                             }
                             const superline = diagram.superline(superlineId)
                             return {
-                                equivalent: superline.summed,
+                                equivalent: superline.summed &&
+                                            !diagram.superline(newSuperlineId),
                                 diagram: diagram.renameSuperlines({
                                     [superlineId]: newSuperlineId,
                                 }).rawDiagram,
@@ -3446,13 +3490,23 @@ function renderJTableau(update, superlines, focus) {
                 : superlineId),
             vnode("td", {
                 "class": "phase",
+                oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: function(e) {
                     if (e.buttons == 1) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
                                     diagram.superlines,
-                                    {[superlineId]: {phase: 1}}),
+                                    {[superlineId]: {phase: +1}}),
+                            })
+                        }))
+                        e.stopPropagation()
+                    } else if (e.buttons == 2) {
+                        update(modifyDiagram({}, diagram => {
+                            return Object.assign({}, diagram, {
+                                superlines: mergeSuperlineLists(
+                                    diagram.superlines,
+                                    {[superlineId]: {phase: -1}}),
                             })
                         }))
                         e.stopPropagation()
@@ -3488,15 +3542,78 @@ function renderJTableau(update, superlines, focus) {
     })
 }
 
-function renderDeltaTableau(update, deltas) {
-    return deltas.map(delta =>
-        vnode("li", {},
-              ...arrayIntercalate(
-                  " = ",
-                  Array.from(delta)
-                       .map(x => x == "0"
-                             ? vnode("span", {"class": "zero"}, "0")
-                             : String(x)))))
+function editDelta(deltaIndex, input) {
+    return diagram => {
+        const oldDeltas = diagram.deltas
+        diagram = Object.assign({}, diagram)
+        diagram.deltas = oldDeltas.slice()
+        diagram.deltas.splice(
+            deltaIndex, 1,
+            ...input.split(/[,;\n]/).map(delta =>
+                delta.split("=").map(s => s.trim()).filter(identity)))
+        diagram.deltas = mergeDeltas(diagram.deltas)
+        diagram.superlines = Object.assign({}, diagram.superlines)
+        for (const delta of diagram.deltas) {
+            for (const j of delta) {
+                if (!diagram.superlines[j]) {
+                    diagram.superlines[j] = EMPTY_SUPERLINE
+                }
+            }
+        }
+        return {
+            equivalent: equalDeltas(oldDeltas, diagram.deltas),
+            diagram: new Diagram(diagram).removeUnusedSuperlines().rawDiagram,
+        }
+    }
+}
+
+function renderDeltaJ(j) {
+    return j == "0"
+         ? vnode("span", {"class": "zero"}, "0")
+         : String(j)
+}
+
+function renderDeltaTableau(update, deltas, focus, frozen) {
+    const addNew = frozen ? [] : [null]
+    return vnode("ul", {}, ...deltas.concat(addNew).map((delta, deltaIndex) => {
+        const focused = focus.type == "delta"
+                     && focus.deltaIndex == deltaIndex
+        const children = delta == null
+                       ? [vnode("i", {}, "(add new)")]
+                       : arrayIntercalate(" = ", Array.from(delta)
+                                                      .map(renderDeltaJ))
+        return vnode("li", {
+            "class": delta == null ? "tip " : "",
+            contenteditable: "true",
+            [VNODE_SUSPEND_CHILDREN]: focused,
+            onmousedown: function(e) {
+                if (e.buttons == 4) {
+                    update(modifyDiagramWith(editDelta(deltaIndex, "")))
+                    e.preventDefault()
+                }
+            },
+            onfocus: function(e) {
+                if (delta == null) {
+                    this.textContent = ""
+                    // clearing the text somehow deselects the text
+                    // so this is a workaround
+                    let range = document.createRange()
+                    range.selectNodeContents(this)
+                    let sel = window.getSelection()
+                    sel.removeAllRanges()
+                    sel.addRange(range)
+                }
+                update(setFocus({type: "delta", deltaIndex: deltaIndex}))
+            },
+            onblur: function(e) {
+                const input = this.textContent
+                update(editor => {
+                    modifyDiagramWith(editDelta(deltaIndex, input))(editor)
+                    clearFocus(editor)
+                })
+            },
+        }, ...children)
+    }))
 }
 
 function renderVariable(type, name) {
@@ -3650,7 +3767,7 @@ function renderEquation(diagram, container) {
     let summedVarsStr =
         Object.keys(summedVars.js)
               .concat(Object.keys(summedVars.ms)).join(", ")
-    if (summedVarsStr != " ") {
+    if (summedVarsStr) {
         summedVarsStr = `\\sum_{${summedVarsStr}}`
     }
     let phasesStr = phases.join(" ")
@@ -3762,7 +3879,6 @@ function toSvgCoords(p) {
 
 function renderEditor(update, editor) {
     const diagram = editor.snapshot.diagram
-
     return [
         {
             element: window,
@@ -3832,7 +3948,8 @@ function renderEditor(update, editor) {
         {
             // Kronecker delta relations
             element: document.getElementById("delta-tableau"),
-            children: renderDeltaTableau(update, diagram.deltas),
+            children: [renderDeltaTableau(update, diagram.deltas,
+                                          editor.focus, editor.snapshot.frozen)],
         },
         {
             element: document.getElementById("equation-container"),
@@ -3866,10 +3983,15 @@ function modifyDiagram(flags, diagramTransform) {
 }
 
 /** Similar to modifyDiagram, but gets the flags from the result of the
-    transformation. */
+   transformation. */
 function modifyDiagramWith(transformer) {
     return editor => {
-        const result = transformer(editor.snapshot.diagram)
+        const result = transformer(editor.snapshot.diagram, editor.snapshot.frozen)
+        if (result == null || (typeof result == "object"
+                            && result.diagram == null)) {
+            setError(editor, "not yet implemented")
+            return
+        }
         if (typeof result == "string") { // error?
             setError(editor, result)
             return
@@ -3907,8 +4029,10 @@ function getModifiers(event) {
 
 function freshenEquation(container) {
     return editor => {
-        editor.staleEquation = false
-        renderEquation(editor.snapshot.diagram, container)
+        if (editor.staleEquation) {
+            editor.staleEquation = false
+            renderEquation(editor.snapshot.diagram, container)
+        }
     }
 }
 
@@ -3970,13 +4094,68 @@ function updateTrack(event) {
 }
 
 function finishTrack(editor, event) {
-    if (editor.trackStop.xy == null ||
-        Math.pow(editor.trackStart.xy[0] - editor.trackStop.xy[0], 2) +
-        Math.pow(editor.trackStart.xy[1] - editor.trackStop.xy[1], 2) < 10) {
+    if (editor.trackStop.xy == null
+        || (editor.trackStart.type == editor.trackStop.type
+         && editor.trackStart.nodeIndex == editor.trackStop.nodeIndex
+         && editor.trackStart.lineId == editor.trackStop.lineId
+         && vectorSquare(vectorSubtract(editor.trackStart.xy,
+                                        editor.trackStop.xy)) < 10)) {
         if (editor.trackStart.type == "line") {
-            modifyDiagram({equivalent: true}, diagram =>
-                flipW1jRule(diagram, editor.trackStart.lineId))(editor)
-            return
+            if (event.button == 2) {
+                if (editor.snapshot.frozen) {
+                    modifyDiagram({equivalent: true}, diagram =>
+                        flipW1jRule(diagram, editor.trackStart.lineId))(editor)
+                } else {
+                    modifyDiagram({}, diagram =>
+                        addW1j(diagram, editor.trackStart.lineId))(editor)
+                }
+                return
+            } else if (event.button == 1) {
+                const lineId = editor.trackStart.lineId
+                if (editor.snapshot.frozen) {
+                    modifyDiagram({equivalent: true}, diagram => {
+                        const line = Object.assign({}, diagram.lines[lineId])
+                        const found = findDeltaEntry(diagram.deltas, line.superline)
+                        if (!found) {
+                            return diagram
+                        }
+                        const [j, i] = found
+                        line.superline = diagram.deltas[j][(i + 1) %
+                            diagram.deltas[j].length]
+                        return Object.assign({}, diagram, {
+                            lines: Object.assign({}, diagram.lines, {
+                                [lineId]: line,
+                            }),
+                        })
+                    })(editor)
+                } else {
+                    modifyDiagram({}, diagram => {
+                        // don't bother if it's already unique
+                        let unique = true
+                        for (const [id, line] of Object.entries(diagram.lines)) {
+                            if (id != lineId &&
+                                line.superline == diagram.lines[lineId].superline) {
+                                unique = false
+                            }
+                        }
+                        if (unique) {
+                            return diagram
+                        }
+                        diagram = Object.assign({}, diagram)
+                        const newLabel = availSuperlineLabels(diagram).next().value
+                        diagram.lines = Object.assign({}, diagram.lines, {
+                            [lineId]: Object.assign({}, diagram.lines[lineId], {
+                                superline: newLabel,
+                            })
+                        })
+                        diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+                            [newLabel]: EMPTY_SUPERLINE
+                        })
+                        return diagram
+                    })(editor)
+                }
+                return
+            }
         }
     } else {
         const stopXy = toSvgCoords(editor.trackStop.xy)
@@ -4037,6 +4216,7 @@ function mouseUp(event) {
         } else {
             clearTrack(editor, event)
         }
+        event.stopPropagation()
     }
 }
 
@@ -4056,6 +4236,13 @@ function mouseMove(event) {
                     event.clientX + editor.dragOffsetX,
                     event.clientY + editor.dragOffsetY,
                     event.ctrlKey))(editor)
+            event.stopPropagation()
+            // prevent user from selecting things by accident;
+            // we can't do this in mousedown, because that breaks deselection;
+            // we also can't use user-select, because that also breaks deselection
+            // (a textbox might *look* like it's deselected, but middle-click paste
+            // and backspace still works!)
+            event.preventDefault()
         } else {
             updateTrack(event)(editor)
         }

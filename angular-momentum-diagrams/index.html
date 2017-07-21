@@ -12,15 +12,13 @@
         <h1>Angular momentum diagram tool (alpha version)</h1>
         <p><em id="notice"></em></p>
         <p id="controls">
-          <b title="Create Wigner 3-jm symbol">&nbsp;w</b>
-          <b title="Create Clebsch&ndash;Gordan coefficient">&nbsp;c</b>
-          <b title="Create Wigner 1-jm symbol">&nbsp;m</b>
-          <b title="Create 2j phase factor on a line, or flip a Wigner 3-jm node">&nbsp;j</b>
-          <b title="Attach two lines">&nbsp;a</b>
-          <b title="Delete">&nbsp;x</b>
-          <b id="freeze" title="Freeze/Unfreeze diagram">&nbsp;f</b>
-          <b title="Reset and reload page"><a href="#">&nbsp;r</a></b>
-          <b title="Help"><a href="help.html">&nbsp;?</a></b>
+          <b title="Press [w] to create a Wigner 3-jm symbol">&nbsp;w</b>
+          <b title="Press [c] to create a Clebsch&ndash;Gordan coefficient">&nbsp;c</b>
+          <b title="Press [a] to attach two lines">&nbsp;a</b>
+          <b title="Press [x] to delete a node or a free line">&nbsp;x</b>
+          <b id="freeze" title="Press [f] to switch between editing and frozen mode">&nbsp;f</b>
+          <b title="Press [r] or click this button to reset and reload page"><a href="#">&nbsp;r</a></b>
+          <b title="Press [?] or click this button for help"><a href="help.html">&nbsp;?</a></b>
         </p>
       </div>
       <div id="middle-container">
@@ -53,7 +51,7 @@
                 </thead>
                 <tbody id="tableau-body" class="main"></tbody>
               </table>
-              <ul id="delta-tableau"></ul>
+              <div id="delta-tableau"></div>
             </div>
           </div>
         </div>
