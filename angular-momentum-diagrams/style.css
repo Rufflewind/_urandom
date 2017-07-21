@@ -7,6 +7,8 @@
 }
 
 html, body {
+    /* needed for Firefox, but do not enable it on other browsers!  */
+    -moz-user-select: none;
     height: 100vh;
     margin: 0;
     padding: 0;

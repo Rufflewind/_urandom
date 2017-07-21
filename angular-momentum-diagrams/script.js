@@ -726,16 +726,6 @@ function sparseGaussElim(field, matrix, vector) {
 //////////////////////////////////////////////////////////////////////////////
 // DOM manipulation
 
-function childNodesOf() {
-    return this.childNodes
-}
-
-function removeChildren(element) {
-    while (element.firstChild) {
-        element.removeChild(element.firstChild)
-    }
-}
-
 const VNODE_KEY = Symbol("VNODE_KEY")
 const VNODE_SUSPEND_CHILDREN = Symbol("VNODE_SUSPEND_CHILDREN")
 const VNODE_SYMBOLS = Symbol("VNODE_SYMBOLS")
@@ -4306,8 +4296,10 @@ function handleDrag(update, canDrag) {
         [ENABLE_DRAG]: "true",
         draggable: "true",
         ondragstart: function(e) {
+            // Firefox needs this to work
+            e.dataTransfer.setData("text/plain", null)
             update(editor => {
-                const dragState = canDrag(editor, e)
+                const dragState = canDrag.call(this, editor, e)
                 if (dragState) {
                     editor.drag = dragState
                 }
@@ -4316,20 +4308,27 @@ function handleDrag(update, canDrag) {
         ondragend: function(e) {
             update(editor => editor.drag = {type: null})
         },
-        ondragexit: function(e) {
-            update(editor => editor.drag = {type: null})
-        },
     }
 }
 
 function handleDrop(update, canDrop, drop) {
+    function dragleave(e) {
+        update(editor => editor.drop = {type: null})
+    }
     return {
-        ondragleave: function(e) {
-            update(editor => editor.drop = {type: null})
+        ondragenter: function(e) {
+            update(editor => {
+                const dropState = canDrop.call(this, editor, e)
+                if (dropState) {
+                    editor.drop = dropState
+                }
+            })
         },
+        ondragleave: dragleave,
+        ondragexit: dragleave,
         ondragover: function(e) {
             update(editor => {
-                const dropState = canDrop(editor, e)
+                const dropState = canDrop.call(this, editor, e)
                 if (dropState) {
                     editor.drop = dropState
                     e.preventDefault()
@@ -4339,7 +4338,7 @@ function handleDrop(update, canDrop, drop) {
         ondrop: function(e) {
             update(editor => {
                 e.preventDefault()
-                drop(editor, e)
+                drop.call(this, editor, e)
                 editor.drag = {type: null}
                 editor.drop = {type: null}
             })
