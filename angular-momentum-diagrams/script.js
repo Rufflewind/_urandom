@@ -1831,9 +1831,31 @@ function deleteNode(diagram, nodeIndex) {
     return diagram
 }
 
+/** Examine the diagram to see if there are any deltas that are immediately
+ * obvious from its topology. */
 function inferDeltas(diagram) {
-    throw new Error("inferDeltas: not yet implemented")
-    return []
+    let deltas = []
+    let knownZeros = new Set()
+    diagram = new Diagram(diagram)
+    for (const node of diagram.nodes()) {
+        const loop = findW3jLoop(node)
+        if (typeof loop == "object") {
+            if (loop.loopLine.direction % 2) {
+                knownZeros.add(loop.cutLine.id)
+            }
+        }
+        if (node.type == "w3j") {
+            for (const line of node.lines()) {
+                if (knownZeros.has(line.id)) {
+                    deltas.push([line.cycNodeLine(0, 1).id,
+                                 line.cycNodeLine(0, 2).id])
+                    break
+                }
+            }
+        }
+    }
+    deltas.push(["0"].concat(Array.from(knownZeros)))
+    return deltas
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -2224,7 +2246,7 @@ class Diagram {
     removeUnusedSuperlines() {
         let marked = Object.assign({}, this.rawDiagram.superlines)
         for (const superlineId of Object.keys(marked)) {
-            if (isEmptySuperline(marked[superlineId])) {
+            if (!isEmptySuperline(marked[superlineId])) {
                 delete marked[superlineId]
             }
         }
@@ -2692,7 +2714,10 @@ function loopElimRule(diagram, lineId, nodeIndex) {
     const lb = loop.cutLine.cycNodeLine(1, 1).reverse()
     const la = loop.cutLine.cycNodeLine(1, 2).reverse()
     if (la.id == lb.id && !isLineDirectable(la.rawLine)) {
-        return "other loop must be directed too"
+        // other loop must be directed too if we want to eliminate it
+        diagram = deepClone(diagram.rawDiagram)
+        diagram.lines[loop.cutLine.id].superline = "0"
+        return diagram
     }
     const md = ld.toString()
     const mc = lc.toString()
@@ -2724,7 +2749,8 @@ function loopElimRule(diagram, lineId, nodeIndex) {
             terminalNode("$1", "b"),
         ],
         lines: {
-            $1: {superline: jb, direction: 0},
+            $1: {superline: jb, direction: 0,
+                 arcHeight: -8 * lb.rawLine.arcHeight}, // empirically works...
         },
         superlines: {
             [jd]: {weight: 1},
@@ -2739,6 +2765,8 @@ function loopElimRule(diagram, lineId, nodeIndex) {
 function loopIntroRule(diagram, lineId, xy1, xy2) {
     diagram = new Diagram(diagram)
     const line = diagram.line(lineId)
+    const dxy = vectorSubtract(xy2, xy1)
+    const angle = Math.atan2(dxy[1], dxy[0])
     return diagram.substitute({
         nodes: [
             terminalNode(line.toString(), "a"),
@@ -2755,10 +2783,13 @@ function loopIntroRule(diagram, lineId, xy1, xy2) {
             w3jNode("$3", "$2", "$1", ...xy1),
         ],
         lines: {
-            $4: {superline: "0", direction: +1, arcHeight: 50.0},
+            $4: {superline: "0", direction: +1,
+                 angle: angle - 0.5 * Math.PI, arcHeight: 50.0},
             $3: {superline: "0", direction: 0},
-            $2: {superline: line.superlineId, direction: 0},
-            $1: {superline: line.superlineId, direction: +1},
+            $2: {superline: line.superlineId, direction: 0,
+                 arcHeight: -line.rawLine.arcHeight / 4},
+            $1: {superline: line.superlineId, direction: +1,
+                 arcHeight: -line.rawLine.arcHeight / 2},
         },
         superlines: {
             [line.superlineId]: {weight: 1},
@@ -2806,10 +2837,14 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
             w3jNode("$2", "$4", "$5", ...xy2),
         ],
         lines: {
-            $1: {superline: line1.superlineId, direction: 0},
-            $2: {superline: line1.superlineId, direction: 0},
-            $3: {superline: line2.superlineId, direction: 0},
-            $4: {superline: line2.superlineId, direction: 0},
+            $1: {superline: line1.superlineId, direction: 0,
+                 arcHeight: -50.0},
+            $2: {superline: line1.superlineId, direction: 0,
+                 arcHeight: -50.0},
+            $3: {superline: line2.superlineId, direction: 0,
+                 arcHeight: 50.0},
+            $4: {superline: line2.superlineId, direction: 0,
+                 arcHeight: 50.0},
             $5: {superline: j, direction: 0},
         },
         superlines: {
@@ -2955,6 +2990,8 @@ function cutRule(diagram, lineId, xy1, xy2) {
             return ambient1
         }
     }
+    const dxy = vectorSubtract(xy1, xy2)
+    const angle = Math.atan2(dxy[1], dxy[0])
     const result = diagram.substitute({
         nodes: [
             terminalNode(line.toString(), "a"),
@@ -2973,8 +3010,10 @@ function cutRule(diagram, lineId, xy1, xy2) {
         lines: {
             $1: {superline: line.superlineId, direction: 0},
             $2: {superline: line.superlineId, direction: 0},
-            $3: {superline: "0", direction: 0},
-            $4: {superline: "0", direction: 0},
+            $3: {superline: "0", direction: 0,
+                 angle: angle + 0.5 * Math.PI, arcHeight: 50},
+            $4: {superline: "0", direction: 0,
+                 angle: angle + 1.5 * Math.PI, arcHeight: 50},
         },
         deltas: [
             ["0", line.superlineId],
@@ -3023,17 +3062,6 @@ function glueRule(diagram, lineId1, lineId2, xy1, xy2) {
             [line2.superlineId]: {weight: +1},
         },
     }).rawDiagram
-}
-
-function deltaElimRule(diagram, entry) {
-    const inferred = inferDeltas(diagram)
-    const related = relatedDeltas(diagram.deltas, entry)
-    if (!containsDeltas(inferred, related)) {
-        return "cannot remove uninferrable delta entry"
-    }
-    return Object.freeze(Object.assign({}, diagram, {
-        deltas: removeDeltaEntry(diagram.deltas, entry)
-    }))
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -3392,7 +3420,20 @@ function cmpSuperlineId(x, y) {
     return d
 }
 
-function renderJTableau(update, superlines, focus) {
+function isValidSuperlineId(superlineId) {
+    // prevent exotic characters from messing up the delta input syntax
+    return !!/^[\w_.]+$/.exec(superlineId)
+}
+
+function isLoopLine(line) {
+    return line.node(0).type == "w3j"
+        && line.node(0).index == line.node(1).index
+        && (line.superlineId == "0" || line.direction % 2)
+}
+
+function renderJTableau(update, superlines, editor) {
+    const frozen = editor.snapshot.frozen
+    const focus = editor.focus
     return Array.from(new Set(
         Object.keys(superlines).concat("0")
     )).sort(cmpSuperlineId).map(superlineId => {
@@ -3401,19 +3442,20 @@ function renderJTableau(update, superlines, focus) {
         const superline = superlineId == "0"
                         ? EMPTY_SUPERLINE
                         : superlines[superlineId]
+        const twoJ = vnode("span", {"class": "two-j"}, "\u2022\u2022")
         let phase
         switch (mod(superline.phase, 4)) {
             case 0:
-                phase = ["\xa0\xa0"]
+                phase = ["\xa0\xa0\xa0"]
                 break
             case 1:
-                phase = ["\xa0."]
+                phase = ["\u2022\xa0\xa0"]
                 break
             case 2:
-                phase = [vnode("span", {"class": "two-j"}, ":"), "\xa0"]
+                phase = [twoJ, "\xa0"]
                 break
             case 3:
-                phase = [vnode("span", {"class": "two-j"}, ":"), "."]
+                phase = [twoJ, "\u2022"]
                 break
         }
         let weight = superline.weight
@@ -3470,13 +3512,38 @@ function renderJTableau(update, superlines, focus) {
                         modifyDiagramWith(diagram => {
                             diagram = new Diagram(diagram)
                             if (superlineId == newSuperlineId
-                                || !/^[\w_.]+$/.exec(newSuperlineId)) {
+                                || !isValidSuperlineId(newSuperlineId)) {
                                 return ""
                             }
                             const superline = diagram.superline(superlineId)
+                            if (frozen
+                                && superline.phase == 0
+                                && !superline.summed
+                                && !findDeltaEntry(deltas, superlineId)) {
+                                let numLoops = 0
+                                for (const line of diagram.lines()) {
+                                    if (line.superlineId == superlineId) {
+                                        if (isLoopLine(line)) {
+                                            numLoops += 1
+                                        } else {
+                                            numLoops = null
+                                            break
+                                        }
+                                    }
+                                }
+                                if (numLoops != null
+                                    && superline.weight == -numLoops) {
+                                    return {
+                                        equivalent: true,
+                                        diagram: diagram.renameSuperlines({
+                                            [superlineId]: newSuperlineId,
+                                        }).rawDiagram,
+                                    }
+                                }
+                            }
                             return {
-                                equivalent: superline.summed &&
-                                            !diagram.superline(newSuperlineId),
+                                equivalent: superline.summed
+                                         && !diagram.superline(newSuperlineId),
                                 diagram: diagram.renameSuperlines({
                                     [superlineId]: newSuperlineId,
                                 }).rawDiagram,
@@ -3488,11 +3555,15 @@ function renderJTableau(update, superlines, focus) {
             }, superlineId == "0"
                 ? vnode("span", {"class": "zero"}, "0")
                 : superlineId),
-            vnode("td", {
-                "class": "phase",
+            vnode("td", Object.assign({
+                "class": "phase "
+                       + (editor.drag.type == "phase"
+                       && editor.drag.superlineId == superlineId ? "drag " : "")
+                       + (editor.drop.type == "phase"
+                       && editor.drop.superlineId == superlineId ? "drop " : ""),
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: function(e) {
-                    if (e.buttons == 1) {
+                    if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -3512,12 +3583,48 @@ function renderJTableau(update, superlines, focus) {
                         e.stopPropagation()
                     }
                 },
-            }, ...phase),
-            vnode("td", {
-                "class": "weight",
+            }, handleDrag(update, (editor, e) => ({
+                type: "phase",
+                superlineId: superlineId,
+            })), handleDrop(update, (editor, e) => {
+                if (editor.drag.type != "phase"
+                    || editor.drag.superlineId == superlineId
+                    || (editor.snapshot.frozen &&
+                        !containsDeltas(editor.snapshot.diagram.deltas,
+                                        [editor.drag.superlineId,
+                                         superlineId]))) {
+                    return null
+                }
+                return {
+                    type: "phase",
+                    superlineId: superlineId,
+                }
+            }, (editor, e) => {
+                modifyDiagramWith(diagram => {
+                    const equivalent = containsDeltas(diagram.deltas,
+                                                      [editor.drag.superlineId,
+                                                       superlineId])
+                    diagram = Object.assign({}, diagram, {
+                        superlines: mergeSuperlineLists(
+                            diagram.superlines,
+                            {
+                                [editor.drag.superlineId]: {phase: -1},
+                                [superlineId]: {phase: +1},
+                            }
+                        )
+                    })
+                    return {equivalent: equivalent, diagram: diagram}
+                })(editor)
+            })), ...phase),
+            vnode("td", Object.assign({
+                "class": "weight "
+                       + (editor.drag.type == "weight"
+                       && editor.drag.superlineId == superlineId ? "drag " : "")
+                       + (editor.drop.type == "weight"
+                       && editor.drop.superlineId == superlineId ? "drop " : ""),
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: function(e) {
-                    if (e.buttons == 1) {
+                    if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -3537,7 +3644,39 @@ function renderJTableau(update, superlines, focus) {
                         e.preventDefault()
                     }
                 },
-            }, weight),
+            }, handleDrag(update, (editor, e) => ({
+                type: "weight",
+                superlineId: superlineId,
+            })), handleDrop(update, (editor, e) => {
+                if (editor.drag.type != "weight"
+                    || editor.drag.superlineId == superlineId
+                    || (editor.snapshot.frozen &&
+                        !containsDeltas(editor.snapshot.diagram.deltas,
+                                        [editor.drag.superlineId,
+                                         superlineId]))) {
+                    return null
+                }
+                return {
+                    type: "weight",
+                    superlineId: superlineId,
+                }
+            }, (editor, e) => {
+                modifyDiagramWith(diagram => {
+                    const equivalent = containsDeltas(diagram.deltas,
+                                                      [editor.drag.superlineId,
+                                                       superlineId])
+                    diagram = Object.assign({}, diagram, {
+                        superlines: mergeSuperlineLists(
+                            diagram.superlines,
+                            {
+                                [editor.drag.superlineId]: {weight: -1},
+                                [superlineId]: {weight: +1},
+                            }
+                        )
+                    })
+                    return {equivalent: equivalent, diagram: diagram}
+                })(editor)
+            })), weight),
         )
     })
 }
@@ -3560,8 +3699,11 @@ function editDelta(deltaIndex, input) {
                 }
             }
         }
+        const inferredDeltas = inferDeltas(diagram)
         return {
-            equivalent: equalDeltas(oldDeltas, diagram.deltas),
+            equivalent: equalDeltas(
+                mergeDeltas(inferredDeltas, oldDeltas),
+                mergeDeltas(inferredDeltas, diagram.deltas)),
             diagram: new Diagram(diagram).removeUnusedSuperlines().rawDiagram,
         }
     }
@@ -3579,7 +3721,7 @@ function renderDeltaTableau(update, deltas, focus, frozen) {
         const focused = focus.type == "delta"
                      && focus.deltaIndex == deltaIndex
         const children = delta == null
-                       ? [vnode("i", {}, "(add new)")]
+                       ? [vnode("i", {}, "(create \u03b4)")]
                        : arrayIntercalate(" = ", Array.from(delta)
                                                       .map(renderDeltaJ))
         return vnode("li", {
@@ -3842,6 +3984,8 @@ function newEditor() {
         notice: "Still a WIP.  Please report any bugs you find!",
         hover: {type: null},
         focus: {type: null},
+        drag: {type: null},
+        drop: {type: null},
         mouseX: null,
         mouseY: null,
         trackType: null,
@@ -3943,7 +4087,7 @@ function renderEditor(update, editor) {
         },
         {
             element: document.getElementById("tableau-body"),
-            children: renderJTableau(update, diagram.superlines, editor.focus),
+            children: renderJTableau(update, diagram.superlines, editor),
         },
         {
             // Kronecker delta relations
@@ -4062,6 +4206,51 @@ function setFocus(entity) {
 
 const clearFocus = setFocus({type: null})
 
+function handleDrag(update, canDrag) {
+    return {
+        draggable: "true",
+        ondragstart: function(e) {
+            update(editor => {
+                const dragState = canDrag(editor, e)
+                if (dragState) {
+                    editor.drag = dragState
+                }
+            })
+        },
+        ondragend: function(e) {
+            update(editor => editor.drag = {type: null})
+        },
+        ondragexit: function(e) {
+            update(editor => editor.drag = {type: null})
+        },
+    }
+}
+
+function handleDrop(update, canDrop, drop) {
+    return {
+        ondragleave: function(e) {
+            update(editor => editor.drop = {type: null})
+        },
+        ondragover: function(e) {
+            update(editor => {
+                const dropState = canDrop(editor, e)
+                if (dropState) {
+                    editor.drop = dropState
+                    e.preventDefault()
+                }
+            })
+        },
+        ondrop: function(e) {
+            update(editor => {
+                e.preventDefault()
+                drop(editor, e)
+                editor.drag = {type: null}
+                editor.drop = {type: null}
+            })
+        },
+    }
+}
+
 function startTrack(event, trackType) {
     return editor => {
         editor.trackType = trackType
@@ -4093,6 +4282,42 @@ function updateTrack(event) {
     }
 }
 
+function isSuperlineOfLineUnique(diagram, lineId) {
+    const line0 = diagram.lines[lineId]
+    for (const [id, line] of Object.entries(diagram.lines)) {
+        if (id != lineId &&
+            line.superline == line0.superline) {
+            return false
+        }
+    }
+    return !findDeltaEntry(diagram.deltas, line0.superline)
+}
+
+function generateLoopSuperline(diagram, lineId) {
+    if (!isLoopLine(new Diagram(diagram).line(lineId))) {
+        return null
+    }
+    if (isSuperlineOfLineUnique(diagram, lineId)) {
+        return diagram
+    }
+    // a loop line can become whatever it wants
+    diagram = Object.assign({}, diagram)
+    const newLabel = availSuperlineLabels(diagram).next().value
+    const oldLabel = diagram.lines[lineId].superline
+    const line = diagram.lines[lineId]
+    diagram.lines = Object.assign({}, diagram.lines, {
+        [lineId]: Object.assign({}, line, {
+            direction: line.direction ? line.direction : +1,
+            superline: newLabel,
+        })
+    })
+    diagram.superlines = mergeSuperlineLists(diagram.superlines, {
+        [oldLabel]: ensureSuperline({weight: +1}),
+        [newLabel]: ensureSuperline({weight: -1}),
+    })
+    return new Diagram(diagram).removeUnusedSuperlines().rawDiagram
+}
+
 function finishTrack(editor, event) {
     if (editor.trackStop.xy == null
         || (editor.trackStart.type == editor.trackStop.type
@@ -4114,6 +4339,10 @@ function finishTrack(editor, event) {
                 const lineId = editor.trackStart.lineId
                 if (editor.snapshot.frozen) {
                     modifyDiagram({equivalent: true}, diagram => {
+                        const result = generateLoopSuperline(diagram, lineId)
+                        if (result) {
+                            return result
+                        }
                         const line = Object.assign({}, diagram.lines[lineId])
                         const found = findDeltaEntry(diagram.deltas, line.superline)
                         if (!found) {
@@ -4131,14 +4360,7 @@ function finishTrack(editor, event) {
                 } else {
                     modifyDiagram({}, diagram => {
                         // don't bother if it's already unique
-                        let unique = true
-                        for (const [id, line] of Object.entries(diagram.lines)) {
-                            if (id != lineId &&
-                                line.superline == diagram.lines[lineId].superline) {
-                                unique = false
-                            }
-                        }
-                        if (unique) {
+                        if (isSuperlineOfLineUnique(diagram, lineId)) {
                             return diagram
                         }
                         diagram = Object.assign({}, diagram)

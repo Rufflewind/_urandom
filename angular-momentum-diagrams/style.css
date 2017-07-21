@@ -86,7 +86,7 @@ main,
 }
 
 #tableau-container {
-    background: #fff9dd;
+    background: #f7da7f;
     vertical-align: top;
     width: 250px;
 }
@@ -111,6 +111,11 @@ main,
     white-space: nowrap;
 }
 
+#tableau *,
+#delta-tableau * {
+    transition: background 0.25s;
+}
+
 #tableau .summed {
     width: 1em;
 }
@@ -130,6 +135,21 @@ main,
     width: 4em;
 }
 
+#tableau td:focus,
+#tableau td:hover,
+#delta-tableau li:focus,
+#delta-tableau li:hover {
+    background: white;
+}
+
+#tableau .drag {
+    opacity: 0.5;
+}
+
+#tableau .drop {
+    background: #8bd35b;
+}
+
 #tableau td.phase,
 #tableau td.weight {
     font-family: monospace;
@@ -140,7 +160,12 @@ main,
     font-weight: bold;
 }
 
+#delta-tableau ul {
+    padding: 0 40px;
+}
+
 #delta-tableau li {
+    padding: 4px;
     list-style-type: square;
 }
 
@@ -196,7 +221,7 @@ g.line.zero use.arrow {
 }
 
 g.line * {
-    transition: fill 0.15s, stroke 0.15s;
+    transition: fill 0.25s, stroke 0.25s;
 }
 
 g.line path.bg,
@@ -270,7 +295,7 @@ g.arrow circle.hit {
 }
 
 g.node * {
-    transition: fill 0.15s;
+    transition: fill 0.25s;
 }
 
 g.node circle {
