@@ -66,46 +66,46 @@ phase factors or weights: the editor will automatically adjust them!
 
 Minor rules:
 
-- **Orientation reversal:** <kbd>Right-click</kbd> on a node to flip the
-  orientation.  This changes the phase by (-1)<sup>j<sub>1</sub> +
-  j<sub>2</sub> + j<sub>3</sub></sup>
-
-- **Double j phase**: <kbd>Shift</kbd> + <kbd>Right-click</kbd> on a node to
-  change the phase by (-1)<sup>2 j<sub>1</sub> + 2 j<sub>2</sub> + 2
-  j<sub>3</sub></sup>
-
-- **Triple arrow rule**: <kbd>Middle-click</kbd> on a node to change the
-  surrounding arrows
-
 - **Arrow reversal**: <kbd>Right-click</kbd> on a line to flip the arrow.
   This changes the phase by (-1)<sup>2 j</sup>.  On j = 0 lines, this can also
   conjure arrows out of thin air.
+
+- **Triple arrow rule**: <kbd>Right-click</kbd> on a node to change the
+  surrounding arrows
+
+- **Orientation reversal:** <kbd>Middle-click</kbd> on a node to flip the
+  orientation.  This changes the phase by (-1)<sup>j<sub>1</sub> +
+  j<sub>2</sub> + j<sub>3</sub></sup>
+
+- **Double j phase**: <kbd>Shift</kbd> + <kbd>Middle-click</kbd> on a node to
+  change the phase by (-1)<sup>2 j<sub>1</sub> + 2 j<sub>2</sub> + 2
+  j<sub>3</sub></sup>
 
 - **Swap j variable**: <kbd>Middle-click</kbd> on a line cycles through the
   variables that are known to be equal due to Kronecker deltas.
 
 Major rules (six rules and they come in pairs):
 
-- **(I) Pinching rule:** <kbd>Middle-drag</kbd> a line onto another line will
+- **(I) Pinching rule:** <kbd>Right-drag</kbd> a line onto another line will
   introduce a resolution of the identity as two 3-jm nodes, with a summed j in
   between.
 
-- **(I') Prying rule:** <kbd>Right-drag</kbd> a summed line onto itself to remove
-  a resolution of the identity, destroying two 3-jm nodes.
+- **(I') Prying rule:** <kbd>Middle-drag</kbd> a summed line onto any node to
+  remove a resolution of the identity, destroying two 3-jm nodes.
 
-- **(II) Pruning rule:** <kbd>Right-drag</kbd> a loop line onto its neighboring
-  node will the set the opposite line to zero, and try to erase the loop
-  entirely along with the two adjacent 3-jm nodes.
+- **(II) Pruning rule:** <kbd>Right-drag</kbd> a loop line onto its
+  neighboring node will the set the opposite line to zero, and try to erase
+  the loop entirely along with the two adjacent 3-jm nodes.
 
-- **(II') Growing rule:** <kbd>Middle-drag</kbd> a line onto empty space will create
-  two 3-jm nodes along with a loop (dual of pruning rule).
+- **(II') Growing rule:** <kbd>Middle-drag</kbd> a line onto empty space will
+  create two 3-jm nodes along with a loop (dual of pruning rule).
 
-- **(III) Cutting rule:** <kbd>Middle-drag</kbd> a line onto itself will split the
-  diagram into two separate pieces, creating two 3-jm nodes in the process.
+- **(III) Cutting rule:** <kbd>Right-drag</kbd> a line onto itself will split
+  the diagram into two separate pieces, creating two 3-jm nodes in the process.
   This only works if at least one of the subdiagrams is orientable.
 
-- **(III') Gluing rule:** <kbd>Right-drag</kbd> a line onto another line will join
-  the two lines together, creating two 3-jm nodes in the process.
+- **(III') Gluing rule:** <kbd>Middle-drag</kbd> a line onto another line will
+  join the two lines together, creating two 3-jm nodes in the process.
 
 Interpretation
 ==============

@@ -173,6 +173,11 @@ main,
     list-style-type: square;
 }
 
+#delta-tableau li:empty::before {
+    /* prevent collapsing on empty boxes (affects Firefox) */
+    content: "\a0";
+}
+
 #delta-tableau li.tip {
     list-style-type: none;
     color: #7e5e4f;

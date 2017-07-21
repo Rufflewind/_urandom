@@ -742,7 +742,7 @@ const VNODE_SYMBOLS = Symbol("VNODE_SYMBOLS")
 const VNODE_EVENT_LISTENERS = Symbol("VNODE_EVENT_LISTENERS")
 
 function vnodeGetSymbol(elem, key) {
-    return (event.target[VNODE_SYMBOLS] || {})[key]
+    return (elem[VNODE_SYMBOLS] || {})[key]
 }
 
 function vnodeAmendAttributes(attrs, elem) {
@@ -3350,7 +3350,7 @@ function renderLine(update, editor, lineId, ambient) {
                     e.stopPropagation()
                 }
             },
-        }, line.superline), // T??
+        }, line.superline),
         ...renderArrow(update, diagram, lineId, ambient),
     )
 }
@@ -3452,7 +3452,7 @@ function renderNode(update, editor, nodeIndex, frozen) {
                     })
                 ))
                 e.stopPropagation()
-            } else if (e.buttons == 2) {
+            } else if (e.buttons == 4) {
                 if (node.type == "terminal") {
                     return
                 }
@@ -3466,7 +3466,7 @@ function renderNode(update, editor, nodeIndex, frozen) {
                         flipW3jRule(diagram, nodeIndex)))
                 }
                 e.stopPropagation()
-            } else if (e.buttons == 4) {
+            } else if (e.buttons == 2) {
                 if (node.type == "terminal") {
                     return
                 }
@@ -3638,7 +3638,7 @@ function renderJTableau(update, superlines, editor) {
                        && editor.drop.superlineId == superlineId ? "drop " : ""),
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: function(e) {
-                    if (e.buttons == 4) {
+                    if (e.buttons == 2) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -3647,7 +3647,7 @@ function renderJTableau(update, superlines, editor) {
                             })
                         }))
                         e.stopPropagation()
-                    } else if (e.buttons == 2) {
+                    } else if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -3699,7 +3699,7 @@ function renderJTableau(update, superlines, editor) {
                        && editor.drop.superlineId == superlineId ? "drop " : ""),
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: function(e) {
-                    if (e.buttons == 4) {
+                    if (e.buttons == 2) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -3708,7 +3708,7 @@ function renderJTableau(update, superlines, editor) {
                             })
                         }))
                         e.preventDefault()
-                    } else if (e.buttons == 2) {
+                    } else if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
                                 superlines: mergeSuperlineLists(
@@ -4141,10 +4141,10 @@ function renderEditor(update, editor) {
             attributes: {
                 oncontextmenu: function(e) { e.preventDefault() },
                 onmousedown: e => {
-                    if (e.buttons == 2) {
+                    if (e.buttons == 4) {
                         update(startTrack(e, "track1"))
                         e.stopPropagation()
-                    } else if (e.buttons == 4) {
+                    } else if (e.buttons == 2) {
                         update(startTrack(e, "track2"))
                         e.stopPropagation()
                     }
@@ -4415,7 +4415,7 @@ function finishTrack(editor, event) {
          && vectorSquare(vectorSubtract(editor.trackStart.xy,
                                         editor.trackStop.xy)) < 10)) {
         if (editor.trackStart.type == "line") {
-            if (event.button == 2) {
+            if (editor.trackType == "track2") {
                 if (editor.snapshot.frozen) {
                     modifyDiagram({equivalent: true}, diagram =>
                         flipW1jRule(diagram, editor.trackStart.lineId))(editor)
@@ -4424,7 +4424,7 @@ function finishTrack(editor, event) {
                         addW1j(diagram, editor.trackStart.lineId))(editor)
                 }
                 return
-            } else if (event.button == 1) {
+            } else if (editor.trackType == "track1") {
                 const lineId = editor.trackStart.lineId
                 if (editor.snapshot.frozen) {
                     modifyDiagram({equivalent: true}, diagram => {
@@ -4471,7 +4471,7 @@ function finishTrack(editor, event) {
     } else {
         const stopXy = toSvgCoords(editor.trackStop.xy)
         const startXy = toSvgCoords(editor.trackStart.xy)
-        if (editor.trackType == "track1") {
+        if (editor.trackType == "track1") { // red - middle
             if (editor.trackStop.type == "line") {
                 if (editor.trackStart.lineId == editor.trackStop.lineId) {
                     modifyDiagram({equivalent: true, clearHover: true}, diagram =>
@@ -4482,13 +4482,14 @@ function finishTrack(editor, event) {
                                  editor.trackStop.lineId,
                                  startXy, stopXy))(editor)
                 }
-            } else if (editor.trackStop.type == "node") {
+            } else if (editor.trackStart.type == "line") {
                 modifyDiagram({equivalent: true, clearHover: true}, diagram =>
-                    loopElimRule(diagram,
-                                 editor.trackStart.lineId,
-                                 editor.trackStop.nodeIndex))(editor)
+                    loopIntroRule(diagram,
+                                  editor.trackStart.lineId,
+                                  startXy,
+                                  stopXy))(editor)
             }
-        } else if (editor.trackType == "track2") {
+        } else if (editor.trackType == "track2") { // green - right
             if (editor.trackStop.type == "line") {
                 if (editor.trackStart.lineId == editor.trackStop.lineId) {
                     modifyDiagram({equivalent: true, clearHover: true}, diagram =>
@@ -4501,12 +4502,11 @@ function finishTrack(editor, event) {
                                      editor.trackStop.lineId,
                                      event.shiftKey))(editor)
                 }
-            } else if (editor.trackStart.type == "line") {
+            } else if (editor.trackStop.type == "node") {
                 modifyDiagram({equivalent: true, clearHover: true}, diagram =>
-                    loopIntroRule(diagram,
-                                  editor.trackStart.lineId,
-                                  startXy,
-                                  stopXy))(editor)
+                    loopElimRule(diagram,
+                                 editor.trackStart.lineId,
+                                 editor.trackStop.nodeIndex))(editor)
             }
         }
     }
@@ -4559,7 +4559,8 @@ function mouseMove(event) {
         // (a textbox might *look* like it's deselected, but middle-click paste
         // and backspace still works!);
         // it also breaks dragging too ... be careful!
-        if (!vnodeGetSymbol(event.target, ENABLE_DRAG)) {
+        if (!vnodeGetSymbol(event.target, ENABLE_DRAG)
+            && editor.focus.type == null) {
             event.preventDefault()
         }
     }
