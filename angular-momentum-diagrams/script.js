@@ -747,15 +747,7 @@ function vnodeGetSymbol(elem, key) {
 
 function vnodeAmendAttributes(attrs, elem) {
     let listeners = elem[VNODE_EVENT_LISTENERS]
-    if (listeners) {
-        let i = listeners.length
-        while (i--) {
-            const eventListener = listeners[i]
-            elem.removeEventListener(eventListener[0],
-                                     eventListener[1])
-        }
-        listeners.length = 0
-    }
+    let unusedListeners = Object.assign({}, listeners)
     const keys = Object.keys(attrs)
     let i = keys.length
     while (i--) {
@@ -764,12 +756,21 @@ function vnodeAmendAttributes(attrs, elem) {
         let m = /^on(.+)/.exec(k)
         if (m) {
             const event = m[1]
-            elem.addEventListener(event, v)
             if (!listeners) {
-                listeners = []
+                listeners = {}
                 elem[VNODE_EVENT_LISTENERS] = listeners
             }
-            listeners.push([event, v])
+            let listener = listeners[event]
+            if (listener) {
+                delete unusedListeners[event]
+            } else {
+                listener = [undefined]
+                listeners[event] = listener
+                elem.addEventListener(event, function(e) {
+                    return listener[0].call(this, e)
+                })
+            }
+            listener[0] = v
         } else if (v == null) {
             elem.removeAttribute(k, v)
         } else {
@@ -788,6 +789,12 @@ function vnodeAmendAttributes(attrs, elem) {
         }
         const k = symKeys[i]
         symbols[k] = attrs[k]
+    }
+    const unusedEvents = Object.keys(unusedListeners)
+    let j = unusedEvents.length
+    while (j--) {
+        const event = unusedEvents[j]
+        elem.removeEventListener(event, unusedListeners[event])
     }
 }
 
