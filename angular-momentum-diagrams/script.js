@@ -1592,6 +1592,11 @@ function w3jDiagram(a, b, c, x, y) {
 function cgDiagram(a, b, c, x, y) {
     const diagram = w3jDiagram(a, b, c, x, y)
     return Object.freeze(Object.assign({}, diagram, {
+        nodes: Object.freeze(Object.assign([], diagram.nodes, {
+            [3]: Object.freeze(Object.assign({}, diagram.nodes[3], {
+                lines: Object.freeze([a, c, b]),
+            })),
+        })),
         lines: Object.freeze(Object.assign({}, diagram.lines, {
             [c]: Object.freeze(Object.assign({}, diagram.lines[c], {
                 direction: 1,
@@ -2638,9 +2643,20 @@ class Diagram {
             joining0.nodes[nodeIndex0].lines[lineIndex0] = lineId
             joining1.nodes[nodeIndex1].lines[lineIndex1] = lineId
             const combined = concatLines(...lines)
+            // prefer superlines that aren't summed to avoid
+            // exposing them as external lines
             deltaMerge.push([combined.delta])
             console.assert(!newLines[lineId])
-            newLines[lineId] = ensureLine(f(combined.line))
+            let superline = combined.line.superline
+            for (const superlineId of combined.delta) {
+                if (!this.superline(superlineId).summed) {
+                    superline = superlineId
+                    break
+                }
+            }
+            newLines[lineId] = ensureLine(f(Object.assign({}, combined.line, {
+                superline: superline,
+            })))
             superlineMerge.push({
                 [combined.line.superline]: {phase: combined.phase},
             })
@@ -3503,6 +3519,39 @@ function isLoopLine(line) {
         && (line.superlineId == "0" || line.direction % 2)
 }
 
+function editSummed(diagram, superlineId) {
+    if (superlineId == "0") {
+        return ""
+    }
+    if (isSuperlineExposed(diagram, superlineId)) {
+        return ""
+    }
+    const superline = diagram.superlines[superlineId]
+    // special case: eliminate summations through deltas
+    if (superline.summed) {
+        const deltas = diagram.deltas
+        const found = findDeltaEntry(deltas, superlineId)
+        if (found) {
+            const deltas = diagram.deltas
+            const newSuperlineId = deltas[found[0]][(found[1] + 1) %
+                deltas[found[0]].length]
+            return {
+                equivalent: true,
+                diagram: new Diagram(diagram).renameSuperlines({
+                    [superlineId]: newSuperlineId,
+                }).rawDiagram,
+            }
+        }
+    }
+    diagram = deepClone(diagram)
+    diagram.superlines[superlineId].summed =
+        !superline.summed
+    return {
+        equivalent: false,
+        diagram: diagram
+    }
+}
+
 function renderJTableau(update, superlines, editor) {
     const frozen = editor.snapshot.frozen
     const focus = editor.focus
@@ -3544,22 +3593,8 @@ function renderJTableau(update, superlines, editor) {
                 "class": "summed",
                 onmousedown: function(e) {
                     if (e.buttons == 1) {
-                        update(modifyDiagramWith(diagram => {
-                            diagram = deepClone(diagram)
-                            if (superlineId == "0") {
-                                return ""
-                            }
-                            if (isSuperlineExposed(diagram, superlineId)) {
-                                return ""
-                            }
-                            diagram.superlines[superlineId].summed =
-                                !diagram.superlines[superlineId].summed
-                            return {
-                                equivalent: containsDeltas(
-                                    diagram.deltas, [["0", superlineId]]),
-                                diagram: diagram
-                            }
-                        }))
+                        update(modifyDiagramWith(diagram =>
+                            editSummed(diagram, superlineId)))
                         e.stopPropagation()
                     }
                 },
@@ -3588,6 +3623,9 @@ function renderJTableau(update, superlines, editor) {
                                 return ""
                             }
                             const superline = diagram.superline(superlineId)
+                            const deltas = diagram.rawDiagram.deltas
+                            // special case for loop lines, which can
+                            // change into anything
                             if (frozen
                                 && superline.phase == 0
                                 && !superline.summed
@@ -3644,6 +3682,7 @@ function renderJTableau(update, superlines, editor) {
                             })
                         }))
                         e.stopPropagation()
+                        e.preventDefault()
                     } else if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
                             return Object.assign({}, diagram, {
@@ -3653,6 +3692,7 @@ function renderJTableau(update, superlines, editor) {
                             })
                         }))
                         e.stopPropagation()
+                        e.preventDefault()
                     }
                 },
             }, handleDrag(update, (editor, e) => ({
@@ -3663,8 +3703,8 @@ function renderJTableau(update, superlines, editor) {
                     || editor.drag.superlineId == superlineId
                     || (editor.snapshot.frozen &&
                         !containsDeltas(editor.snapshot.diagram.deltas,
-                                        [editor.drag.superlineId,
-                                         superlineId]))) {
+                                        [[editor.drag.superlineId,
+                                          superlineId]]))) {
                     return null
                 }
                 return {
@@ -3674,8 +3714,8 @@ function renderJTableau(update, superlines, editor) {
             }, (editor, e) => {
                 modifyDiagramWith(diagram => {
                     const equivalent = containsDeltas(diagram.deltas,
-                                                      [editor.drag.superlineId,
-                                                       superlineId])
+                                                      [[editor.drag.superlineId,
+                                                        superlineId]])
                     diagram = Object.assign({}, diagram, {
                         superlines: mergeSuperlineLists(
                             diagram.superlines,
@@ -3704,6 +3744,7 @@ function renderJTableau(update, superlines, editor) {
                                     {[superlineId]: {weight: +1}}),
                             })
                         }))
+                        e.stopPropagation()
                         e.preventDefault()
                     } else if (e.buttons == 4) {
                         update(modifyDiagram({}, diagram => {
@@ -3713,6 +3754,7 @@ function renderJTableau(update, superlines, editor) {
                                     {[superlineId]: {weight: -1}}),
                             })
                         }))
+                        e.stopPropagation()
                         e.preventDefault()
                     }
                 },
@@ -3724,8 +3766,8 @@ function renderJTableau(update, superlines, editor) {
                     || editor.drag.superlineId == superlineId
                     || (editor.snapshot.frozen &&
                         !containsDeltas(editor.snapshot.diagram.deltas,
-                                        [editor.drag.superlineId,
-                                         superlineId]))) {
+                                        [[editor.drag.superlineId,
+                                          superlineId]]))) {
                     return null
                 }
                 return {
@@ -3735,8 +3777,8 @@ function renderJTableau(update, superlines, editor) {
             }, (editor, e) => {
                 modifyDiagramWith(diagram => {
                     const equivalent = containsDeltas(diagram.deltas,
-                                                      [editor.drag.superlineId,
-                                                       superlineId])
+                                                      [[editor.drag.superlineId,
+                                                        superlineId]])
                     diagram = Object.assign({}, diagram, {
                         superlines: mergeSuperlineLists(
                             diagram.superlines,
