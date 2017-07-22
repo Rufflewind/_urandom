@@ -2837,6 +2837,8 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
         scalarMultiply(0.375, vectorAdd(line1.node(1).xy, line2.node(1).xy)),
     )
     const j = availSuperlineLabels(diagram.rawDiagram).next().value
+    const arcHeight1 = line1.node(0).index == line2.node(0).index ? 50.0 : 0.0
+    const arcHeight2 = line1.node(1).index == line2.node(1).index ? 50.0 : 0.0
     return diagram.substitute({
         nodes: [
             terminalNode(line1.toString(), "a"),
@@ -2859,13 +2861,13 @@ function w3jIntroRule(diagram, lineId1, lineId2, reversed) {
         ],
         lines: {
             $1: {superline: line1.superlineId, direction: 0,
-                 arcHeight: -50.0},
+                 arcHeight: -arcHeight1},
             $2: {superline: line1.superlineId, direction: 0,
-                 arcHeight: -50.0},
+                 arcHeight: -arcHeight2},
             $3: {superline: line2.superlineId, direction: 0,
-                 arcHeight: 50.0},
+                 arcHeight: arcHeight1},
             $4: {superline: line2.superlineId, direction: 0,
-                 arcHeight: 50.0},
+                 arcHeight: arcHeight2},
             $5: {superline: j, direction: 0},
         },
         superlines: {
@@ -3096,7 +3098,23 @@ function cutRule(diagram, lineId, xy1, xy2) {
         ],
     }, {withLineRenames: true})
     diagram = result.diagram.rawDiagram
-    return diagram
+    // try to eliminate the loops if possible
+    const renames = result.lineRenames
+    const loop1Id = result.diagram.line(renames.$3).id
+    const loop2Id = result.diagram.line(renames.$4).id
+    const loopNode1Index = result.diagram.line(loop1Id).node(0).index
+    // kind of fragile: relying on the fact that pruning doesn't relabel lines
+    let newDiagram = loopElimRule(diagram, loop1Id, loopNode1Index)
+    if (typeof newDiagram == "string") {
+        return diagram
+    }
+    diagram = newDiagram
+    const loopNode2Index = new Diagram(diagram).line(loop2Id).node(0).index
+    newDiagram = loopElimRule(diagram, loop2Id, loopNode2Index)
+    if (typeof newDiagram == "string") {
+        return diagram
+    }
+    return newDiagram
 }
 
 function glueRule(diagram, lineId1, lineId2, xy1, xy2) {
@@ -4085,7 +4103,7 @@ const SHIFT = 0x4
 const EMPTY_SNAPSHOT = {
     diagram: EMPTY_DIAGRAM,
     frozen: false,
-    showAmbient: false,
+    showAmbient: true,
 }
 
 function newEditor() {
