@@ -2649,7 +2649,8 @@ class Diagram {
             console.assert(!newLines[lineId])
             let superline = combined.line.superline
             for (const superlineId of combined.delta) {
-                if (!this.superline(superlineId).summed) {
+                if (!this.superline(superlineId) ||
+                    !this.superline(superlineId).summed) {
                     superline = superlineId
                     break
                 }
