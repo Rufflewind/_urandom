@@ -3554,11 +3554,18 @@ function editSummed(diagram, superlineId) {
             const deltas = diagram.deltas
             const newSuperlineId = deltas[found[0]][(found[1] + 1) %
                 deltas[found[0]].length]
+            const summed = diagram.superlines[superlineId].summed
+                        && diagram.superlines[newSuperlineId].summed
+            diagram = new Diagram(diagram).renameSuperlines({
+                    [superlineId]: newSuperlineId,
+                }).rawDiagram
+            diagram = Object.assign({}, diagram)
+            diagram.superlines = Object.assign({}, diagram.superlines)
+            diagram.superlines[newSuperlineId] = Object.assign(
+                {}, diagram.superlines[newSuperlineId], {summed: summed})
             return {
                 equivalent: true,
-                diagram: new Diagram(diagram).renameSuperlines({
-                    [superlineId]: newSuperlineId,
-                }).rawDiagram,
+                diagram: diagram,
             }
         }
     }
