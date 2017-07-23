@@ -1,6 +1,0 @@
-{
-    "source": ".",
-    "destination": "doc",
-    "excludes": ["^doc"],
-    "unexportIdentifier": true
-}
