@@ -285,7 +285,31 @@ var VIEW_CAM02_HLC = {
     }
 };
 
-function cartesian(toSrgb, transform, sliderValue, maxChroma) {
+function ColorPicker(canvas) {
+    this.ctx = canvas.getContext("2d");
+    this.width = canvas.width;
+    this.height = canvas.height;
+    this.img = this.ctx.createImageData(this.width, this.height);
+
+    this.colorState = new ColorState(VIEW_SRGB, [0.65, 0.65, 0.65]);
+    this.view = VIEW_SRGB; // this needn't be the same as colorState.view!
+    this.maxChroma = 0.75;
+    this.currentHash = "";
+
+    this.onsave = function(value) {};
+    this.ondraw = function() {};
+
+    this.drawScheduled = false;
+    this.drawFull = false;
+
+    this.redraw(true);
+}
+
+ColorPicker.prototype.cartesian = function(toSrgb, transform, sliderValue) {
+    var data = this.img.data;
+    var width = this.width;
+    var height = this.height;
+    var maxChroma = this.maxChroma;
     var inp = [0.0, 0.0, sliderValue];
     for (var y = 0; y < height; ++y) {
         inp[1] = 1.0 - y / height;
@@ -307,79 +331,131 @@ function cartesian(toSrgb, transform, sliderValue, maxChroma) {
             data[3 + 4 * (x + width * y)] = 255.0;
         }
     }
-}
+};
 
-var drawScheduled = false;
-var drawFull = false;
-function redraw(full) {
-    drawFull = drawFull || full;
-    if (drawScheduled) {
+ColorPicker.prototype.redraw = function(full) {
+    this.drawFull = this.drawFull || full;
+    if (this.drawScheduled) {
         return;
     }
-    drawScheduled = true;
+    this.drawScheduled = true;
+    var self = this;
     window.requestAnimationFrame(function() {
-        var rgb = currentColorState.get(VIEW_SRGB).value;
-        var hex = rgbToHex(rgb);
-        colorText.value = hex;
-        document.getElementById("preview").style.backgroundColor = hex;
-        document.getElementById("display-rgb").textContent =
-            "rgb("
-            + (rgb[0] * 255.0).toFixed(0) + ", "
-            + (rgb[1] * 255.0).toFixed(0) + ", "
-            + (rgb[2] * 255.0).toFixed(0)
-            + ")";
+        self.ondraw();
 
-        var raw = currentColorState.get(view).value;
-        var inp = view.untransform(raw, maxChroma);
-        var cursorX = inp[0] * width;
-        var cursorY = (1.0 - inp[1]) * height;
-        slider.value = slider.max * inp[2];
-        document.getElementById("display").textContent = view.display(raw);
+        var inp = self.getColor();
+        var cursorX = inp[0] * self.width;
+        var cursorY = (1.0 - inp[1]) * self.height;
 
-        if (drawFull) {
+        if (self.drawFull) {
             console.time("redraw");
-            cartesian(view.toSrgb, view.transform, inp[2], maxChroma);
+            self.cartesian(self.view.toSrgb, self.view.transform, inp[2]);
             console.timeEnd("redraw");
         }
 
-        createImageBitmap(img).then(function(img) {
+        createImageBitmap(self.img).then(function(img) {
+            var ctx = self.ctx;
 
-            ctx.clearRect(0, 0, width, height);
+            ctx.clearRect(0, 0, self.width, self.height);
             ctx.save();
-            view.mask(ctx, width, height);
+            self.view.mask(ctx, self.width, self.height);
             ctx.drawImage(img, 0, 0);
             ctx.restore();
 
             ctx.strokeStyle = "white";
             ctx.beginPath();
-            ctx.arc(cursorX, cursorY, 4, 0, Math.PI * 2);
+            ctx.arc(cursorX, cursorY, 4, 0, 2 * Math.PI);
             ctx.stroke();
 
             ctx.strokeStyle = "black";
             ctx.beginPath();
-            ctx.arc(cursorX, cursorY, 5, 0, Math.PI * 2);
+            ctx.arc(cursorX, cursorY, 5, 0, 2 * Math.PI);
             ctx.stroke();
-
         });
 
-        drawScheduled = false;
-        drawFull = false;
+        self.drawScheduled = false;
+        self.drawFull = false;
     });
-}
+};
+
+ColorPicker.prototype.getColor = function() {
+    return this.view.untransform(this.colorState.get(this.view).value,
+                                 this.maxChroma);
+};
+
+ColorPicker.prototype.setColor = function(inp) {
+    var oldInpZ = this.getColorInpZ();
+    this.colorState.set(this.view, this.view.transform(inp, this.maxChroma));
+    this.redraw(oldInpZ != inp[2]);
+};
+
+ColorPicker.prototype.getColorInpZ = function() {
+    return this.getColor()[2];
+};
+
+ColorPicker.prototype.setColorInpZ = function(value) {
+    var inp = this.getColor().slice();
+    inp[2] = value;
+    this.setColor(inp);
+};
+
+ColorPicker.prototype.getColorDisplay = function() {
+    return this.view.display(this.colorState.get(this.view).value);
+};
+
+ColorPicker.prototype.getTextColor = function() {
+    var rgb = this.colorState.get(VIEW_SRGB).value;
+    return {
+        hex: rgbToHex(rgb),
+        rgb: "rgb("
+           + (rgb[0] * 255.0).toFixed(0) + ", "
+           + (rgb[1] * 255.0).toFixed(0) + ", "
+           + (rgb[2] * 255.0).toFixed(0)
+           + ")",
+    }
+};
+
+ColorPicker.prototype.saveTextColor = function(text) {
+    var rgb = hexToRgb(text);
+    if (rgb == null) {
+        return;
+    }
+    this.colorState.set(VIEW_SRGB, rgb);
+    this.save();
+    this.redraw(true);
+};
+
+ColorPicker.prototype.setView = function(view) {
+    this.view = view;
+    this.redraw(true);
+};
+
+ColorPicker.prototype.setMaxChromaPercent = function(value) {
+    this.maxChroma = Number(value) / 100.0;
+    this.redraw(true);
+};
+
+ColorPicker.prototype.restore = function(hash) {
+    if (hash == this.currentHash) {
+        return;
+    }
+    var rgb = hexToRgb(hash);
+    if (rgb == null) {
+        return;
+    }
+    this.currentHash = hash;
+    this.colorState.set(VIEW_SRGB, rgb);
+    this.redraw(true);
+};
+
+ColorPicker.prototype.save = function() {
+    this.currentHash = this.colorState.save()
+    this.onsave(this.currentHash);
+};
 
 function ColorState(view, color) {
     this.set(view, color);
 }
-
-ColorState.prototype.set = function(view, color, save) {
-    this.view = view;
-    this.color = color;
-};
-
-ColorState.prototype.save = function() {
-    currentHash = rgbToHex(this.get(VIEW_SRGB).value);
-    window.location.hash = currentHash;
-};
 
 ColorState.prototype.get = function(view) {
     if (this.view == view) {
@@ -390,123 +466,108 @@ ColorState.prototype.get = function(view) {
     return {value: r2.value, inGamut: r1.inGamut && r2.inGamut};
 };
 
-
-function setCursor(e) {
-    var rx = e.offsetX / canvas.clientWidth;
-    var ry = e.offsetY / canvas.clientHeight;
-    var sliderValue = slider.value / slider.max;
-    var inp = view.transform([rx, 1.0 - ry, sliderValue], maxChroma);
-    currentColorState.set(view, inp);
-    redraw(false);
-}
-
-var mouseDown = false;
-var canvas = document.getElementById("canvas");
-canvas.addEventListener("mousedown", function(e) {
-    if (e.buttons & 1) {
-        e.preventDefault();
-        mouseDown = true;
-        setCursor(e);
-    }
-});
-canvas.addEventListener("mousemove", function(e) {
-    if (mouseDown) {
-        e.preventDefault();
-        setCursor(e);
-    }
-});
-canvas.addEventListener("mouseup", function() {
-    currentColorState.save();
-    mouseDown = false;
-});
-
-var currentHash = "";
-function updateHash() {
-    if (window.location.hash == currentHash) {
-        return false;
-    }
-    var rgb = hexToRgb(window.location.hash);
-    if (rgb == null) {
-        return false;
-    }
-    currentColorState.set(VIEW_SRGB, rgb);
-    return true;
-}
-window.addEventListener("hashchange", function() {
-    updateHash();
-    redraw(true);
-});
-
-var view;
-var radioViews = {
-    "view-lab-hcl": VIEW_LAB_HCL,
-    "view-lab-hlc": VIEW_LAB_HLC,
-    "view-cam02-hcl": VIEW_CAM02_HCL,
-    "view-cam02-hlc": VIEW_CAM02_HLC
+ColorState.prototype.set = function(view, color, save) {
+    this.view = view;
+    this.color = color;
 };
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-for (var id in radioViews) {
-    if (hasOwnProperty.call(radioViews, id)) {
-        var elem = document.getElementById(id);
-        if (elem.checked) {
-            view = radioViews[id];
+
+ColorState.prototype.save = function() {
+    return rgbToHex(this.get(VIEW_SRGB).value);
+};
+
+function main() {
+    var canvas = document.getElementById("canvas");
+    canvas.width = 400;
+    canvas.height = 400;
+    var colorPicker = new ColorPicker(canvas);
+
+    colorPicker.onsave = function(value) {
+        window.location.hash = value;
+    };
+    window.addEventListener("hashchange", function() {
+        colorPicker.restore(window.location.hash);
+    });
+    colorPicker.restore(window.location.hash);
+
+    var slider = document.getElementById("slider");
+    var colorText = document.getElementById("color");
+    slider.addEventListener("input", function(e) {
+        colorPicker.setColorInpZ(slider.value / slider.max);
+    });
+    slider.addEventListener("change", function(e) {
+        colorPicker.save();
+    });
+    colorText.addEventListener("blur", function(e) {
+        colorPicker.saveTextColor(this.value);
+    });
+    colorText.addEventListener("keydown", function(e) {
+        if (e.key == "Enter") {
+            colorPicker.saveTextColor(this.value);
         }
-        elem.addEventListener("change", (function(id) {
-            view = radioViews[id];
-            redraw(true);
-        }).bind(null, id));
+    });
+    colorPicker.ondraw = function() {
+        slider.value = colorPicker.getColorInpZ() *  slider.max;
+        document.getElementById("display").textContent =
+            colorPicker.getColorDisplay();
+        var color = colorPicker.getTextColor();
+        colorText.value = color.hex;
+        document.getElementById("preview").style.backgroundColor = color.hex;
+        document.getElementById("display-rgb").textContent = color.rgb;
+    };
+
+    function setCursor(e) {
+        colorPicker.setColor([
+            e.offsetX / canvas.clientWidth,
+            1.0 - e.offsetY / canvas.clientHeight,
+            slider.value / slider.max
+        ]);
+    }
+    var mouseDown = false;
+    canvas.addEventListener("mousedown", function(e) {
+        if (e.buttons & 1) {
+            e.preventDefault();
+            mouseDown = true;
+            setCursor(e);
+        }
+    });
+    canvas.addEventListener("mousemove", function(e) {
+        if (mouseDown) {
+            e.preventDefault();
+            setCursor(e);
+        }
+    });
+    canvas.addEventListener("mouseup", function(e) {
+        e.preventDefault();
+        colorPicker.save();
+        mouseDown = false;
+    });
+
+    var maxChromaInput = document.getElementById("max-chroma");
+    colorPicker.setMaxChromaPercent(maxChromaInput.value);
+    maxChromaInput.addEventListener("input", function(e) {
+        colorPicker.setMaxChromaPercent(this.value);
+    });
+
+    var radioViews = {
+        "view-lab-hcl": VIEW_LAB_HCL,
+        "view-lab-hlc": VIEW_LAB_HLC,
+        "view-cam02-hcl": VIEW_CAM02_HCL,
+        "view-cam02-hlc": VIEW_CAM02_HLC
+    };
+    var hasOwnProperty = Object.prototype.hasOwnProperty;
+    for (var id in radioViews) {
+        if (hasOwnProperty.call(radioViews, id)) {
+            var elem = document.getElementById(id);
+            if (elem.checked) {
+                colorPicker.setView(radioViews[id]);
+            }
+            elem.addEventListener("change", (function(id) {
+                colorPicker.setView(radioViews[id]);
+            }).bind(null, id));
+        }
     }
 }
 
-var slider = document.getElementById("slider");
-slider.addEventListener("input", function(e) {
-    var inp = view.untransform(currentColorState.get(view).value, maxChroma);
-    inp[2] = slider.value / slider.max;
-    currentColorState.set(view, view.transform(inp, maxChroma));
-    redraw(true);
-});
-slider.addEventListener("change", function(e) {
-    currentColorState.save();
-});
-
-var maxChromaInput = document.getElementById("max-chroma");
-var maxChroma = Number(maxChromaInput.value) / 100.0;
-maxChromaInput.addEventListener("input", function(e) {
-    maxChroma = Number(maxChromaInput.value) / 100.0;
-    redraw(true);
-});
-
-function setColor(e) {
-    var rgb = hexToRgb(this.value);
-    if (rgb == null) {
-        return;
-    }
-    currentColorState.set(VIEW_SRGB, rgb);
-    currentColorState.save();
-    redraw(true);
-}
-
-var colorText = document.getElementById("color");
-colorText.addEventListener("blur", setColor);
-colorText.addEventListener("keydown", function(e) {
-    if (e.key == "Enter") {
-        setColor.apply(this, e);
-    }
-});
-
-var currentColorState = new ColorState(VIEW_SRGB, [0.65, 0.65, 0.65]);
-if (updateHash()) {
-    currentColorState.save();
-}
-
-var ctx = canvas.getContext("2d");
-var width = 400;
-var height = 400;
-var cursorX = width / 2;
-var cursorY = height / 2;
-canvas.width = width;
-canvas.height = height;
-
-var img = ctx.createImageData(width, height);
-var data = img.data;
-redraw(true);
+module.exports = {
+    main: main
+};
