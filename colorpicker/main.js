@@ -147,6 +147,8 @@ function hexToRgb(hex) {
 
 // https://stackoverflow.com/a/19765382
 function rgbToHex(rgb) {
+    rgb = rgb.slice();
+    clipRgb(rgb);
     var r = rgb[0] * 255.0;
     var g = rgb[1] * 255.0;
     var b = rgb[2] * 255.0;
@@ -543,7 +545,7 @@ ColorState.prototype.get = function(view) {
         return {value: this.color, inGamut: true};
     }
     var r1 = VIEWS[this.view].toSrgb(this.color);
-    var r2 = VIEWS[this.view].fromSrgb(r1.value);
+    var r2 = VIEWS[view].fromSrgb(r1.value);
     return {value: r2.value, inGamut: r1.inGamut && r2.inGamut};
 };
 
