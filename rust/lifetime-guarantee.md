@@ -16,4 +16,4 @@ You might try to cheat by using a `RefCell`, but it won’t work (within safe Ru
 
 That being said, it *is* possible to obtain, e.g. a raw pointer or equivalent from `borrow`, which may not be dereferenceable for the duration `'a`, or even at all.  But this is fine because the dereferenceability of raw pointers is never assumed to begin with (safe functions must never assume a raw pointer is valid).  One may assert that validity (in the safe sense) is *not* equivalent to dereferenceability (raw pointers are always “valid” trivially, but may or may not be dereferenceable).
 
-Another consequence of this concerns `Deref`, `Borrow`, and `AsRef`.  All of these functions have the same form as the `borrow` function above.  This means that inso
+This as a consequence affects the possible semantics of `Deref`, `Borrow`, and `AsRef`.  Given an honest implementation, a pointer should always remain valid (and maintain whatever property it had) for the longest possible duration of `'a`.

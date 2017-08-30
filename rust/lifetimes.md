@@ -164,15 +164,15 @@ T: 'a  |-  WF(&'a ~m T)
 &'a T -> &'a U
   where T: U
 
-// mutability covariance
-&'a ~m T -> &'a T
-
 // lifetime covariance
 &'a ~m T -> &'b ~m T
   where 'a: 'b
 
+// sharing
+&'a ~m T -> &'a T
+
 // reborrowing
-&'b ~m &'a ~m T -> &'b ~m T
+&'b ~m1 &'a ~m2 T -> &'b (~m1 + ~m2) T
 
 // sharability
 &'b ~m &'a T -> &'a T
@@ -193,17 +193,9 @@ A reference is well-formed only if the original object outlives the duration of 
   where T: U
 ```
 
-A shared reference can be downcast if the underlying type can be downcast.
+A shared reference can be downcast if the underlying type can be downcast.  Note that this does not allow mutability changes in the underlying type!  (`&'b &'a mut T -> &'b &'a T` is not allowed.)
 
 This does not hold for mutable references, which are invariant with respect to the underlying type.
-
-### Mutability covariance
-
-```rust
-&'a ~m T -> &'a T
-```
-
-A mutable reference can be downcast to a shared reference, but not the other way around.
 
 ### Lifetime covariance
 
@@ -214,13 +206,21 @@ A mutable reference can be downcast to a shared reference, but not the other way
 
 The lifetime of a reference can always be shrunk, but not extended.
 
+### Sharing
+
+```rust
+&'a ~m T -> &'a T
+```
+
+A mutable reference can be downcast to a shared reference, but not the other way around.  This essentially forgets the mutability.
+
 ### Reborrowing
 
 ```rust
-&'b ~m &'a ~m T -> &'b ~m T
+&'b ~m1 &'a ~m2 T -> &'b (~m1 + ~m2) T
 ```
 
-A reference can always be reborrowed for a shorter duration.
+A reference can always be reborrowed for a shorter duration, subject to the weaker of the mutability conditions.
 
 ### Sharability
 
@@ -228,7 +228,7 @@ A reference can always be reborrowed for a shorter duration.
 &'b ~m &'a T -> &'a T
 ```
 
-Shared references can be cloned (duh).
+Shared references can be cloned or copied.
 
 ## Contiguity of lifetimes
 
@@ -297,17 +297,3 @@ where
   - a `mut` constraint is equivalent to no constraints at all
 
 This would imply that references are *contravariant*, which is confusing.  Therefore, we do *not* interpret mutability in this way and simply *define* references to be covariant in mutability.
-
-## The unsafe lifetime
-
-One may be tempted to define an [`'unsafe` lifetime](https://github.com/rust-lang/rfcs/pull/1918/) in opposition to `'static`.  Objects with `'unsafe` lifetime are not known to be valid for any duration.  Hence, `'unsafe` lifetimes are outlived by all lifetimes (including itself).  `'unsafe`, when promoted as a constraint, is totally vacuous:
-
-```rust
-'unsafe == exists<'a> 'a == ()   // the vacuous constraint
-```
-
-There are problems with this approach, however.  One of the biggest issues is that it interacts poorly with the well-formed rules.  Consider any object `F<'unsafe>`.  If you want to use a variable of this type at all, it must satisfy `'unsafe: lifetimeof(variable)`, which is impossible.  Thus, functions can never manipulate objects where `'unsafe` appears.
-
-Moreover, if an object contains `'unsafe`, is the lifetime of the type `'unsafe` or something else?  If we think of structs as bare, exposed tuples, then the answer would suggest `'unsafe`.  But after wrapping it inside a struct, the `'unsafe` is no longer visible, so is its lifetime `'unsafe` or unconstrained?  After all, the main motivation for `'unsafe` is to actually *disguise* lifetime parameters, which otherwise have a tendency to infect everything.
-
-[[Unresolved]]
