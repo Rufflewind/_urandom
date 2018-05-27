@@ -38,6 +38,12 @@ JSON_PRETTY = {
 }
 #@]
 
+#@pretty_json[
+#@requires: JSON_PRETTY
+def pretty_json(j):
+    return json.dumps(j, **JSON_PRETTY)
+#@]
+
 #@Identity[
 class Identity(object):
     '''Allows hashing by identity if hashing is not otherwise available.'''
