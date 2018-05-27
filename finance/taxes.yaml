@@ -1,0 +1,61 @@
+2017:
+  single:
+    fed:
+      income_brackets:
+      - [0.100,      0]
+      - [0.150,   9325]
+      - [0.250,  37950]
+      - [0.280,  91900]
+      - [0.330, 191650]
+      - [0.350, 416700]
+      - [0.396, 418400]
+2018:
+  common:
+    fed:
+      social_security_brackets:
+      - [0.062,      0]
+      - [0.000, 128400]
+      supplemental_withholding_brackets:
+      - [0.22,       0]
+      - [0.37, 1000000]
+      allowance_deduction: 4150
+      individual_hsa_contribution_limit: 3450
+      ira_contribution_limit: 5500
+      401k_deferral_limit: 18500
+      401k_contribution_limit: 55000
+    ca:
+      sdi_brackets:
+      - [0.01,      0]
+      - [0.00, 114967]
+      allowance_credit: 125.40
+      bonus_withholding_rate: 0.1023
+      supplemental_withholding_rate: 0.066
+  single:
+    fed:
+      income_brackets:
+      - [0.10,      0]
+      - [0.12,   9525]
+      - [0.22,  38700]
+      - [0.24,  82500]
+      - [0.32, 157500]
+      - [0.35, 200000]
+      - [0.37, 500000]
+      medicare_brackets:
+      - [0.0145,      0]
+      - [0.0235, 200000]
+      standard_deduction: 12000
+      base_num_allowances: 2
+    ca:
+      income_brackets:
+      - [0.0110,       0]
+      - [0.0220,    8223]
+      - [0.0440,   19495]
+      - [0.0660,   30769]
+      - [0.0880,   42711]
+      - [0.1023,   53980]
+      - [0.1133,  275738]
+      - [0.1243,  330884]
+      - [0.1353,  551473]
+      - [0.1463, 1000000]
+      standard_deduction: 4236
+      low_income_exemption: 14048
