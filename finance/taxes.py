@@ -63,11 +63,12 @@ class TaxYear(object):
         return get_tax_with(self.param("fed")["social_security_brackets"],
                             income)
 
-    def ca_bonus_withholding_tax(self, income):
-        return income * self.param("ca")["bonus_withholding_rate"]
-
     def ca_supplemental_withholding_tax(self, income):
         return income * self.param("ca")["supplemental_withholding_rate"]
+
+    def ca_bonus_withholding_surtax(self, income):
+        return income * (self.param("ca")["bonus_withholding_rate"]
+                         - self.param("ca")["supplemental_withholding_rate"])
 
     def ca_sdi_withholding(self):
         return BracketedTax(self.param("ca")["sdi_brackets"])
@@ -134,11 +135,11 @@ class TaxFiler(object):
             - num_allowances * self.tax_year().param("ca")["allowance_credit"]
         ) / pay_freq
 
-    def ca_bonus_withholding_tax(self, income):
-        return self.tax_year().ca_bonus_withholding_tax(income)
-
     def ca_supplemental_withholding_tax(self, income):
         return self.tax_year().ca_supplemental_withholding_tax(income)
+
+    def ca_bonus_withholding_surtax(self, income):
+        return self.tax_year().ca_bonus_withholding_surtax(income)
 
     def ca_sdi_withholding(self):
         return self.tax_year().ca_sdi_withholding()
