@@ -96,6 +96,9 @@ class TaxFiler(object):
     def income_tax(self, income):
         return get_tax_with(self.param("fed")["income_brackets"], income)
 
+    def amt(self, income):
+        return get_tax_with(self.param("fed")["amt_brackets"], income)
+
     def regular_withholding_tax(self, wage, pay_freq, num_allowances):
         adjusted_income = max(0, (
             wage * pay_freq
