@@ -1,4 +1,5 @@
 from __future__ import division
+import math
 import os
 import yaml
 
@@ -17,21 +18,33 @@ class BracketedTax(object):
     def __init__(self, brackets):
         self._brackets = [(0, 0), (0, 0)] + list(brackets) + [(0, float("inf"))]
         self._index = 0
-        self._remaining = 0
+        self._accumulated = 0
 
     def tax(self, income):
         tax = 0
-        assert income >= 0
+        if income < 0 or not math.isfinite(income):
+            raise ValueError("invalid income: {!r}".format(income))
         while True:
             rate = self._brackets[self._index][0]
-            if income <= self._remaining:
-                self._remaining -= income
+            next_threshold = self._brackets[self._index + 1][1]
+            remaining = next_threshold - self._accumulated
+            if income <= remaining:
+                self._accumulated += income
                 return tax + income * rate
-            income -= self._remaining
-            tax += self._remaining * rate
+            income -= remaining
+            tax += remaining * rate
             self._index += 1
-            self._remaining = (self._brackets[self._index + 1][1]
-                               - self._brackets[self._index][1])
+            self._accumulated = next_threshold
+
+    def taxable(self):
+        """Calculate how much more income would remain taxable."""
+        for (rate, start), (_, end) in zip(self._brackets[self._index:],
+                                           self._brackets[self._index + 1:]):
+            if end == float("inf"):
+                if rate:
+                    return float("inf")
+                else:
+                    return max(0, start - self._accumulated)
 
 def get_tax_with(brackets, income):
     return BracketedTax(brackets).tax(income)
@@ -59,9 +72,8 @@ class TaxYear(object):
             self.param("fed")["supplemental_withholding_brackets"]
         )
 
-    def social_security_tax(self, income):
-        return get_tax_with(self.param("fed")["social_security_brackets"],
-                            income)
+    def social_security_withholding(self):
+        return BracketedTax(self.param("fed")["social_security_brackets"])
 
     def ca_supplemental_withholding_tax(self, income):
         return income * self.param("ca")["supplemental_withholding_rate"]
@@ -112,14 +124,11 @@ class TaxFiler(object):
     def supplemental_withholding(self):
         return self.tax_year().supplemental_withholding()
 
-    def social_security_tax(self, income):
-        return self.tax_year().social_security_tax(income)
+    def social_security_withholding(self):
+        return self.tax_year().social_security_withholding()
 
-    def medicare_tax(self, income):
-        return get_tax_with(self.param("fed")["medicare_brackets"], income)
-
-    def fica_taxes(self, income):
-        return self.social_security_tax(income) + self.medicare_tax(income)
+    def medicare_withholding(self):
+        return BracketedTax(self.param("fed")["medicare_brackets"])
 
     def ca_income_tax(self, income):
         return get_tax_with(self.param("ca")["income_brackets"], income)
