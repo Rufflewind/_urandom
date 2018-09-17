@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+import argparse, base64, crypt, hmac, http.server, os
+import random, re, ssl, string, subprocess, sys, threading
+
+PASSWORD_LEN = 6
+MAX_LOGIN_FAILS = 3
+
+class ServerHandler:
+
+    def __init__(self, server, req_handler):
+        self.server = server
+        self.req_handler = req_handler
+
+    def get(self):
+        self.respond((
+            '<form method="post" enctype="multipart/form-data">'
+            '<input type="file" name="file">'
+            '<button type="submit">Upload</button>'
+            '</form>'
+        ), headers={"Content-Type": "text/html"})
+
+    def post(self):
+        if not self.is_authorized():
+            return
+
+        content_type = self.req_handler.headers["Content-Type"]
+        _, boundary = content_type.split("=", 1)
+        boundary = boundary.encode("utf-8")
+        n = int(self.req_handler.headers["Content-Length"])
+
+        for _ in range(4):
+            n -= len(next(self.req_handler.rfile))
+
+        with open(self.server.output_path, "wb") as f:
+            prev_line = next(self.req_handler.rfile)
+            n -= len(prev_line)
+            while n > 0:
+                line = next(self.req_handler.rfile)
+                n -= len(line)
+                if boundary in line:
+                    prev_line = re.match(b"(.*?)\r?\n$", prev_line).group(1)
+                    f.write(prev_line)
+                    break
+                else:
+                    f.write(prev_line)
+                    prev_line = line
+            else:
+                raise ValueError("end of data??")
+
+        self.respond("OK\n")
+        sys.stderr.write("Upload complete.\n")
+        sys.stderr.flush()
+        self.shutdown(None)
+
+    def is_authorized(self):
+        authorization = self.req_handler.headers["Authorization"]
+        if authorization is None:
+            self.respond("Unauthorized\n", code=401, headers={
+                "WWW-Authenticate": 'Basic realm="simple"',
+            })
+            return
+        scheme, credentials = authorization.split(None, 1)
+        if scheme.strip() != "Basic":
+            raise ValueError("unknown authentication scheme: {}"
+                             .format(scheme))
+        credentials = base64.b64decode(credentials).decode("utf-8")
+        username, password = credentials.split(":", 1)
+        username = username.strip().lower()
+        crypt_password = self.server.auth_creds.get(username, None)
+        if (crypt_password is None or
+            not hmac.compare_digest(crypt_password,
+                                    crypt.crypt(password, crypt_password))):
+            sys.stderr.write("(!) Failed login ({}/{}) for user {!r}\n".format(
+                self.server.login_fails,
+                self.server.max_login_fails,
+                username,
+                password,
+            ))
+            sys.stderr.flush()
+            retry = self.mark_auth_fail()
+            self.respond("Unauthorized\n", code=401, headers={
+                "WWW-Authenticate": 'Basic realm="simple"',
+            } if retry else {})
+            if not retry:
+                self.server.auth_creds = {}
+                self.shutdown("Too many login failures, bye!")
+            return
+
+        return True
+
+    def mark_auth_fail(self):
+        self.server.login_fails += 1
+        return self.server.login_fails < self.server.max_login_fails
+
+    def respond(self, content, code=200, headers={}):
+        content = content.encode("utf-8")
+        self.req_handler.send_response(code)
+        self.req_handler.send_header("Content-Length", len(content))
+        headers["Content-Type"] = headers.get("Content-Type", "text/plain")
+        for k, v in headers.items():
+            self.req_handler.send_header(k, v)
+        self.req_handler.end_headers()
+        self.req_handler.wfile.write(content)
+
+    def shutdown(self, msg):
+        self.server.exit_msg = msg
+        threading.Thread(
+            target=self.req_handler.server.shutdown,
+            daemon=True,
+        ).start()
+
+class Server:
+
+    def __init__(self, output_path, auth_creds, max_login_fails):
+        self.output_path = output_path
+        self.auth_creds = auth_creds
+        self.login_fails = 0
+        self.max_login_fails = max_login_fails
+
+    def handler(self):
+        server = self
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                return ServerHandler(server, self).get()
+            def do_POST(self):
+                return ServerHandler(server, self).post()
+        return Handler
+
+def parse_host_port(host_port):
+    host, port = host_port.split(":")
+    return host, int(port)
+
+def gen_password(random, alphabet, length):
+    return "".join(random.choice(alphabet) for _ in range(length))
+
+def gen_guest_creds():
+    username = "guest"
+    password = gen_password(
+        random.SystemRandom(),
+        string.ascii_lowercase,
+        PASSWORD_LEN,
+    )
+    return password, {username: crypt.crypt(password)}
+
+def get_cert(path):
+    if not path:
+        path = os.path.join(
+            os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
+            "fyl-localhost.pem",
+        )
+        if not os.path.exists(path):
+            subprocess.run([
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey", "rsa:4096",
+                "-days", "365",
+                "-subj", "/CN=localhost",
+                "-nodes",
+                "-keyout", path,
+                "-out", path,
+            ])
+    return path
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser()
+    p.add_argument("--cert", "-c",
+                   help="Leave blank to create a self-signed certificate.")
+    p.add_argument("--listen", "-l",
+                   default="localhost:8080",
+                   type=parse_host_port)
+    p.add_argument("--output_path", "-o", default="/tmp/output.dat")
+    args = p.parse_args()
+    password, auth_creds = gen_guest_creds()
+    sys.stdout.write("".join([
+        "Listening: {}:{} (HTTPS)\n".format(*args.listen),
+        "Username: {}\n".format(*auth_creds),
+        "Password: {}\n".format(password),
+    ]))
+    sys.stdout.flush()
+    server = Server(
+        output_path=args.output_path,
+        auth_creds=auth_creds,
+        max_login_fails=MAX_LOGIN_FAILS,
+    )
+    httpd = http.server.HTTPServer(args.listen, server.handler())
+    httpd.socket = ssl.wrap_socket(
+        httpd.socket,
+        certfile=get_cert(args.cert),
+        server_side=True,
+    )
+    httpd.serve_forever()
+    sys.exit(server.exit_msg)
