@@ -10,12 +10,10 @@ def get_rainbow(Cp, Jp, count):
     # Nathaniel Smith and Stéfan van der Walt
     # “A Better Default Colormap for Matplotlib”
     # SciPy 2015 Conference
-    t = (np.linspace(0.0, 1.0, count)) * 2.0 * np.pi
-    ap = Cp * np.cos(t)
-    bp = Cp * np.sin(t)
-    Jpapbp = np.column_stack([np.full(ap.shape, Jp), ap, bp])
+    hp = np.linspace(0.0, 360.0, count)
+    JpCphp = np.column_stack([np.full(hp.shape, Jp), np.full(hp.shape, Cp), hp])
     with np.errstate(divide="ignore", invalid="ignore"):
-        rgb = colorspacious.cspace_convert(Jpapbp, "CAM02-UCS", "sRGB255")
+        rgb = colorspacious.cspace_convert(JpCphp, "JCh", "sRGB255")
     clipped_rgb = np.clip(rgb, 0.0, 255.0)
     return np.ma.masked_array(clipped_rgb, clipped_rgb - rgb)
 
@@ -81,7 +79,7 @@ if len(sys.argv) not in (1, 3):
     sys.stderr.write("""
 usage: {} [<J′> <C′>]
 
-Specify J′ (lightness, 0 to 100) and C′ (chroma, 0 to ≈25) to see a specific
+Specify J′ (lightness, 0 to 100) and C′ (chroma, 0 to ≈50) to see a specific
 rainbow.  Otherwise, the program will show the most colorful rainbows at
 various levels of J′.
 
@@ -116,7 +114,7 @@ else:
     ax.set_xlabel("Jp (lightness)")
     ax.set_ylabel("Cp (chroma)")
     ax.set_xlim(0.0, 100.0)
-    ax.set_ylim(0.0, 30.0)
+    ax.set_ylim(0.0, 51.0)
 
     for Jp in np.linspace(0.0, 100.0, 32):
 
