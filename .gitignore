@@ -59,6 +59,7 @@ node_modules/
 package-lock.json
 
 # Python
+.mypy_cache/
 MANIFEST
 __pycache__
 *.pyc
