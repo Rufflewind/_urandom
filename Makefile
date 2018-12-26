@@ -10,6 +10,9 @@ deploy: dist/.git/config all
 	(cd colorpicker && npm run-script build)
 	ln -f colorpicker/{index.html,script.js,style.css} $(<D)/../colorpicker
 
+	mkdir -p $(<D)/../ctype
+	ln -f ctype/{index.html,main.js} $(<D)/../ctype
+
 	mkdir -p $(<D)/../angular-momentum-diagrams
 	echo '<meta http-equiv="refresh" content="0;url=/jucys"/>' >$(<D)/../angular-momentum-diagrams/index.html
 
