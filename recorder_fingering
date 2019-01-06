@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import argparse, re, sys
+
+def make_style(*code):
+    return lambda s: "\x1b[{}m{}\x1b[0m".format(";".join(map(str, code)), s)
+
+def parse_fingering(word):
+    fingering = {}
+    for finger in re.findall(r"\d/?", word):
+        if finger.endswith("/"):
+            cover = 0.5
+            finger = finger[:-1]
+        else:
+            cover = 1.0
+        fingering[int(finger)] = cover
+    return fingering
+
+def parse_note_fingerings(line):
+    words = line.split()
+    if len(words) == 0:
+        return None
+    note = words[0]
+    fingerings = list(map(parse_fingering, words[1:]))
+    return note, fingerings
+
+def parse_chart(lines):
+    return list(filter(lambda x: x, map(parse_note_fingerings, lines)))
+
+def tabulate_note_fingerings(note, fingerings):
+    row = []
+    if "#" in note:
+        style = make_style(1, 37, 40)
+        row.append(style("#"))
+        row.append(style(" "))
+    else:
+        style = make_style(1, 30, 47)
+        row.append(style(note[0]))
+        row.append(style(note[-1]))
+    for fingering in fingerings:
+        row.append(" ")
+        for finger in range(9):
+            cover = fingering.get(finger, 0.0)
+            if cover == 1.0:
+                style = make_style(37, 40)
+            elif cover == 0.5:
+                style = make_style(9, 37, 42)
+            else:
+                style = make_style(30, 47)
+            row.append(style(finger))
+    return row
+
+def uniformize_table_width(table):
+    max_width = max(map(len, table))
+    return [row + [" "] * (max_width - len(row)) for row in table]
+
+def rotate_clockwise(table):
+    return list(zip(*reversed(list(table))))
+
+def tabulate_chart(chart, rotate=False):
+    table = reversed(uniformize_table_width([
+        tabulate_note_fingerings(note, fingerings)
+        for note, fingerings in chart
+    ]))
+    if rotate:
+        table = rotate_clockwise(table)
+    return "".join("".join(row) + "\n" for row in table)
+
+YAMAHA_ALTO_CHART = """
+F4 01234567
+F#4 01234567/
+G4 0123456
+G#4 0123456/
+A4 012345
+A#4 0123467
+B4 012356
+C5 0123
+C#5 012456/
+D5 012
+D#5 0134
+E5 01 023
+F5 02
+F#5 12 0
+G5 2
+G#5 23456
+A5 0/12345
+A#5 0/12346
+B5 0/1235
+C6 0/123
+C#6 0/124
+D6 0/12
+D#6 0/12456
+E6 0/1245 0/1567
+F6 0/145
+F#6 0/134578
+G6 0/1346
+"""
+
+chart = parse_chart(YAMAHA_ALTO_CHART.splitlines())
+sys.stdout.write(tabulate_chart(chart))
