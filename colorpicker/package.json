@@ -2,12 +2,13 @@
   "name": "colorpicker",
   "version": "0.1.0",
   "scripts": {
-    "build": "node_modules/webpack/bin/webpack.js",
-    "serve": "node_modules/webpack-dev-server/bin/webpack-dev-server.js"
+    "build": "webpack --mode=production",
+    "serve": "webpack-dev-server --mode=production"
   },
   "devDependencies": {
-    "webpack": "^3.2.0",
-    "webpack-dev-server": "^2.5.1"
+    "webpack": "^4.28.3",
+    "webpack-cli": "^3.2.0",
+    "webpack-dev-server": "^3.1.14"
   },
   "dependencies": {
     "ciecam02": "^0.4.6"
