@@ -55,10 +55,26 @@
       medicare_brackets:
       - [0.0145,      0]
       - [0.0235, 200000]
+      ltcg_brackets:
+      # see: Qualified Dividends and Capital Gain Tax Worksheet
+      - [0.00,      0]
+      - [0.15,  38600]
+      - [0.20, 425800]
       standard_deduction: 12000
       base_num_allowances: 2
     ca:
       income_brackets:
+      - [0.0100,       0]
+      - [0.0200,    8544]
+      - [0.0400,   20255]
+      - [0.0600,   31969]
+      - [0.0800,   44377]
+      - [0.0930,   56085]
+      - [0.1030,  286492]
+      - [0.1130,  343788]
+      - [0.1230,  572980]
+      standard_deduction: 4401
+      withholding_brackets:
       - [0.0110,       0]
       - [0.0220,    8223]
       - [0.0440,   19495]
@@ -69,5 +85,5 @@
       - [0.1243,  330884]
       - [0.1353,  551473]
       - [0.1463, 1000000]
-      standard_deduction: 4236
+      withholding_standard_deduction: 4236
       low_income_exemption: 14048

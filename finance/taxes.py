@@ -62,7 +62,7 @@ class TaxYear(object):
         return "TaxYear({!r}, {!r})".format(self.year, self.params)
 
     def with_filing_status(self, filing_status):
-        return TaxFiler(self, filing_status)
+        return TaxFiler(self.year, filing_status)
 
     def param(self, name):
         return self.params[self.year]["common"][name]
@@ -105,8 +105,25 @@ class TaxFiler(object):
     def tax_year(self):
         return TaxYear(self.year, self.params)
 
-    def income_tax(self, income):
-        return get_tax_with(self.param("fed")["income_brackets"], income)
+    def income_tax(self, income, ltcg=0):
+        '''
+        income: Taxable income from line 1 of the Qualified Dividends and
+          Capital Gain Tax Worksheet.
+        ltcg: Taxable long-term capital gain and qualified dividends.  This is
+          the amount from line 6 of the Qualified Dividends and Capital Gain
+          Tax Worksheet.
+
+        Although the inputs come from the Qualified Dividends and Capital Gain
+        Tax Worksheet, it is only necessary to fill out lines 1 through 6.
+        '''
+        ordinary_income = max(0, income - max(0, ltcg))
+        ordinary_tax = get_tax_with(self.param("fed")["income_brackets"],
+                                    ordinary_income)
+        ltcg_tax = (
+            get_tax_with(self.param("fed")["ltcg_brackets"], income)
+            - get_tax_with(self.param("fed")["ltcg_brackets"], ordinary_income)
+        )
+        return ordinary_tax + ltcg_tax
 
     def amt(self, income):
         return get_tax_with(self.param("fed")["amt_brackets"], income)
@@ -139,11 +156,12 @@ class TaxFiler(object):
         adjusted_income = max(
             0,
             wage * pay_freq
-            - self.param("ca")["standard_deduction"]
+            - self.param("ca")["withholding_standard_deduction"]
         )
         return max(
             0,
-            get_tax_with(self.param("ca")["income_brackets"], adjusted_income)
+            get_tax_with(self.param("ca")["withholding_brackets"],
+                         adjusted_income)
             - num_allowances * self.tax_year().param("ca")["allowance_credit"]
         ) / pay_freq
 
