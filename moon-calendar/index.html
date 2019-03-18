@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Wuff calendar</title>
+    <style>
+      html {
+          font-family: monospace;
+      }
+      li.past {
+          background-color: #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wuff calendar</h1>
+    <p>Your time zone is <span id="tz"></span> h from UTC.  All times shown below are in UTC.  Data provided courtesy of <a href="https://api.usno.navy.mil">api.usno.navy.mil</a>.</p>
+    <ul id="calendar"></ul>
+    <script>
+      var now = new Date();
+      var year = now.getFullYear();
+      var tz = now.getTimezoneOffset() / -60;
+      document.getElementById("tz").innerText = tz;
+      var calendar = document.getElementById("calendar");
+      var xhr = new XMLHttpRequest();
+      xhr.addEventListener("load", function() {
+          var response = JSON.parse(this.responseText);
+          if (response.error) {
+              calendar.innerText = "ERROR";
+              return;
+          }
+          for (var i = 0; i < response.phasedata.length; ++i) {
+              var phase = response.phasedata[i];
+              var li = document.createElement("li");
+              var t = new Date(phase.date + " " + phase.time + "Z")
+              var ts = t.toISOString().substr(0, 16).replace("T", " ") + "Z"
+              li.innerText = ts + " " + {
+                  "New Moon": "🌑",
+                  "First Quarter": "🌓",
+                  "Full Moon": "🌕 awoo!",
+                  "Last Quarter": "🌗"
+              }[phase.phase];
+              li.className = t >= now ? "" : "past";
+              calendar.appendChild(li);
+          }
+      });
+      xhr.open("GET", "https://api.usno.navy.mil/moon/phase?ID=WUFCALEN&year=" + year);
+      xhr.send();
+    </script>
+  </body>
+</html>
