@@ -132,7 +132,7 @@ class TaxFiler(object):
         adjusted_income = max(0, (
             wage * pay_freq
             - self.param("fed")["standard_deduction"]
-            - self.tax_year().param("fed")["allowance_deduction"]
+            - self.tax_year().param("fed")["withholding_allowance"]
             * (num_allowances - self.param("fed")["base_num_allowances"])
         ))
         return get_tax_with(self.param("fed")["income_brackets"],
@@ -162,7 +162,7 @@ class TaxFiler(object):
             0,
             get_tax_with(self.param("ca")["withholding_brackets"],
                          adjusted_income)
-            - num_allowances * self.tax_year().param("ca")["allowance_credit"]
+            - num_allowances * self.tax_year().param("ca")["exemption_allowance"]
         ) / pay_freq
 
     def ca_supplemental_withholding_tax(self, income):
