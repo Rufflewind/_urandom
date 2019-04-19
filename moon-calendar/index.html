@@ -8,43 +8,129 @@
       html {
           font-family: monospace;
       }
+      h1 {
+          margin: 3px 0;
+      }
+      p {
+          margin: 3px 0;
+      }
+      #calendar.error {
+          color: red;
+      }
+      .kex {
+          cursor: pointer;
+      }
+      .kex:hover {
+          background-color: #ffc;
+      }
+      .awoo {
+          font-size: xx-small;
+      }
       li.past {
           background-color: #ddd;
+      }
+      #footer {
+          font-size: xx-small;
+          font-style: italic;
+      }
+      #footer.hidden {
+          opacity: 0;
       }
     </style>
   </head>
   <body>
     <h1>Wuff calendar</h1>
-    <p>Your time zone is <span id="tz"></span> h from UTC.  All times shown below are in UTC.  Data provided courtesy of <a href="https://api.usno.navy.mil">api.usno.navy.mil</a>.</p>
+    <p id="footer" class="hidden">In memory of <a href="https://twitter.com/Kexie_">Kex</a> 🍪</p>
+    <p>Data provided courtesy of <a href="https://api.usno.navy.mil">api.usno.navy.mil</a>.</p>
     <ul id="calendar"></ul>
     <script>
+      function parseDate(date, time) {
+          var MONTHS = [
+              "jan", "feb", "mar", "apr", "may", "jun",
+              "jul", "aug", "sep", "oct", "nov", "dec",
+          ];
+          var ymd = /(\d+) (\w+) (\d+)/.exec(date);
+          var hm = /(\d+):(\d+)/.exec(time);
+          return new Date(Date.UTC(
+              +ymd[1],
+              MONTHS.indexOf(ymd[2].toLowerCase()),
+              +ymd[3],
+              +hm[1],
+              +hm[2]
+          ));
+      }
+
+      function renderDate(date, timezoneOffset) {
+          date = new Date(date.getTime());
+          date.setMinutes(date.getMinutes() + timezoneOffset);
+          var offset =
+              (timezoneOffset >= 0 ? "+" : "-")
+              + Math.abs(
+                  timezoneOffset + Math.trunc(timezoneOffset / 60) * 40
+              ).toString().padStart(4, "0");
+          return date.toISOString().substr(0, 16).replace("T", " ") + " " + offset;
+      }
+
+      function kex(e) {
+          event.preventDefault();
+          var moon = e.target;
+          moon.innerText = {"🌕": "🍪", "🍪": "🌕"}[moon.innerText];
+          var footer = document.getElementById("footer")
+          footer.className = {"": "hidden", "hidden": ""}[footer.className];
+      }
+
+      function load() {
+          try {
+              var response = JSON.parse(this.responseText);
+              if (response.error) {
+                  throw new Error("GET failed: " + JSON.stringify(response))
+                  return;
+              }
+              for (var i = 0; i < response.phasedata.length; ++i) {
+                  var phase = response.phasedata[i];
+                  var li = document.createElement("li");
+                  var t = parseDate(phase.date, phase.time)
+                  li.appendChild(document.createTextNode(renderDate(t, timezoneOffset) + " "));
+                  switch (phase.phase) {
+                  case "New Moon":
+                      li.appendChild(document.createTextNode("🌑"));
+                      break;
+                  case "First Quarter":
+                      li.appendChild(document.createTextNode("🌓"));
+                      break;
+                  case "Full Moon":
+                      var moon = document.createElement("span");
+                      moon.className = "kex";
+                      moon.innerText = "🌕";
+                      moon.addEventListener("mousedown", kex);
+                      li.appendChild(moon);
+                      li.appendChild(document.createTextNode(" "));
+                      var awoo = document.createElement("span");
+                      awoo.className = "awoo";
+                      awoo.innerText = "awoo!";
+                      li.appendChild(awoo);
+                      break;
+                  case "Last Quarter":
+                      li.appendChild(document.createTextNode("🌗"));
+                      break;
+                  default:
+                      throw new Error("unrecognized phase: " + phase.phase);
+                  }
+                  li.className = t >= now ? "" : "past";
+                  calendar.appendChild(li);
+              }
+          } catch (e) {
+              calendar.className = "error";
+              calendar.innerText = "Error: " + e;
+          }
+      }
+
       var now = new Date();
       var year = now.getFullYear();
-      var tz = now.getTimezoneOffset() / -60;
-      document.getElementById("tz").innerText = tz;
+      var timezoneOffset = -now.getTimezoneOffset();
       var calendar = document.getElementById("calendar");
       var xhr = new XMLHttpRequest();
-      xhr.addEventListener("load", function() {
-          var response = JSON.parse(this.responseText);
-          if (response.error) {
-              calendar.innerText = "ERROR";
-              return;
-          }
-          for (var i = 0; i < response.phasedata.length; ++i) {
-              var phase = response.phasedata[i];
-              var li = document.createElement("li");
-              var t = new Date(phase.date + " " + phase.time + "Z")
-              var ts = t.toISOString().substr(0, 16).replace("T", " ") + "Z"
-              li.innerText = ts + " " + {
-                  "New Moon": "🌑",
-                  "First Quarter": "🌓",
-                  "Full Moon": "🌕 awoo!",
-                  "Last Quarter": "🌗"
-              }[phase.phase];
-              li.className = t >= now ? "" : "past";
-              calendar.appendChild(li);
-          }
-      });
+      xhr.addEventListener("load", load);
       xhr.open("GET", "https://api.usno.navy.mil/moon/phase?ID=WUFCALEN&year=" + year);
       xhr.send();
     </script>
