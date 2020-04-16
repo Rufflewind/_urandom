@@ -8,7 +8,7 @@ PAY_FREQ_ANNUAL = 1
 
 def load_yaml(path):
     with open(path) as f:
-        return yaml.load(f)
+        return yaml.safe_load(f)
 
 PARAMS = load_yaml(os.path.join(os.path.dirname(__file__), "taxes.yaml"))
 
