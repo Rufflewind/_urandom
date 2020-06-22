@@ -20,9 +20,14 @@ class YamlLoader(yaml.SafeLoader):
 def _decimal_constructor(loader: yaml.Loader, node: yaml.Node) -> decimal.Decimal:
     return decimal.Decimal(loader.construct_scalar(node))
 
-YamlLoader.add_constructor('!decimal', lambda loader, node: decimal.Decimal)
+YamlLoader.add_constructor('!decimal', _decimal_constructor)
+for resolvers in YamlLoader.yaml_implicit_resolvers.values():
+    resolvers[:] = [
+        (tag, regex) for tag, regex in resolvers
+        if tag not in ['tag:yaml.org,2002:float', 'tag:yaml.org,2002:int']
+    ]
 YamlLoader.add_implicit_resolver(
     '!decimal',
-    re.compile(r'(?a)[-+]?(\.\d+|\d+(\.\d*)?)([Ee][-+]?\d+)?'),
+    re.compile(r'(?a)\A[-+]?(\.\d+|\d+(\.\d*)?)([Ee][-+]?\d+)?\Z'),
     '-+0123456789.',
 )
