@@ -6,7 +6,7 @@ class YamlDumper(yaml.SafeDumper):
     pass
 
 def _decimal_representer(dumper: yaml.Dumper, data: decimal.Decimal) -> yaml.Node:
-    return dumper.represent_scalar('tag:yaml.org,2002:float', str(data))
+    return dumper.represent_scalar('tag:yaml.org,2002:str', str(data))
 
 def _none_representer(dumper: yaml.Dumper, data: None) -> yaml.Node:
     return dumper.represent_scalar('tag:yaml.org,2002:null', '')
