@@ -1,656 +1,416 @@
 "use strict";
 
-// TODO add a way to disable the masking
+import vertexShaderSource from "./shader.vert";
+import fragmentShaderSource from "./shader.frag";
 
-var ciebase = require("ciebase");
-var ciecam02 = require("ciecam02");
-var cielab = require("./cielab");
-
-var cam = ciecam02.cam({
-    whitePoint: ciebase.illuminant.D65,
-    adaptingLuminance: 40,
-    backgroundLuminance: 20,
-    surroundType: "average",
-    discounting: false
-}, ciecam02.cfs("JCh"));
-
-var xyz = ciebase.xyz(ciebase.workspace.sRGB, ciebase.illuminant.D65);
-
-function leadingZeros(n, s) {
-    s = String(s);
-    return Array(n - s.length + 1).join("0") + s;
+function assertEqual(x, y) {
+    console.assert(x == y, x, y);
 }
 
-function signedLeadingZeros(n, s) {
-    s = String(s);
-    if (s[0] == "-") {
-        return "-" + Array(n - s.length + 2).join("0") + s.slice(1);
-    } else {
-        return "+" + Array(n - s.length + 1).join("0") + s;
+function createShader(gl, shaderSpec) {
+    const shader = gl.createShader(shaderSpec.type);
+    gl.shaderSource(shader, shaderSpec.source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)
+        && !gl.isContextLost()) {
+        const log = gl.getShaderInfoLog(shader);
+        gl.deleteShader(shader);
+        throw new Error(`failed to compile shader: ${log}`);
     }
+    return shader;
 }
 
-function labToJch(lab) {
-    var j = lab[0] * 100.0;
-    var c = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]) * 100.0;
-    var h = Math.atan2(lab[2], lab[1]) * 180.0 / Math.PI;
-    if (h < 0) {
-        h += 360.0;
-    }
-    return [j, c, h];
-}
-
-function jchToLab(jch) {
-    var r = jch[1] / 100.0;
-    var t = jch[2] * Math.PI / 180.0;
-    return [
-        jch[0] / 100.0,
-        r * Math.cos(t),
-        r * Math.sin(t)
-    ];
-}
-
-function cabToJch(cab) {
-    var x = cab[1];
-    var y = cab[2];
-    var h = Math.atan2(y, x);
-    if (h < 0.0) {
-        h += 2 * Math.PI;
-    }
-    return [
-        100.0 * (1.0 - Math.sqrt(x * x + y * y)),
-        100.0 * cab[0],
-        h * 180.0 / Math.PI
-    ];
-}
-
-function inpToLab(inp, maxChroma) {
-    return [
-        inp[2],
-        (2.0 * inp[0] - 1.0) * maxChroma,
-        (2.0 * inp[1] - 1.0) * maxChroma
-    ];
-}
-
-function labToInp(lab, maxChroma) {
-    return [
-        (lab[1] / maxChroma + 1.0) / 2.0,
-        (lab[2] / maxChroma + 1.0) / 2.0,
-        lab[0]
-    ];
-}
-
-function inpToCab(inp, maxChroma) {
-    return [
-        maxChroma * inp[2],
-        2.0 * inp[0] - 1.0,
-        2.0 * inp[1] - 1.0
-    ];
-}
-
-function cabToInp(cab, maxChroma) {
-    return [
-        (cab[1] + 1.0) / 2.0,
-        (cab[2] + 1.0) / 2.0,
-        cab[0] / maxChroma
-    ];
-}
-
-function clipRgb(rgb) {
-    var inGamut = true;
-    if (rgb[0] < 0.0) {
-        inGamut = false;
-        rgb[0] = 0.0;
-    } else if (rgb[0] > 1.0) {
-        inGamut = false;
-        rgb[0] = 1.0;
-    }
-    if (rgb[1] < 0.0) {
-        inGamut = false;
-        rgb[1] = 0.0;
-    } else if (rgb[1] > 1.0) {
-        inGamut = false;
-        rgb[1] = 1.0;
-    }
-    if (rgb[2] < 0.0) {
-        inGamut = false;
-        rgb[2] = 0.0;
-    } else if (rgb[2] > 1.0) {
-        inGamut = false;
-        rgb[2] = 1.0;
-    }
-    return inGamut;
-}
-
-// https://stackoverflow.com/a/5624139
-function hexToRgb(hex) {
-    var m;
-    m = /(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(hex);
-    if (m) {
-        var rgb = [parseInt(m[1]) / 255.0,
-                   parseInt(m[2]) / 255.0,
-                   parseInt(m[3]) / 255.0];
-        clipRgb(rgb);
-        return rgb;
-    }
-    hex = hex.replace(/^#?([a-f\d])([a-f\d])([a-f\d])$/i, function(m, r, g, b) {
-        return r + r + g + g + b + b;
+function createProgram(gl, shaderSpecs) {
+    const program = gl.createProgram();
+    const shaders = shaderSpecs.map(shaderSpec => {
+        return createShader(gl, shaderSpec);
     });
-    m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!m) {
+    for (const shader of shaders) {
+        gl.attachShader(program, shader);
+    }
+    gl.linkProgram(program);
+    for (const shader of shaders) {
+        gl.detachShader(program, shader);
+        gl.deleteShader(shader);
+    }
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)
+        && !gl.isContextLost()) {
+        const log = gl.getProgramInfoLog(program);
+        gl.deleteProgram(program);
+        throw new Error(`failed to link shader program: ${log}`);
+    }
+    return program;
+}
+
+function updateFloatBuffer(gl, program, buffer, attribValues) {
+    const allValues = [];
+    const attribRefs = [];
+    for (const [name, {dim, values}] of Object.entries(attribValues)) {
+        const index = allValues.length;
+        allValues.push(...values);
+        attribRefs.push({name, dim, index});
+    }
+    const typedArray = new Float32Array(allValues);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, typedArray, gl.STATIC_DRAW);
+    for (const {name, dim, index} of attribRefs) {
+        const attrib = gl.getAttribLocation(program, name);
+        const offset = index * typedArray.BYTES_PER_ELEMENT;
+        gl.vertexAttribPointer(attrib, dim, gl.FLOAT, false, 0, offset);
+        gl.enableVertexAttribArray(attrib);
+    }
+}
+
+const DEBUG = true;
+
+function computeViewSpec(aspectDim) {
+    // When a model coordinate is set to FOLLOW_FOCUS, the world coordinate will
+    // follow the cursor.  Except for CURSOR, model coordinates should normally be
+    // nonnegative.
+    const FOLLOW_FOCUS = -1;
+    const sliderClipX = 1 - 0.2 / aspectDim[0];
+    const swatchClipSize = [0.2 / aspectDim[0], 0.2 / aspectDim[1]];
+    const viewSpec = {
+        whichView(clipPos) {
+            const viewName = clipPos[0] < sliderClipX ? "PLANE_VIEW" : "SLIDER_VIEW";
+            return viewSpec.views[viewName];
+        },
+        views: {
+            "PLANE_VIEW": {
+                vertexClipPos: [
+                    [-1, -1],
+                    [-1, 1],
+                    [sliderClipX, -1],
+                    [sliderClipX, 1],
+                ],
+                vertexModelPos: [
+                    [0, 0, FOLLOW_FOCUS],
+                    [0, aspectDim[1], FOLLOW_FOCUS],
+                    [aspectDim[0], 0, FOLLOW_FOCUS],
+                    [aspectDim[0], aspectDim[1], FOLLOW_FOCUS],
+                ],
+                clipToWorld(clipPos, worldPos) {
+                    worldPos[0] = (clipPos[0] + 1) / (sliderClipX + 1) * aspectDim[0];
+                    worldPos[1] = (clipPos[1] + 1) / 2 * aspectDim[1];
+                },
+            },
+            "SLIDER_VIEW": {
+                vertexClipPos: [
+                    [sliderClipX, -1],
+                    [sliderClipX, 1],
+                    [1, -1],
+                    [1, 1],
+                ],
+                vertexModelPos: [
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, 0],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, 1],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, 0],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, 1],
+                ],
+                clipToWorld(clipPos, worldPos) {
+                    worldPos[2] = (clipPos[1] + 1) / 2;
+                },
+            },
+            "SWATCH_VIEW": {
+                vertexClipPos: [
+                    [-1, -1],
+                    [-1, -1 + swatchClipSize[1]],
+                    [-1 + swatchClipSize[0], -1],
+                    [-1 + swatchClipSize[0], -1 + swatchClipSize[1]],
+                ],
+                vertexModelPos: [
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, FOLLOW_FOCUS],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, FOLLOW_FOCUS],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, FOLLOW_FOCUS],
+                    [FOLLOW_FOCUS, FOLLOW_FOCUS, FOLLOW_FOCUS],
+                ],
+                clipToWorld(clipPos, worldPos) {},
+            },
+        },
+    };
+    return viewSpec;
+}
+
+function buildVertexSpec(views) {
+    const QUAD_TO_TRIANGLES = [
+        0, 1, 2,
+        1, 2, 3,
+    ];
+    const CLIP_DIMENSION = 2;
+    const MODEL_DIMENSION = 3;
+    const clipPos = [];
+    const modelPos = [];
+    for (const {vertexClipPos, vertexModelPos} of Object.values(views)) {
+        assertEqual(vertexClipPos.length, 4);
+        assertEqual(vertexModelPos.length, 4);
+        for (const i of QUAD_TO_TRIANGLES) {
+            assertEqual(vertexClipPos[i].length, CLIP_DIMENSION);
+            assertEqual(vertexModelPos[i].length, MODEL_DIMENSION);
+            clipPos.push(...vertexClipPos[i]);
+            modelPos.push(...vertexModelPos[i]);
+        }
+    }
+    return {
+        numVertices: views.length * QUAD_TO_TRIANGLES.length,
+        attribValues: {
+            "clip_pos": {
+                dim: CLIP_DIMENSION,
+                values: clipPos,
+            },
+            "model_pos": {
+                dim: MODEL_DIMENSION,
+                values: modelPos,
+            },
+        },
+    };
+}
+
+function canvasClipCoord(canvas, mouseEvent) {
+    const rect = canvas.getBoundingClientRect();
+    return [
+        (mouseEvent.clientX - rect.left) / rect.width * 2 - 1,
+        -((mouseEvent.clientY - rect.top) / rect.height * 2 - 1),
+    ];
+}
+
+// Creates all the resources tied to the OpenGL context.  Don't put non-GL
+// resources into this object, as Resources will be re-created when OpenGL
+// context is lost and restored.
+function createResources(canvas) {
+    const gl = canvas.getContext(DEBUG ? "webgl2" : "webgl");
+    if (gl == null) {
         return null;
     }
-    return [parseInt(m[1], 16) / 255.0,
-            parseInt(m[2], 16) / 255.0,
-            parseInt(m[3], 16) / 255.0];
-}
-
-// https://stackoverflow.com/a/19765382
-function rgbToHex(rgb) {
-    rgb = rgb.slice();
-    clipRgb(rgb);
-    var r = rgb[0] * 255.0;
-    var g = rgb[1] * 255.0;
-    var b = rgb[2] * 255.0;
-    return "#" + (0x1000000 + ((r << 16) | (g << 8) | b)).toString(16).slice(1);
-}
-
-function trivialConverter(c) {
-    return {value: c, inGamut: true};
-}
-
-function circularMask(ctx, width, height) {
-    ctx.beginPath();
-    ctx.arc(width / 2.0, height / 2.0, width / 2.0, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-}
-
-var VIEWS = {
-    SRGB: {
-        mask: function(ctx) {},
-        fromSrgb: trivialConverter,
-        toSrgb: trivialConverter
-    },
-    LAB_HCL: {
-        mask: circularMask,
-        display: function(lab) {
-            return "(L=" + leadingZeros(3, (lab[0] * 100.0).toFixed(0))
-                 + ", a=" + signedLeadingZeros(3, (lab[1] * 100.0).toFixed(0))
-                 + ", b=" + signedLeadingZeros(3, (lab[2] * 100.0).toFixed(0))
-                 + ")";
-        },
-        transform: inpToLab,
-        untransform: labToInp,
-        toSrgb: cielab.cielabToSrgb,
-        fromSrgb: cielab.srgbToCielab,
-    },
-    LAB_HLC: {
-        mask: circularMask,
-        display: function(cab) {
-            var x = cab[1];
-            var y = cab[2];
-            var r = Math.sqrt(x * x + y * y);
-            var h = Math.atan2(y, x);
-            if (h < 0.0) {
-                h += 2 * Math.PI;
-            }
-            h *= 180.0 / Math.PI;
-            return "(H=" + leadingZeros(3, h.toFixed(0))
-                 + "\xb0, C=" + leadingZeros(3, (cab[0] * 100.0).toFixed(0))
-                 + ", L=" + leadingZeros(3, ((1.0 - r) * 100.0).toFixed(0))
-                 + ")";
-        },
-        transform: inpToCab,
-        untransform: cabToInp,
-        toSrgb: function(cab) {
-            var x = cab[1];
-            var y = cab[2];
-            var r = Math.sqrt(x * x + y * y);
-            var lab;
-            if (r < 1e-8) {
-                lab = [1.0, 0.0, 0.0];
-            } else {
-                lab = [1.0 - r, cab[0] * x / r, cab[0] * y / r];
-            }
-            return cielab.cielabToSrgb(lab);
-        },
-        fromSrgb: function(rgb) {
-            var res = cielab.srgbToCielab(rgb);
-            var lab = res.value;
-            var r = 1.0 - lab[0];
-            var c = Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]);
-            var cab = [c, 0.0, 0.0];
-            if (c < 1e-8) {
-                cab[1] = r;
-            } else {
-                cab[1] = lab[1] / c * r;
-                cab[2] = lab[2] / c * r;
-            }
-            return {
-                value: cab,
-                inGamut: res.inGamut
-            };
-        }
-    },
-    CAM02_HCL: {
-        mask: circularMask,
-        display: function(lab) {
-            var jch = labToJch(lab);
-            return "(J=" + leadingZeros(3, jch[0].toFixed(0))
-                 + ", C=" + leadingZeros(3, jch[1].toFixed(0))
-                 + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + "\xb0)";
-        },
-        transform: inpToLab,
-        untransform: labToInp,
-        toSrgb: function(lab) {
-            var jch = labToJch(lab);
-            jch = {J: jch[0], C: jch[1], h: jch[2]};
-            var rgb = xyz.toRgb(cam.toXyz(jch));
-            var inGamut = clipRgb(rgb);
-            return {value: rgb, inGamut: inGamut};
-        },
-        fromSrgb: function(rgb) {
-            var jch = cam.fromXyz(xyz.fromRgb(rgb));
-            return {value: jchToLab([jch.J, jch.C, jch.h]), inGamut: true};
-        }
-    },
-    CAM02_HLC: {
-        mask: circularMask,
-        display: function(lab) {
-            var jch = cabToJch(lab);
-            return "(J=" + leadingZeros(3, jch[0].toFixed(0))
-                 + ", C=" + leadingZeros(3, jch[1].toFixed(0))
-                 + ", h=" + leadingZeros(3, jch[2].toFixed(0)) + "\xb0)";
-        },
-        transform: inpToCab,
-        untransform: cabToInp,
-        toSrgb: function(cab) {
-            var jch = cabToJch(cab);
-            jch = {J: jch[0], C: jch[1], h: jch[2]};
-            var rgb = xyz.toRgb(cam.toXyz(jch));
-            var inGamut = clipRgb(rgb);
-            return {value: rgb, inGamut: inGamut};
-        },
-        fromSrgb: function(rgb) {
-            var jch = cam.fromXyz(xyz.fromRgb(rgb));
-            var r = 1.0 - jch.J / 100.0;
-            var t = jch.h * Math.PI / 180.0;
-            var cab = [jch.C / 100.0, r * Math.cos(t), r * Math.sin(t)];
-            return {value: cab, inGamut: true};
-        }
-    }
-};
-
-function Queue() {
-    var self = this;
-    function put(shift) {
-        self.shift = shift || function() {};
-    }
-    var push = put;
-    put();
-    this.push = function(item) {
-        function after() {
-            push = put;
-        }
-        push(function() {
-            put();
-            after();
-            return item;
-        });
-        push = function(shift) {
-            after = put.bind(null, shift);
-        };
+    const program = createProgram(gl, [
+        {type: gl.VERTEX_SHADER, source: vertexShaderSource},
+        {type: gl.FRAGMENT_SHADER, source: fragmentShaderSource},
+    ]);
+    gl.useProgram(program);
+    return {
+        gl,
+        program,
+        buffer: gl.createBuffer(),
     };
 }
 
-function WorkerPool(url, count) {
-    var workers = [];
-    this.workers = workers;
-    for (var i = 0; i < count; ++i) {
-        (function() {
-            var worker = new Worker(url);
-            var backlog = new Queue();
-            worker.onmessage = function(e) {
-                backlog.shift()(e.data);
-            };
-            workers.push({
-                worker: worker,
-                backlog: backlog
-            });
-        })();
+function updateSize(gl) {
+    const width = window.devicePixelRatio * gl.canvas.clientWidth;
+    const height = window.devicePixelRatio * gl.canvas.clientHeight;
+    if (!(gl.canvas.width == width && gl.canvas.height == height)) {
+        gl.canvas.width = width;
+        gl.canvas.height = height;
+        gl.viewport(0, 0, width, height);
     }
-    this.nextWorker = 0;
+    return {width, height};
 }
 
-Object.defineProperty(WorkerPool.prototype, "length", {
-    get: function() {
-        return this.workers.length;
-    }
-});
+function renderConsole(swatchPixel, state) {
+    const debugConsole = document.getElementById("debug-console");
 
-WorkerPool.prototype.submit = function(job, callback) {
-    var worker = this.workers[this.nextWorker];
-    worker.backlog.push(callback)
-    worker.worker.postMessage(job);
-    this.nextWorker = (this.nextWorker + 1) % this.workers.length;
-};
-
-var WORKER_CALLS = {
-    cartesian: cartesian
-};
-
-function ColorPicker(canvas, workerPool) {
-    this.ctx = canvas.getContext("2d");
-    this.width = canvas.width;
-    this.height = canvas.height;
-    this.img = this.ctx.createImageData(this.width, this.height);
-    this.workerPool = workerPool;
-
-    this.colorState = new ColorState("SRGB", [0.65, 0.65, 0.65]);
-    this.view = "SRGB"; // this needn't be the same as colorState.view!
-    this.maxChroma = 0.75;
-    this.currentHash = "";
-
-    this.onsave = function(value) {};
-    this.ondraw = function() {};
-
-    this.drawScheduled = false;
-    this.drawFull = false;
-
-    this.redraw(true);
+    const hexColor = Array.from(swatchPixel.subarray(0, 3)).map(x => {
+        const str = x.toString(16);
+        return "0".repeat(2 - str.length) + str;
+    }).join("");
+    debugConsole.innerText = `focus = ${state.focus.join(", ")}
+color = #${hexColor} = swatchPixel(${swatchPixel.join(", ")})`;
+    debugConsole.style.border = `5px solid swatchPixel(${swatchPixel.join(", ")})`;
 }
 
-function cartesian(width, height, yBegin, yEnd, maxChroma, inpZ, view) {
-    var transform = VIEWS[view].transform;
-    var toSrgb = VIEWS[view].toSrgb;
-    var inp = [0.0, 0.0, inpZ];
-    var data = new Uint8ClampedArray(4 * width * (yEnd - yBegin));
-    for (var y = yBegin; y < yEnd; ++y) {
-        inp[1] = 1.0 - y / height;
-        for (var x = 0; x < width; ++x) {
-            inp[0] = x / width;
-            var r = toSrgb(transform(inp, maxChroma));
-            var rgb = r.value;
-            if (!r.inGamut) {
-                var desat = 0.5;
-                var dim = 0.1;
-                var avg = (rgb[0] + rgb[1] + rgb[2]) / 3.0;
-                rgb[0] = (rgb[0]) * (1.0 - desat) + avg * desat - dim;
-                rgb[1] = (rgb[1]) * (1.0 - desat) + avg * desat - dim;
-                rgb[2] = (rgb[2]) * (1.0 - desat) + avg * desat - dim;
-            }
-            var offset = 4 * (x + width * (y - yBegin));
-            data[offset + 0] = 255.0 * rgb[0];
-            data[offset + 1] = 255.0 * rgb[1];
-            data[offset + 2] = 255.0 * rgb[2];
-            data[offset + 3] = 255.0;
-        }
+function initDrag(canvas, alpha) {
+    let draggingView = null;
+
+    function updateFocus(clipPos) {
+        draggingView.clipToWorld(clipPos, alpha.state.focus);
+        alpha.render();
     }
-    return data;
-}
 
-ColorPicker.prototype.redraw = function(full) {
-    this.drawFull = this.drawFull || full;
-    if (this.drawScheduled) {
-        return;
-    }
-    this.drawScheduled = true;
-    var self = this;
-    window.requestAnimationFrame(function() {
-        function render() {
-            self.ondraw();
-
-            createImageBitmap(self.img).then(function(img) {
-                var ctx = self.ctx;
-                var inp = self.getColor();
-                var cursorX = inp[0] * self.width;
-                var cursorY = (1.0 - inp[1]) * self.height;
-
-                ctx.clearRect(0, 0, self.width, self.height);
-                ctx.save();
-                VIEWS[self.view].mask(ctx, self.width, self.height);
-                ctx.drawImage(img, 0, 0);
-                ctx.restore();
-
-                ctx.strokeStyle = "white";
-                ctx.beginPath();
-                ctx.arc(cursorX, cursorY, 4, 0, 2 * Math.PI);
-                ctx.stroke();
-
-                ctx.strokeStyle = "black";
-                ctx.beginPath();
-                ctx.arc(cursorX, cursorY, 5, 0, 2 * Math.PI);
-                ctx.stroke();
-            });
-
-            self.drawScheduled = false;
-            self.drawFull = false;
-        }
-
-        if (self.drawFull) {
-            console.time("redraw")
-            var inpZ = self.getColorInpZ();
-            var blockHeight = Math.round(self.height / self.workerPool.length);
-            var pending = 0;
-            for (var yBegin = 0; yBegin < self.height; yBegin += blockHeight) {
-                var yEnd = yBegin + blockHeight;
-                if (yEnd > self.height) {
-                    yEnd = self.height;
-                }
-                pending += 1;
-                self.workerPool.submit({
-                    call: "cartesian",
-                    args: [self.width, self.height, yBegin, yEnd,
-                           self.maxChroma, inpZ, self.view]
-                }, (function(yBegin) {
-                    return function(data) {
-                        self.img.data.set(data, 4 * self.width * yBegin);
-                        pending -= 1;
-                        if (pending == 0) {
-                            console.timeEnd("redraw");
-                            render();
-                        }
-                    };
-                })(yBegin));
-            }
-        } else {
-            render();
-        }
+    canvas.addEventListener("pointerdown", event => {
+        canvas.setPointerCapture(event.pointerId);
+        const clipPos = canvasClipCoord(canvas, event);
+        draggingView = alpha.viewSpec.whichView(clipPos);
+        updateFocus(clipPos);
     });
-};
-
-ColorPicker.prototype.getColor = function() {
-    return VIEWS[this.view].untransform(this.colorState.get(this.view).value,
-                                        this.maxChroma);
-};
-
-ColorPicker.prototype.setColor = function(inp) {
-    var oldInpZ = this.getColorInpZ();
-    this.colorState.set(this.view,
-                        VIEWS[this.view].transform(inp, this.maxChroma));
-    this.redraw(oldInpZ != inp[2]);
-};
-
-ColorPicker.prototype.getColorInpZ = function() {
-    return this.getColor()[2];
-};
-
-ColorPicker.prototype.setColorInpZ = function(value) {
-    var inp = this.getColor().slice();
-    inp[2] = value;
-    this.setColor(inp);
-};
-
-ColorPicker.prototype.getColorDisplay = function() {
-    return VIEWS[this.view].display(this.colorState.get(this.view).value);
-};
-
-ColorPicker.prototype.getTextColor = function() {
-    var rgb = this.colorState.get("SRGB").value;
-    return {
-        hex: rgbToHex(rgb),
-        rgb: "rgb("
-           + (rgb[0] * 255.0).toFixed(0) + ", "
-           + (rgb[1] * 255.0).toFixed(0) + ", "
-           + (rgb[2] * 255.0).toFixed(0)
-           + ")",
-    }
-};
-
-ColorPicker.prototype.saveTextColor = function(text) {
-    var rgb = hexToRgb(text);
-    if (rgb == null) {
-        return;
-    }
-    this.colorState.set("SRGB", rgb);
-    this.save();
-    this.redraw(true);
-};
-
-ColorPicker.prototype.setView = function(view) {
-    this.view = view;
-    this.redraw(true);
-};
-
-ColorPicker.prototype.setMaxChromaPercent = function(value) {
-    this.maxChroma = Number(value) / 100.0;
-    this.redraw(true);
-};
-
-ColorPicker.prototype.restore = function(hash) {
-    if (hash == this.currentHash) {
-        return;
-    }
-    var rgb = hexToRgb(hash);
-    if (rgb == null) {
-        return;
-    }
-    this.currentHash = hash;
-    this.colorState.set("SRGB", rgb);
-    this.redraw(true);
-};
-
-ColorPicker.prototype.save = function() {
-    this.currentHash = this.colorState.save()
-    this.onsave(this.currentHash);
-};
-
-function ColorState(view, color) {
-    this.set(view, color);
+    canvas.addEventListener("pointermove", event => {
+        if (draggingView == null) {
+            return;
+        }
+        const clipPos = canvasClipCoord(canvas, event);
+        updateFocus(clipPos);
+    });
+    canvas.addEventListener("pointerup", event => {
+        draggingView = null;
+        canvas.releasePointerCapture(event.pointerId);
+    });
 }
 
-ColorState.prototype.get = function(view) {
-    if (this.view == view) {
-        return {value: this.color, inGamut: true};
+function createPerformanceGauge(metricNames) {
+    const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+    const WINDOW_SIZE = 512;
+
+    const debugGraph = document.getElementById("debug-graph");
+    const debugMetric = document.getElementById("debug-metric");
+
+    const metrics = {};
+    for (const metricName of metricNames) {
+        const polyline = document.createElementNS(SVG_NAMESPACE, "polyline");
+        for (let x = 0; x < WINDOW_SIZE; x++) {
+            const point = debugGraph.createSVGPoint();
+            point.x = x;
+            point.y = 1;
+            polyline.points.appendItem(point);
+        }
+        metrics[metricNames] = {
+            query: null,
+            points: polyline.points,
+            // cyclic buffer
+            sampleBuffer: new Float64Array(50),
+            sampleIndex: 0,
+        };
     }
-    var r1 = VIEWS[this.view].toSrgb(this.color);
-    var r2 = VIEWS[view].fromSrgb(r1.value);
-    return {value: r2.value, inGamut: r1.inGamut && r2.inGamut};
-};
 
-ColorState.prototype.set = function(view, color, save) {
-    this.view = view;
-    this.color = color;
-};
+    return {
+        // render needs to be sequenced before measure.
+        render(gl) {
+            // TODO: This render doesn't really work when multiple metrics are sampled at
+            // unpredictable intervals.
+            const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+            const text = [];
+            for (const [metricName, metric] of Object.entries(metrics)) {
+                const query = metric.query;
+                if (query == null) {
+                    continue;
+                }
+                const available = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE);
+                const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+                if (available && !disjoint) {
+                    const timeElapsed = gl.getQueryParameter(query, gl.QUERY_RESULT);
+                    const {sampleBuffer, sampleIndex, points} = metric.points;
+                    const n = metric.points.length;
+                    for (let i = 1; i < n; i++) {
+                        points.getItem(i - 1).y =
+                            points.getItem(i).y;
+                    }
+                    points.getItem(n - 1).y = 1 - timeElapsed / 1e6;
+                    sampleBuffer[sampleIndex] = timeElapsed;
+                    metric.sampleIndex = (sampleIndex + 1) % n;
+                    const avg = sampleBuffer.reduce((z, x) => z + x, 0) / n;
+                    const std = Math.pow(sampleBuffer.reduce(
+                        (z, x) => z + Math.pow(x - avg, 2), 0) / n, 0.5);
+                    text.push(`${metricName}:  ${(avg / 1e3).toFixed(3)} us
+${metricName}:  ${(std / 1e3).toFixed(3)} us`);
+                }
+                if (available || disjoint) {
+                    gl.deleteQuery(query);
+                    metric.query = null;
+                }
+            }
+            debugMetric.innerText = text.join("\n");
+        },
+        measure(gl, metricName, measuredCallback) {
+            const ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+            const metric = metrics[metricName];
+            const shouldMeasure = ext != null && metric.query == null;
+            if (shouldMeasure) {
+                metric.query = gl.createQuery();
+                gl.beginQuery(ext.TIME_ELAPSED_EXT, metric.query);
+            }
+            measuredCallback();
+            if (shouldMeasure) {
+                gl.endQuery(ext.TIME_ELAPSED_EXT);
+            }
+        },
+    };
+}
 
-ColorState.prototype.save = function() {
-    return rgbToHex(this.get("SRGB").value);
-};
+const METRICS = ["draw"];
+
+function renderMain(performanceGauge, viewHolder, swatchPixel, resources, state) {
+    const errorNoWebgl = document.getElementById("error-no-webgl");
+
+    const gl = resources.gl;
+    const errorNoWebglDisplay = gl == null ? "" : "none";
+    if (errorNoWebgl.style.display != errorNoWebglDisplay) {
+        errorNoWebgl.style.display = errorNoWebglDisplay;
+    }
+
+    const program = resources.program;
+    const focusUniform = gl.getUniformLocation(program, "focus");
+
+    performanceGauge.render(gl);
+
+    const {width, height} = updateSize(gl);
+    const minDim = Math.min(width, height);
+    const aspectDim = [width / minDim, height / minDim];
+    const viewSpec = computeViewSpec(aspectDim);
+    viewHolder.viewSpec = viewSpec;
+    const vertexSpec = buildVertexSpec(viewSpec.views);
+    updateFloatBuffer(gl, program, resources.buffer, vertexSpec.attribValues);
+
+    gl.uniform3fv(focusUniform, state.focus);
+    performanceGauge.measure(gl, "draw", () => {
+        gl.drawArrays(gl.TRIANGLES, 0, vertexSpec.numVertices);
+    });
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, swatchPixel);
+}
+
+// Aligns rendering to animation frames and deduplicates rendering requests.
+function createAlignedRenderer(render) {
+    let renderPending = false;
+
+    function alignedRender(...args) {
+        if (renderPending) {
+            return;
+        }
+        renderPending = true;
+        window.requestAnimationFrame(() => {
+            renderPending = false;
+            render(...args);
+        });
+    }
+
+    return alignedRender;
+}
+
+function maintainResources(canvas, initializeResources) {
+    canvas.addEventListener("webglcontextlost", event => {
+        event.preventDefault();
+    }, false);
+    canvas.addEventListener("webglcontextrestored", event => {
+        initializeResources();
+    }, false);
+    initializeResources();
+}
+
+// Handles resize events.
+function initResizer(canvas, requestRender) {
+    const observer = new window.ResizeObserver(() => {
+        requestRender();
+    });
+    observer.observe(canvas, {box: "content-box"});
+
+}
 
 function main() {
-    if (typeof WorkerGlobalScope != "undefined"
-        && self instanceof WorkerGlobalScope) {
-        onmessage = function(e) {
-            postMessage(WORKER_CALLS[e.data.call].apply(null, e.data.args));
-        };
-        return;
+    const canvas = document.getElementById("canvas");
+    const errorDisplay = document.getElementById("error-display");
+
+    const state = {focus: [0.5, 0.5, 0.5]};
+    let resources;
+    maintainResources(canvas, () => {
+        resources = createResources(canvas);
+    });
+
+    const alignedRender = createAlignedRenderer(renderMain);
+    const performanceGauge = createPerformanceGauge(METRICS);
+    const viewHolder = {viewSpec: "TODO"};
+    const swatchPixel = new Uint8Array(4);
+    function requestRender() {
+        alignedRender(performanceGauge, viewHolder, swatchPixel, resources, state);
     }
-    var workerPool = new WorkerPool("script.js",
-                                    navigator.hardwareConcurrency || 4);
 
-    var canvas = document.getElementById("canvas");
-    canvas.width = 400;
-    canvas.height = 400;
-    var colorPicker = new ColorPicker(canvas, workerPool);
-
-    colorPicker.onsave = function(value) {
-        window.location.hash = value;
-    };
-    window.addEventListener("hashchange", function() {
-        colorPicker.restore(window.location.hash);
-    });
-    colorPicker.restore(window.location.hash);
-
-    var slider = document.getElementById("slider");
-    var colorText = document.getElementById("color");
-    slider.addEventListener("input", function(e) {
-        colorPicker.setColorInpZ(slider.value / slider.max);
-    });
-    slider.addEventListener("change", function(e) {
-        colorPicker.save();
-    });
-    colorText.addEventListener("blur", function(e) {
-        colorPicker.saveTextColor(this.value);
-    });
-    colorText.addEventListener("keydown", function(e) {
-        if (e.key == "Enter") {
-            colorPicker.saveTextColor(this.value);
-        }
-    });
-    colorPicker.ondraw = function() {
-        slider.value = colorPicker.getColorInpZ() *  slider.max;
-        document.getElementById("display").textContent =
-            colorPicker.getColorDisplay();
-        var color = colorPicker.getTextColor();
-        colorText.value = color.hex;
-        document.getElementById("preview").style.backgroundColor = color.hex;
-        document.getElementById("display-rgb").textContent = color.rgb;
-    };
-
-    function setCursor(e) {
-        colorPicker.setColor([
-            e.offsetX / canvas.clientWidth,
-            1.0 - e.offsetY / canvas.clientHeight,
-            slider.value / slider.max
-        ]);
-    }
-    var mouseDown = false;
-    canvas.addEventListener("mousedown", function(e) {
-        if (e.buttons & 1) {
-            e.preventDefault();
-            mouseDown = true;
-            setCursor(e);
-        }
-    });
-    canvas.addEventListener("mousemove", function(e) {
-        if (mouseDown) {
-            e.preventDefault();
-            setCursor(e);
-        }
-    });
-    canvas.addEventListener("mouseup", function(e) {
-        e.preventDefault();
-        colorPicker.save();
-        mouseDown = false;
-    });
-
-    var maxChromaInput = document.getElementById("max-chroma");
-    colorPicker.setMaxChromaPercent(maxChromaInput.value);
-    maxChromaInput.addEventListener("input", function(e) {
-        colorPicker.setMaxChromaPercent(this.value);
-    });
-
-    ["LAB_HCL", "LAB_HLC", "CAM02_HCL", "CAM02_HLC"].forEach(function(view) {
-        var id = "view-" + view.replace("_", "-").toLowerCase();
-        var elem = document.getElementById(id);
-        if (elem.checked) {
-            colorPicker.setView(view);
-        }
-        elem.addEventListener("change", function(id) {
-            colorPicker.setView(view);
-        });
-    });
+    initResizer(canvas, requestRender);
+const alpha = {};
+    initDrag(canvas, alpha);
 }
 
 main();

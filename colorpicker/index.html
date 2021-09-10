@@ -3,32 +3,18 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>CIELAB and CIECAM02 color picker</title>
-    <link rel="stylesheet" href="style.css"/>
+    <title>Colorpicker</title>
+    <link href="style.css" rel="stylesheet"/>
   </head>
   <body>
-    <h1>CIE<a href="https://en.wikipedia.org/wiki/Lab_color_space">LAB</a>&amp;<a href="https://en.wikipedia.org/wiki/CIECAM02">CAM02</a> color picker</h1>
-    <main>
-      <div id="resize">
-        <canvas id="canvas"></canvas>
-      </div>
-      <input id="slider" type="range" value="50" step="1" min="0" max="100"/>
-        <input id="color" type="text"/>
-      <label>Max chroma:
-        <input id="max-chroma" type="number" value="75" step="1" min="0" max="999"/>
-      </label>
-      <div id="preview"></div>
-      <div id="display-rgb"></div>
-      <div id="display"></div>
-    </main>
-    <form id="mode">
-      <p><label><input id="view-lab-hcl" type="radio" name="view" checked="checked"/> LAB: chroma-hue-lightness</label></p>
-      <p><label><input id="view-lab-hlc" type="radio" name="view"/> LAB: lightness-hue-chroma</label></p>
-      <p><label><input id="view-cam02-hcl" type="radio" name="view"/> CAM02: chroma-hue-lightness</label></p>
-      <p><label><input id="view-cam02-hlc" type="radio" name="view"/> CAM02: lightness-hue-chroma</label></p>
-    </form>
-    <p><small><a href="https://github.com/baskerville/ciecam02">Powered by baskerville/ciecam02.</a></small></p>
-    <p><small><a href="https://github.com/Rufflewind/_urandom/tree/master/colorpicker">[Source code]</a></small></p>
+    <noscript class="error">ERROR: JavaScript is not enabled.</noscript>
+    <div id="error-no-webgl" class="error" style="display: none;">ERROR: WebGL is not available.</div>
+    <canvas id="canvas"></canvas>
+    <div id="debug-console"></div>
+    <svg id="debug-graph" viewBox="0 0 1000 1" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+      <line x1="0" y1="0.9" x2="1000" y2="0.9" stroke="red" stroke-width="0.005"/>
+    </svg>
+    <div id="debug-metric" style=""></div>
     <script src="script.js"></script>
   </body>
 </html>
