@@ -15,6 +15,9 @@ deploy: dist/.git/config all
 	mkdir -p $(<D)/../moon-calendar
 	ln -f moon-calendar/index.html $(<D)/../moon-calendar
 
+	mkdir -p $(<D)/../tunic-encoder
+	ln -f tunic-encoder/index.html tunic-encoder/script.js tunic-encoder/style.css $(<D)/../tunic-encoder
+
 	mkdir -p $(<D)/../angular-momentum-diagrams
 	echo '<meta http-equiv="refresh" content="0;url=/jucys"/>' >$(<D)/../angular-momentum-diagrams/index.html
 

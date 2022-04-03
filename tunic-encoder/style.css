@@ -1,0 +1,42 @@
+body {
+    margin: 8px;
+}
+
+svg.tunic {
+    vertical-align: middle;
+}
+
+#input {
+    margin-top: 10px;
+    width: 97%;
+    height: 50px;
+}
+
+pre {
+    margin: 5px 0 0 0;
+}
+
+.ipa {
+    font-family: sans-serif;
+}
+
+.chart-entry {
+    display: inline-block;
+    margin-right: 20px;
+}
+
+#chart .ascii {
+    font-family: monospace;
+}
+
+#chart .baseline {
+    stroke: #aaa;
+}
+
+#chart .consonant {
+    stroke: #ee2200;
+}
+
+#chart .vowel {
+    stroke: #0088ee;
+}
