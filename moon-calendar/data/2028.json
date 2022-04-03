@@ -1,0 +1,357 @@
+{
+  "apiversion": "4.0.1", 
+  "numphases": 50, 
+  "phasedata": [
+    {
+      "day": 5, 
+      "month": 1, 
+      "phase": "First Quarter", 
+      "time": "01:40", 
+      "year": 2028
+    }, 
+    {
+      "day": 12, 
+      "month": 1, 
+      "phase": "Full Moon", 
+      "time": "04:03", 
+      "year": 2028
+    }, 
+    {
+      "day": 18, 
+      "month": 1, 
+      "phase": "Last Quarter", 
+      "time": "19:26", 
+      "year": 2028
+    }, 
+    {
+      "day": 26, 
+      "month": 1, 
+      "phase": "New Moon", 
+      "time": "15:12", 
+      "year": 2028
+    }, 
+    {
+      "day": 3, 
+      "month": 2, 
+      "phase": "First Quarter", 
+      "time": "19:10", 
+      "year": 2028
+    }, 
+    {
+      "day": 10, 
+      "month": 2, 
+      "phase": "Full Moon", 
+      "time": "15:04", 
+      "year": 2028
+    }, 
+    {
+      "day": 17, 
+      "month": 2, 
+      "phase": "Last Quarter", 
+      "time": "08:08", 
+      "year": 2028
+    }, 
+    {
+      "day": 25, 
+      "month": 2, 
+      "phase": "New Moon", 
+      "time": "10:37", 
+      "year": 2028
+    }, 
+    {
+      "day": 4, 
+      "month": 3, 
+      "phase": "First Quarter", 
+      "time": "09:02", 
+      "year": 2028
+    }, 
+    {
+      "day": 11, 
+      "month": 3, 
+      "phase": "Full Moon", 
+      "time": "01:06", 
+      "year": 2028
+    }, 
+    {
+      "day": 17, 
+      "month": 3, 
+      "phase": "Last Quarter", 
+      "time": "23:23", 
+      "year": 2028
+    }, 
+    {
+      "day": 26, 
+      "month": 3, 
+      "phase": "New Moon", 
+      "time": "04:31", 
+      "year": 2028
+    }, 
+    {
+      "day": 2, 
+      "month": 4, 
+      "phase": "First Quarter", 
+      "time": "19:15", 
+      "year": 2028
+    }, 
+    {
+      "day": 9, 
+      "month": 4, 
+      "phase": "Full Moon", 
+      "time": "10:26", 
+      "year": 2028
+    }, 
+    {
+      "day": 16, 
+      "month": 4, 
+      "phase": "Last Quarter", 
+      "time": "16:37", 
+      "year": 2028
+    }, 
+    {
+      "day": 24, 
+      "month": 4, 
+      "phase": "New Moon", 
+      "time": "19:47", 
+      "year": 2028
+    }, 
+    {
+      "day": 2, 
+      "month": 5, 
+      "phase": "First Quarter", 
+      "time": "02:26", 
+      "year": 2028
+    }, 
+    {
+      "day": 8, 
+      "month": 5, 
+      "phase": "Full Moon", 
+      "time": "19:49", 
+      "year": 2028
+    }, 
+    {
+      "day": 16, 
+      "month": 5, 
+      "phase": "Last Quarter", 
+      "time": "10:43", 
+      "year": 2028
+    }, 
+    {
+      "day": 24, 
+      "month": 5, 
+      "phase": "New Moon", 
+      "time": "08:16", 
+      "year": 2028
+    }, 
+    {
+      "day": 31, 
+      "month": 5, 
+      "phase": "First Quarter", 
+      "time": "07:36", 
+      "year": 2028
+    }, 
+    {
+      "day": 7, 
+      "month": 6, 
+      "phase": "Full Moon", 
+      "time": "06:09", 
+      "year": 2028
+    }, 
+    {
+      "day": 15, 
+      "month": 6, 
+      "phase": "Last Quarter", 
+      "time": "04:27", 
+      "year": 2028
+    }, 
+    {
+      "day": 22, 
+      "month": 6, 
+      "phase": "New Moon", 
+      "time": "18:27", 
+      "year": 2028
+    }, 
+    {
+      "day": 29, 
+      "month": 6, 
+      "phase": "First Quarter", 
+      "time": "12:10", 
+      "year": 2028
+    }, 
+    {
+      "day": 6, 
+      "month": 7, 
+      "phase": "Full Moon", 
+      "time": "18:11", 
+      "year": 2028
+    }, 
+    {
+      "day": 14, 
+      "month": 7, 
+      "phase": "Last Quarter", 
+      "time": "20:56", 
+      "year": 2028
+    }, 
+    {
+      "day": 22, 
+      "month": 7, 
+      "phase": "New Moon", 
+      "time": "03:02", 
+      "year": 2028
+    }, 
+    {
+      "day": 28, 
+      "month": 7, 
+      "phase": "First Quarter", 
+      "time": "17:40", 
+      "year": 2028
+    }, 
+    {
+      "day": 5, 
+      "month": 8, 
+      "phase": "Full Moon", 
+      "time": "08:10", 
+      "year": 2028
+    }, 
+    {
+      "day": 13, 
+      "month": 8, 
+      "phase": "Last Quarter", 
+      "time": "11:45", 
+      "year": 2028
+    }, 
+    {
+      "day": 20, 
+      "month": 8, 
+      "phase": "New Moon", 
+      "time": "10:44", 
+      "year": 2028
+    }, 
+    {
+      "day": 27, 
+      "month": 8, 
+      "phase": "First Quarter", 
+      "time": "01:36", 
+      "year": 2028
+    }, 
+    {
+      "day": 3, 
+      "month": 9, 
+      "phase": "Full Moon", 
+      "time": "23:47", 
+      "year": 2028
+    }, 
+    {
+      "day": 12, 
+      "month": 9, 
+      "phase": "Last Quarter", 
+      "time": "00:46", 
+      "year": 2028
+    }, 
+    {
+      "day": 18, 
+      "month": 9, 
+      "phase": "New Moon", 
+      "time": "18:24", 
+      "year": 2028
+    }, 
+    {
+      "day": 25, 
+      "month": 9, 
+      "phase": "First Quarter", 
+      "time": "13:10", 
+      "year": 2028
+    }, 
+    {
+      "day": 3, 
+      "month": 10, 
+      "phase": "Full Moon", 
+      "time": "16:25", 
+      "year": 2028
+    }, 
+    {
+      "day": 11, 
+      "month": 10, 
+      "phase": "Last Quarter", 
+      "time": "11:57", 
+      "year": 2028
+    }, 
+    {
+      "day": 18, 
+      "month": 10, 
+      "phase": "New Moon", 
+      "time": "02:57", 
+      "year": 2028
+    }, 
+    {
+      "day": 25, 
+      "month": 10, 
+      "phase": "First Quarter", 
+      "time": "04:53", 
+      "year": 2028
+    }, 
+    {
+      "day": 2, 
+      "month": 11, 
+      "phase": "Full Moon", 
+      "time": "09:17", 
+      "year": 2028
+    }, 
+    {
+      "day": 9, 
+      "month": 11, 
+      "phase": "Last Quarter", 
+      "time": "21:26", 
+      "year": 2028
+    }, 
+    {
+      "day": 16, 
+      "month": 11, 
+      "phase": "New Moon", 
+      "time": "13:18", 
+      "year": 2028
+    }, 
+    {
+      "day": 24, 
+      "month": 11, 
+      "phase": "First Quarter", 
+      "time": "00:14", 
+      "year": 2028
+    }, 
+    {
+      "day": 2, 
+      "month": 12, 
+      "phase": "Full Moon", 
+      "time": "01:40", 
+      "year": 2028
+    }, 
+    {
+      "day": 9, 
+      "month": 12, 
+      "phase": "Last Quarter", 
+      "time": "05:39", 
+      "year": 2028
+    }, 
+    {
+      "day": 16, 
+      "month": 12, 
+      "phase": "New Moon", 
+      "time": "02:06", 
+      "year": 2028
+    }, 
+    {
+      "day": 23, 
+      "month": 12, 
+      "phase": "First Quarter", 
+      "time": "21:45", 
+      "year": 2028
+    }, 
+    {
+      "day": 31, 
+      "month": 12, 
+      "phase": "Full Moon", 
+      "time": "16:48", 
+      "year": 2028
+    }
+  ], 
+  "year": 2028
+}

@@ -1,0 +1,36 @@
+<style>
+  body {
+      font-family: sans;
+      font-size: x-large;
+  }
+  #output span.name {
+      color: grey;
+  }
+  #output span.op {
+      color: green;
+  }
+  #output span.node {
+      border: 1px solid transparent;
+  }
+  #output span.node.hover {
+      border-color: orange;
+      background-color: #ff9;
+  }
+  #input {
+      font-family: monospace;
+      font-size: xx-large;
+      width: 100%;
+  }
+  #output {
+      font-family: monospace;
+      font-size: xx-large;
+  }
+</style>
+<body>
+  <p>Translate a C-style type declaration into Rust-style one:</p>
+  <form id="form">
+    <input id="input" value="unsigned char *(*f)(int *const x[42])"/>
+  </form>
+  <div id="output"></div>
+  <script src="main.js"></script>
+</body>

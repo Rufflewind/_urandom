@@ -1,0 +1,96 @@
+html {
+    font-family: "Fira Sans", "Helvetica Neue", Helvetica, "Noto Sans", Arial, sans-serif;
+}
+
+a:link,
+a:visited {
+    color: grey;
+    text-decoration: none;
+}
+
+a:hover {
+    color: lightgrey;
+    text-decoration: underline;
+}
+
+h1 {
+    font-size: 25px;
+    margin: 20px 10px;
+}
+
+main {
+    display: table;
+    margin: 10px;
+    width: 300px;
+    height: 0;
+}
+
+#resize {
+    overflow: hidden;
+    padding: 10px;
+    resize: both;
+    width: 300px;
+    height: 300px;
+    user-select: none;
+}
+
+#canvas {
+    display: table-row;
+    height: 100%;
+    width: 100%;
+    cursor: crosshair;
+}
+
+#slider {
+    display: table-row;
+    width: 100%;
+    height: 40px;
+}
+
+#color,
+#max-chroma,
+#preview,
+#display-rgb,
+#display {
+    margin: 5px;
+}
+
+input,
+#display-rgb,
+#display {
+    padding: 3px;
+    font-family: "Fira Mono", monospace;
+}
+
+#color {
+    width: 65px;
+}
+
+#max-chroma {
+    width: 55px;
+}
+
+#preview {
+    display: inline-block;
+    border: 1px solid grey;
+    width: 50px;
+    height: 50px;
+    float: right;
+}
+
+#display-rgb,
+#display {
+    font-size: 15px;
+}
+
+#mode {
+    margin: 8px;
+}
+
+#mode label:hover {
+    color: grey;
+}
+
+p {
+    margin: 4px 8px;
+}

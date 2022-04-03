@@ -1,0 +1,350 @@
+{
+  "apiversion": "4.0.1", 
+  "numphases": 49, 
+  "phasedata": [
+    {
+      "day": 8, 
+      "month": 1, 
+      "phase": "Last Quarter", 
+      "time": "17:01", 
+      "year": 2067
+    }, 
+    {
+      "day": 15, 
+      "month": 1, 
+      "phase": "New Moon", 
+      "time": "11:17", 
+      "year": 2067
+    }, 
+    {
+      "day": 22, 
+      "month": 1, 
+      "phase": "First Quarter", 
+      "time": "06:17", 
+      "year": 2067
+    }, 
+    {
+      "day": 30, 
+      "month": 1, 
+      "phase": "Full Moon", 
+      "time": "10:30", 
+      "year": 2067
+    }, 
+    {
+      "day": 7, 
+      "month": 2, 
+      "phase": "Last Quarter", 
+      "time": "06:14", 
+      "year": 2067
+    }, 
+    {
+      "day": 13, 
+      "month": 2, 
+      "phase": "New Moon", 
+      "time": "21:58", 
+      "year": 2067
+    }, 
+    {
+      "day": 20, 
+      "month": 2, 
+      "phase": "First Quarter", 
+      "time": "23:31", 
+      "year": 2067
+    }, 
+    {
+      "day": 1, 
+      "month": 3, 
+      "phase": "Full Moon", 
+      "time": "04:42", 
+      "year": 2067
+    }, 
+    {
+      "day": 8, 
+      "month": 3, 
+      "phase": "Last Quarter", 
+      "time": "16:16", 
+      "year": 2067
+    }, 
+    {
+      "day": 15, 
+      "month": 3, 
+      "phase": "New Moon", 
+      "time": "08:29", 
+      "year": 2067
+    }, 
+    {
+      "day": 22, 
+      "month": 3, 
+      "phase": "First Quarter", 
+      "time": "18:44", 
+      "year": 2067
+    }, 
+    {
+      "day": 30, 
+      "month": 3, 
+      "phase": "Full Moon", 
+      "time": "20:09", 
+      "year": 2067
+    }, 
+    {
+      "day": 6, 
+      "month": 4, 
+      "phase": "Last Quarter", 
+      "time": "23:38", 
+      "year": 2067
+    }, 
+    {
+      "day": 13, 
+      "month": 4, 
+      "phase": "New Moon", 
+      "time": "19:24", 
+      "year": 2067
+    }, 
+    {
+      "day": 21, 
+      "month": 4, 
+      "phase": "First Quarter", 
+      "time": "14:16", 
+      "year": 2067
+    }, 
+    {
+      "day": 29, 
+      "month": 4, 
+      "phase": "Full Moon", 
+      "time": "08:40", 
+      "year": 2067
+    }, 
+    {
+      "day": 6, 
+      "month": 5, 
+      "phase": "Last Quarter", 
+      "time": "05:19", 
+      "year": 2067
+    }, 
+    {
+      "day": 13, 
+      "month": 5, 
+      "phase": "New Moon", 
+      "time": "07:21", 
+      "year": 2067
+    }, 
+    {
+      "day": 21, 
+      "month": 5, 
+      "phase": "First Quarter", 
+      "time": "08:29", 
+      "year": 2067
+    }, 
+    {
+      "day": 28, 
+      "month": 5, 
+      "phase": "Full Moon", 
+      "time": "18:42", 
+      "year": 2067
+    }, 
+    {
+      "day": 4, 
+      "month": 6, 
+      "phase": "Last Quarter", 
+      "time": "10:39", 
+      "year": 2067
+    }, 
+    {
+      "day": 11, 
+      "month": 6, 
+      "phase": "New Moon", 
+      "time": "20:41", 
+      "year": 2067
+    }, 
+    {
+      "day": 20, 
+      "month": 6, 
+      "phase": "First Quarter", 
+      "time": "00:29", 
+      "year": 2067
+    }, 
+    {
+      "day": 27, 
+      "month": 6, 
+      "phase": "Full Moon", 
+      "time": "02:53", 
+      "year": 2067
+    }, 
+    {
+      "day": 3, 
+      "month": 7, 
+      "phase": "Last Quarter", 
+      "time": "17:03", 
+      "year": 2067
+    }, 
+    {
+      "day": 11, 
+      "month": 7, 
+      "phase": "New Moon", 
+      "time": "11:16", 
+      "year": 2067
+    }, 
+    {
+      "day": 19, 
+      "month": 7, 
+      "phase": "First Quarter", 
+      "time": "13:59", 
+      "year": 2067
+    }, 
+    {
+      "day": 26, 
+      "month": 7, 
+      "phase": "Full Moon", 
+      "time": "09:59", 
+      "year": 2067
+    }, 
+    {
+      "day": 2, 
+      "month": 8, 
+      "phase": "Last Quarter", 
+      "time": "01:52", 
+      "year": 2067
+    }, 
+    {
+      "day": 10, 
+      "month": 8, 
+      "phase": "New Moon", 
+      "time": "02:37", 
+      "year": 2067
+    }, 
+    {
+      "day": 18, 
+      "month": 8, 
+      "phase": "First Quarter", 
+      "time": "01:10", 
+      "year": 2067
+    }, 
+    {
+      "day": 24, 
+      "month": 8, 
+      "phase": "Full Moon", 
+      "time": "16:57", 
+      "year": 2067
+    }, 
+    {
+      "day": 31, 
+      "month": 8, 
+      "phase": "Last Quarter", 
+      "time": "14:05", 
+      "year": 2067
+    }, 
+    {
+      "day": 8, 
+      "month": 9, 
+      "phase": "New Moon", 
+      "time": "18:09", 
+      "year": 2067
+    }, 
+    {
+      "day": 16, 
+      "month": 9, 
+      "phase": "First Quarter", 
+      "time": "10:20", 
+      "year": 2067
+    }, 
+    {
+      "day": 23, 
+      "month": 9, 
+      "phase": "Full Moon", 
+      "time": "00:54", 
+      "year": 2067
+    }, 
+    {
+      "day": 30, 
+      "month": 9, 
+      "phase": "Last Quarter", 
+      "time": "06:01", 
+      "year": 2067
+    }, 
+    {
+      "day": 8, 
+      "month": 10, 
+      "phase": "New Moon", 
+      "time": "09:28", 
+      "year": 2067
+    }, 
+    {
+      "day": 15, 
+      "month": 10, 
+      "phase": "First Quarter", 
+      "time": "18:03", 
+      "year": 2067
+    }, 
+    {
+      "day": 22, 
+      "month": 10, 
+      "phase": "Full Moon", 
+      "time": "10:56", 
+      "year": 2067
+    }, 
+    {
+      "day": 30, 
+      "month": 10, 
+      "phase": "Last Quarter", 
+      "time": "01:08", 
+      "year": 2067
+    }, 
+    {
+      "day": 7, 
+      "month": 11, 
+      "phase": "New Moon", 
+      "time": "00:14", 
+      "year": 2067
+    }, 
+    {
+      "day": 14, 
+      "month": 11, 
+      "phase": "First Quarter", 
+      "time": "01:07", 
+      "year": 2067
+    }, 
+    {
+      "day": 20, 
+      "month": 11, 
+      "phase": "Full Moon", 
+      "time": "23:50", 
+      "year": 2067
+    }, 
+    {
+      "day": 28, 
+      "month": 11, 
+      "phase": "Last Quarter", 
+      "time": "22:07", 
+      "year": 2067
+    }, 
+    {
+      "day": 6, 
+      "month": 12, 
+      "phase": "New Moon", 
+      "time": "14:05", 
+      "year": 2067
+    }, 
+    {
+      "day": 13, 
+      "month": 12, 
+      "phase": "First Quarter", 
+      "time": "08:39", 
+      "year": 2067
+    }, 
+    {
+      "day": 20, 
+      "month": 12, 
+      "phase": "Full Moon", 
+      "time": "15:42", 
+      "year": 2067
+    }, 
+    {
+      "day": 28, 
+      "month": 12, 
+      "phase": "Last Quarter", 
+      "time": "19:10", 
+      "year": 2067
+    }
+  ], 
+  "year": 2067
+}

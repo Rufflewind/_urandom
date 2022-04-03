@@ -1,0 +1,350 @@
+{
+  "apiversion": "4.0.1", 
+  "numphases": 49, 
+  "phasedata": [
+    {
+      "day": 5, 
+      "month": 1, 
+      "phase": "New Moon", 
+      "time": "13:41", 
+      "year": 2038
+    }, 
+    {
+      "day": 13, 
+      "month": 1, 
+      "phase": "First Quarter", 
+      "time": "12:34", 
+      "year": 2038
+    }, 
+    {
+      "day": 21, 
+      "month": 1, 
+      "phase": "Full Moon", 
+      "time": "04:00", 
+      "year": 2038
+    }, 
+    {
+      "day": 27, 
+      "month": 1, 
+      "phase": "Last Quarter", 
+      "time": "22:00", 
+      "year": 2038
+    }, 
+    {
+      "day": 4, 
+      "month": 2, 
+      "phase": "New Moon", 
+      "time": "05:52", 
+      "year": 2038
+    }, 
+    {
+      "day": 12, 
+      "month": 2, 
+      "phase": "First Quarter", 
+      "time": "09:30", 
+      "year": 2038
+    }, 
+    {
+      "day": 19, 
+      "month": 2, 
+      "phase": "Full Moon", 
+      "time": "16:09", 
+      "year": 2038
+    }, 
+    {
+      "day": 26, 
+      "month": 2, 
+      "phase": "Last Quarter", 
+      "time": "06:56", 
+      "year": 2038
+    }, 
+    {
+      "day": 5, 
+      "month": 3, 
+      "phase": "New Moon", 
+      "time": "23:15", 
+      "year": 2038
+    }, 
+    {
+      "day": 14, 
+      "month": 3, 
+      "phase": "First Quarter", 
+      "time": "03:41", 
+      "year": 2038
+    }, 
+    {
+      "day": 21, 
+      "month": 3, 
+      "phase": "Full Moon", 
+      "time": "02:09", 
+      "year": 2038
+    }, 
+    {
+      "day": 27, 
+      "month": 3, 
+      "phase": "Last Quarter", 
+      "time": "17:36", 
+      "year": 2038
+    }, 
+    {
+      "day": 4, 
+      "month": 4, 
+      "phase": "New Moon", 
+      "time": "16:43", 
+      "year": 2038
+    }, 
+    {
+      "day": 12, 
+      "month": 4, 
+      "phase": "First Quarter", 
+      "time": "18:02", 
+      "year": 2038
+    }, 
+    {
+      "day": 19, 
+      "month": 4, 
+      "phase": "Full Moon", 
+      "time": "10:36", 
+      "year": 2038
+    }, 
+    {
+      "day": 26, 
+      "month": 4, 
+      "phase": "Last Quarter", 
+      "time": "06:15", 
+      "year": 2038
+    }, 
+    {
+      "day": 4, 
+      "month": 5, 
+      "phase": "New Moon", 
+      "time": "09:19", 
+      "year": 2038
+    }, 
+    {
+      "day": 12, 
+      "month": 5, 
+      "phase": "First Quarter", 
+      "time": "04:18", 
+      "year": 2038
+    }, 
+    {
+      "day": 18, 
+      "month": 5, 
+      "phase": "Full Moon", 
+      "time": "18:23", 
+      "year": 2038
+    }, 
+    {
+      "day": 25, 
+      "month": 5, 
+      "phase": "Last Quarter", 
+      "time": "20:43", 
+      "year": 2038
+    }, 
+    {
+      "day": 3, 
+      "month": 6, 
+      "phase": "New Moon", 
+      "time": "00:24", 
+      "year": 2038
+    }, 
+    {
+      "day": 10, 
+      "month": 6, 
+      "phase": "First Quarter", 
+      "time": "11:11", 
+      "year": 2038
+    }, 
+    {
+      "day": 17, 
+      "month": 6, 
+      "phase": "Full Moon", 
+      "time": "02:30", 
+      "year": 2038
+    }, 
+    {
+      "day": 24, 
+      "month": 6, 
+      "phase": "Last Quarter", 
+      "time": "12:39", 
+      "year": 2038
+    }, 
+    {
+      "day": 2, 
+      "month": 7, 
+      "phase": "New Moon", 
+      "time": "13:32", 
+      "year": 2038
+    }, 
+    {
+      "day": 9, 
+      "month": 7, 
+      "phase": "First Quarter", 
+      "time": "16:00", 
+      "year": 2038
+    }, 
+    {
+      "day": 16, 
+      "month": 7, 
+      "phase": "Full Moon", 
+      "time": "11:48", 
+      "year": 2038
+    }, 
+    {
+      "day": 24, 
+      "month": 7, 
+      "phase": "Last Quarter", 
+      "time": "05:40", 
+      "year": 2038
+    }, 
+    {
+      "day": 1, 
+      "month": 8, 
+      "phase": "New Moon", 
+      "time": "00:40", 
+      "year": 2038
+    }, 
+    {
+      "day": 7, 
+      "month": 8, 
+      "phase": "First Quarter", 
+      "time": "20:21", 
+      "year": 2038
+    }, 
+    {
+      "day": 14, 
+      "month": 8, 
+      "phase": "Full Moon", 
+      "time": "22:57", 
+      "year": 2038
+    }, 
+    {
+      "day": 22, 
+      "month": 8, 
+      "phase": "Last Quarter", 
+      "time": "23:12", 
+      "year": 2038
+    }, 
+    {
+      "day": 30, 
+      "month": 8, 
+      "phase": "New Moon", 
+      "time": "10:13", 
+      "year": 2038
+    }, 
+    {
+      "day": 6, 
+      "month": 9, 
+      "phase": "First Quarter", 
+      "time": "01:51", 
+      "year": 2038
+    }, 
+    {
+      "day": 13, 
+      "month": 9, 
+      "phase": "Full Moon", 
+      "time": "12:24", 
+      "year": 2038
+    }, 
+    {
+      "day": 21, 
+      "month": 9, 
+      "phase": "Last Quarter", 
+      "time": "16:27", 
+      "year": 2038
+    }, 
+    {
+      "day": 28, 
+      "month": 9, 
+      "phase": "New Moon", 
+      "time": "18:57", 
+      "year": 2038
+    }, 
+    {
+      "day": 5, 
+      "month": 10, 
+      "phase": "First Quarter", 
+      "time": "09:52", 
+      "year": 2038
+    }, 
+    {
+      "day": 13, 
+      "month": 10, 
+      "phase": "Full Moon", 
+      "time": "04:22", 
+      "year": 2038
+    }, 
+    {
+      "day": 21, 
+      "month": 10, 
+      "phase": "Last Quarter", 
+      "time": "08:23", 
+      "year": 2038
+    }, 
+    {
+      "day": 28, 
+      "month": 10, 
+      "phase": "New Moon", 
+      "time": "03:53", 
+      "year": 2038
+    }, 
+    {
+      "day": 3, 
+      "month": 11, 
+      "phase": "First Quarter", 
+      "time": "21:23", 
+      "year": 2038
+    }, 
+    {
+      "day": 11, 
+      "month": 11, 
+      "phase": "Full Moon", 
+      "time": "22:27", 
+      "year": 2038
+    }, 
+    {
+      "day": 19, 
+      "month": 11, 
+      "phase": "Last Quarter", 
+      "time": "22:10", 
+      "year": 2038
+    }, 
+    {
+      "day": 26, 
+      "month": 11, 
+      "phase": "New Moon", 
+      "time": "13:46", 
+      "year": 2038
+    }, 
+    {
+      "day": 3, 
+      "month": 12, 
+      "phase": "First Quarter", 
+      "time": "12:46", 
+      "year": 2038
+    }, 
+    {
+      "day": 11, 
+      "month": 12, 
+      "phase": "Full Moon", 
+      "time": "17:30", 
+      "year": 2038
+    }, 
+    {
+      "day": 19, 
+      "month": 12, 
+      "phase": "Last Quarter", 
+      "time": "09:29", 
+      "year": 2038
+    }, 
+    {
+      "day": 26, 
+      "month": 12, 
+      "phase": "New Moon", 
+      "time": "01:02", 
+      "year": 2038
+    }
+  ], 
+  "year": 2038
+}

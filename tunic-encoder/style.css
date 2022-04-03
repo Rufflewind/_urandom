@@ -1,0 +1,142 @@
+html {
+    font-family: "Roboto Slab", sans-serif;
+}
+
+code, .error, #chart .ascii {
+    font-family: Inconsolata, monospace;
+}
+
+body {
+    margin: 0;
+}
+
+body > * {
+    padding: 8px;
+}
+
+h1 {
+    font-size: 12px;
+    text-align: center;
+    margin: 0;
+    padding: 6px 0 6px 0;
+    background: #227317;
+    color: white;
+    text-shadow: 0 0 1px black, 0 0 1px black;
+}
+
+h2 {
+    font-size: 12px;
+    margin: 0;
+    padding: 12px 0 6px 0;
+}
+
+p {
+    margin: 0;
+}
+
+p + p {
+    margin-top: 8px;
+}
+
+a:link, a:visited {
+    color: #b9068f;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #f550ce;
+    text-decoration: underline;
+}
+
+.error {
+    background-color: red;
+    color: white;
+}
+
+svg.tunic {
+    vertical-align: middle;
+}
+
+kbd {
+    border-radius: 1px;
+    border: 0.5px solid #999;
+    background: #ddd;
+    padding: 1px;
+}
+
+pre {
+    margin: 0;
+}
+
+.ipa {
+    font-family: sans-serif;
+}
+
+details {
+    padding: 0;
+}
+
+details > article {
+    padding: 8px;
+}
+
+details > summary {
+    background: #ffe386;
+    border-top: 0.5px solid #daa95e;
+    color: #8e3429;
+    font-size: 12px;
+    padding: 7px;
+}
+
+details[open] > summary {
+    border-bottom: 0.5px solid #daa95e;
+}
+
+#instructions {
+    font-size: 11px;
+}
+
+.chart-entry {
+    background: none;
+    display: inline-block;
+    margin-right: 10px;
+    padding: 2px;
+    cursor: pointer;
+    border: 0.5px solid transparent;
+    border-radius: 2px;
+}
+
+.chart-entry:hover {
+    border: 0.5px solid #daa95e;
+    background: #fce7bd;
+}
+
+#editor {
+    background: #ffe386;
+    border-bottom: 0.5px solid #daa95e;
+    border-top: 0.5px solid #daa95e;
+}
+
+textarea {
+    border: 0.5px solid #ccc;
+    border-radius: 3px;
+    box-sizing: border-box;
+    height: 0;
+    resize: none;
+    width: 100%;
+}
+
+#input {
+    border: 0.5px solid #daa95e;
+    height: 50px;
+    resize: vertical;
+}
+
+#input:focus {
+    border: 0.5 solid transparent;
+}
+
+#output-monospace {
+    font-size: 12px;
+    white-space: pre;
+}
