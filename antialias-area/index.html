@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Area of a square cut by a line</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  <link rel="stylesheet" href="style.css" />
+  <script src="/usr/share/javascript/mathjax/tex-mml-chtml.js" type="text/javascript"></script>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Area of a square cut by a line</h1>
+</header>
+<h1 id="area-of-a-square-cut-by-a-line">Area of a square cut by a line</h1>
+<p><a href="https://rufflewind.com/_urandom/antialias-area">Rendered</a></p>
+<h2 id="definition">Definition</h2>
+<p>Suppose we have a 1 × 1 square and a line that cuts across the square. The line is angled <span class="math inline">\(\theta\)</span> with respect to one of the sides of the square, and is at a distance <span class="math inline">\(s\)</span> from the center of the square.</p>
+<ol type="1">
+<li>Calculate the area <span class="math inline">\(A(s, \theta)\)</span> enclosed by the square and one side of the line. We choose <span class="math inline">\(A(s, \theta) &gt; \frac{1}{2}\)</span> if <span class="math inline">\(s &gt; 0\)</span>.</li>
+<li>Calculate the area <span class="math inline">\(\bar{A}(s)\)</span> averaged over all angles <span class="math inline">\(\theta\)</span> at which the line touches the square.</li>
+</ol>
+<h2 id="formula">Formula</h2>
+<p>For any <span class="math inline">\(|\theta| \le \frac{\pi}{4}\)</span>, the area is given by <span class="math display">\[A(s, \theta) = \frac{1}{2} + F(|s|, |\theta|) \operatorname{sgn} s\]</span> where <span class="math display">\[\begin{aligned}
+F(s, \theta) &amp;= \begin{cases}
+   s \sec\theta &amp; \text{if } 0 \le s &lt; S_-(\theta) \\
+   \frac{1}{2} - (S_+(\theta) - s)^2 \csc(2 \theta) &amp; \text{if } S_-(\theta) \le s &lt; S_+(\theta) \\
+   \frac{1}{2} &amp; \text{if } s \ge S_+(\theta) \\
+\end{cases} \\
+S_\pm(\theta) &amp;= \frac{\cos\theta \pm \sin|\theta|}{2}
+\end{aligned}\]</span> The formula for other values of <span class="math inline">\(\theta\)</span> may be deduced from symmetries of the square.</p>
+<p>The average area over all angles at which the line touches the square is given by <span class="math display">\[\bar{A}(s) = \frac{1}{2} + \bar{F}(|s|) \operatorname{sgn} s\]</span> where <span class="math display">\[\begin{aligned}
+\bar{F}(s) &amp;= \begin{cases}
+   G(s, T(s))  &amp; \text{if } 0 \le s &lt; \frac{1}{2} \\
+   H(s, -T(s)) &amp; \text{if } \frac{1}{2} \le s &lt; \frac{1}{\sqrt{2}} \\
+   \frac{1}{2} &amp; \text{if } s \ge \frac{1}{\sqrt{2}} \\
+\end{cases} \\
+G(s, t) &amp;= \frac{4}{\pi} \left(s \ln\frac{1 + t}{1 - t} + I(s, t)\right) \\
+H(s, t) &amp;= \frac{I(s, t)}{\Phi(t)} \\
+I(s, t) &amp;= \frac{1}{4} \left(\Phi(t)
+    + 2 s \ln\frac{1 - t}{t + t^2}
+    - \left(\frac{1}{2} + 2 s^2\right) \ln\frac{1 - t^2}{2 t}
+  \right) \\
+\Phi(t) &amp;= \frac{\pi}{4} - 2 \arctan t \\
+T(s) &amp;= \frac{\sqrt{2 - 4 s^2} - 1}{1 + 2 s}
+\end{aligned}\]</span></p>
+<h2 id="derivation">Derivation</h2>
+<h3 id="area-for-a-specific-angle">Area for a specific angle</h3>
+<p>To derive this, we first establish a coordinate system. Define a square of area 4 by the vertices (1, 1), (−1, 1), (−1, −1), and (1, −1). This means we have scaled up our problem by a factor of two and would be calculating <span class="math inline">\(4 A(2 s, \theta)\)</span> instead.</p>
+<p>Define a line by the equation <span class="math inline">\(y = m (x - a)\)</span>. The parameters <span class="math inline">\((a, m)\)</span> are related to <span class="math inline">\((2 s, \theta)\)</span> by <span class="math display">\[m = \tan\theta \qquad \text{and} \qquad a = 2 s \csc\theta\]</span></p>
+<p>It is adequate to consider just the following case and derive others from symmetry: <span class="math display">\[a \ge 0 \qquad \text{and} \qquad 1 \le m &lt; \infty\]</span> Equivalently: <span class="math display">\[s \ge 0 \qquad \text{and} \qquad \frac{\pi}{4} \le \theta &lt; \frac{\pi}{2}\]</span></p>
+<p>Firstly, we compute the maximum value of <span class="math inline">\(a\)</span> at which the line touch the square: <span class="math display">\[a \le a_+ = 1 + \frac{1}{m} \qquad \Leftrightarrow \qquad s \le s_+ = \frac{1}{2}(\sin\theta + \cos\theta)\]</span></p>
+<p>Below that, there are two interesting cases to consider, depending on whether <span class="math inline">\(a\)</span> is lesser or greater than this threshold: <span class="math display">\[a_- = 1 - \frac{1}{m} \qquad \Leftrightarrow \qquad s_- = \frac{1}{2}(\sin\theta - \cos\theta)\]</span></p>
+<p>In the first case where <span class="math inline">\(0 \le a \le a_-\)</span>, the area is given by <span class="math display">\[4 A(s, \theta) = 2 + 2 a = 2 + 4 s \csc\theta\]</span></p>
+<p>In the second case where <span class="math inline">\(a_- \le a \le a_+\)</span>, the area is given by <span class="math display">\[4 A(s, \theta) = 4 - \frac{1}{2} \left(1 - a + \frac{1}{m}\right) (1 + m (1 - a)) = 4 - 4 (s_+ - s)^2 \csc(2\theta)\]</span> where a double-angle formula has been used.</p>
+<p>Then, using the symmetries of the square and of trigonometric functions, we can remap <span class="math inline">\(\theta\)</span> into the range <span class="math inline">\(|\theta| &lt; \frac{\pi}{4}\)</span>. This turns <span class="math inline">\(\csc\theta\)</span> into <span class="math inline">\(\sec\theta\)</span>, <span class="math inline">\(\sin\theta\)</span> into <span class="math inline">\(\cos\theta\)</span>, and <span class="math inline">\(\cos\theta\)</span> into <span class="math inline">\(\sin\theta\)</span>.</p>
+<h3 id="averaged-area-over-all-allowed-angles">Averaged area over all allowed angles</h3>
+<p>To find the average area, it suffices to consider only <span class="math inline">\(0 \le \theta \le \frac{\pi}{4}\)</span>. The other 8 sectors are identical by symmetry. As before, we will only analyze the case where <span class="math inline">\(s \ge 0\)</span>, hence <span class="math inline">\(A(s, \theta) \ge \frac{1}{2}\)</span>.</p>
+<p>We need to first determine the range of angles at which the line touches the square.</p>
+<ul>
+<li>If <span class="math inline">\(0 \le s \le \frac{1}{2}\)</span>, then the line will certainly make contact with the square for any <span class="math inline">\(0 \le \theta \le \frac{\pi}{4}\)</span>.</li>
+<li>If <span class="math inline">\(\frac{1}{2} &lt; s \le \frac{1}{\sqrt{2}}\)</span>, then the line will touch the square only if <span class="math display">\[0 &lt; -2 \arctan T(s) \le \theta &lt; \pi / 4\]</span> where <span class="math display">\[T(s) = \frac{\sqrt{2 - 4 s^2} - 1}{1 + 2 s}\]</span> Note that this quantity satisfies <span class="math inline">\(S_\pm(\mp 2 \arctan T(s)) = s\)</span>.</li>
+<li>If <span class="math inline">\(s &gt; \frac{1}{\sqrt{2}}\)</span>, the line will never touch the square. For convenience, will simply define the averaged area to be 1.</li>
+</ul>
+<p>Let us denote the lower bound of <span class="math inline">\(\theta\)</span> by <span class="math display">\[\Theta(s) = \max\{0, -2 \arctan T(s)\}\]</span></p>
+<p>To find the average, we need to compute the integral: <span class="math display">\[\bar{A}(s) = \frac{\int_{\Theta(s)}^{\pi / 4} A(s, \theta) \, \mathrm{d} \theta}{\pi / 4 - \Theta(s)}\]</span> Due to the piecewise nature of <span class="math inline">\(A(s, \theta)\)</span>, it is necessary to split the integral into several pieces: <span class="math display">\[\bar{A}(s) = \begin{cases}
+  \frac{4}{\pi} \left(\int_0^{2 \arctan T(s)} A(s, \theta) \, \mathrm{d} \theta + \int_{2 \arctan T(s)}^{\pi / 4} A(s, \theta) \, \mathrm{d} \theta\right) &amp; \text{if } 0 \le s &lt; \frac{1}{2} \\
+  \left(\frac{\pi}{4} + 2 \arctan T(s)\right)^{-1} \int_{-2 \arctan T(s)}^{\pi / 4} A(s, \theta) \, \mathrm{d} \theta &amp; \text{if } \frac{1}{2} \le s &lt; \frac{1}{\sqrt{2}} \\
+\end{cases}\]</span></p>
+<p>The rest of the calculation is straightforward but very tedious. Use of a computer algebra system is recommended.</p>
+</body>
+</html>
