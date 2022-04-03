@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>loopy-game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin" rel="stylesheet"/>
+    <link rel="stylesheet" href="style.css"/>
+  </head>
+  <body>
+    <header>
+      <p>
+        <button id="reset-button">Reset</button>
+        <label title="Automatically apply simple deduction rules after every move.">
+          <input type="checkbox" id="auto-reduction-checkbox"/>
+          Auto reduction
+        </label>
+        <label title="Run the backtracking solver.">
+          <input type="checkbox" id="solve-checkbox"/>
+          Solve
+        </label>
+      </p>
+      <p>(To change the puzzle, generate a puzzle using the <a href="https://www.chiark.greenend.org.uk/~sgtatham/puzzles/js/loopy.html">upstream game</a> and copy-paste the <a href="https://en.wikipedia.org/wiki/URI_fragment">URL hash fragment</a> here.)</p>
+    </header>
+    <svg id="view" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>
+    <footer>Credit: <a id="credit-link" href="https://www.chiark.greenend.org.uk/~sgtatham/puzzles/js/loopy.html">Simon Tatham</a></footer>
+    <script src="script.js"></script>
+  </body>
+</html>

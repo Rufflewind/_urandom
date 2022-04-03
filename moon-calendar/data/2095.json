@@ -1,0 +1,350 @@
+{
+  "apiversion": "4.0.1", 
+  "numphases": 49, 
+  "phasedata": [
+    {
+      "day": 6, 
+      "month": 1, 
+      "phase": "New Moon", 
+      "time": "09:35", 
+      "year": 2095
+    }, 
+    {
+      "day": 13, 
+      "month": 1, 
+      "phase": "First Quarter", 
+      "time": "02:29", 
+      "year": 2095
+    }, 
+    {
+      "day": 20, 
+      "month": 1, 
+      "phase": "Full Moon", 
+      "time": "12:49", 
+      "year": 2095
+    }, 
+    {
+      "day": 28, 
+      "month": 1, 
+      "phase": "Last Quarter", 
+      "time": "17:08", 
+      "year": 2095
+    }, 
+    {
+      "day": 4, 
+      "month": 2, 
+      "phase": "New Moon", 
+      "time": "21:30", 
+      "year": 2095
+    }, 
+    {
+      "day": 11, 
+      "month": 2, 
+      "phase": "First Quarter", 
+      "time": "12:18", 
+      "year": 2095
+    }, 
+    {
+      "day": 19, 
+      "month": 2, 
+      "phase": "Full Moon", 
+      "time": "07:00", 
+      "year": 2095
+    }, 
+    {
+      "day": 27, 
+      "month": 2, 
+      "phase": "Last Quarter", 
+      "time": "11:00", 
+      "year": 2095
+    }, 
+    {
+      "day": 6, 
+      "month": 3, 
+      "phase": "New Moon", 
+      "time": "07:40", 
+      "year": 2095
+    }, 
+    {
+      "day": 13, 
+      "month": 3, 
+      "phase": "First Quarter", 
+      "time": "00:19", 
+      "year": 2095
+    }, 
+    {
+      "day": 21, 
+      "month": 3, 
+      "phase": "Full Moon", 
+      "time": "01:11", 
+      "year": 2095
+    }, 
+    {
+      "day": 29, 
+      "month": 3, 
+      "phase": "Last Quarter", 
+      "time": "00:56", 
+      "year": 2095
+    }, 
+    {
+      "day": 4, 
+      "month": 4, 
+      "phase": "New Moon", 
+      "time": "16:37", 
+      "year": 2095
+    }, 
+    {
+      "day": 11, 
+      "month": 4, 
+      "phase": "First Quarter", 
+      "time": "14:28", 
+      "year": 2095
+    }, 
+    {
+      "day": 19, 
+      "month": 4, 
+      "phase": "Full Moon", 
+      "time": "18:15", 
+      "year": 2095
+    }, 
+    {
+      "day": 27, 
+      "month": 4, 
+      "phase": "Last Quarter", 
+      "time": "10:46", 
+      "year": 2095
+    }, 
+    {
+      "day": 4, 
+      "month": 5, 
+      "phase": "New Moon", 
+      "time": "01:07", 
+      "year": 2095
+    }, 
+    {
+      "day": 11, 
+      "month": 5, 
+      "phase": "First Quarter", 
+      "time": "06:15", 
+      "year": 2095
+    }, 
+    {
+      "day": 19, 
+      "month": 5, 
+      "phase": "Full Moon", 
+      "time": "09:22", 
+      "year": 2095
+    }, 
+    {
+      "day": 26, 
+      "month": 5, 
+      "phase": "Last Quarter", 
+      "time": "17:18", 
+      "year": 2095
+    }, 
+    {
+      "day": 2, 
+      "month": 6, 
+      "phase": "New Moon", 
+      "time": "09:59", 
+      "year": 2095
+    }, 
+    {
+      "day": 9, 
+      "month": 6, 
+      "phase": "First Quarter", 
+      "time": "23:03", 
+      "year": 2095
+    }, 
+    {
+      "day": 17, 
+      "month": 6, 
+      "phase": "Full Moon", 
+      "time": "22:07", 
+      "year": 2095
+    }, 
+    {
+      "day": 24, 
+      "month": 6, 
+      "phase": "Last Quarter", 
+      "time": "21:56", 
+      "year": 2095
+    }, 
+    {
+      "day": 1, 
+      "month": 7, 
+      "phase": "New Moon", 
+      "time": "19:55", 
+      "year": 2095
+    }, 
+    {
+      "day": 9, 
+      "month": 7, 
+      "phase": "First Quarter", 
+      "time": "16:17", 
+      "year": 2095
+    }, 
+    {
+      "day": 17, 
+      "month": 7, 
+      "phase": "Full Moon", 
+      "time": "08:32", 
+      "year": 2095
+    }, 
+    {
+      "day": 24, 
+      "month": 7, 
+      "phase": "Last Quarter", 
+      "time": "02:18", 
+      "year": 2095
+    }, 
+    {
+      "day": 31, 
+      "month": 7, 
+      "phase": "New Moon", 
+      "time": "07:30", 
+      "year": 2095
+    }, 
+    {
+      "day": 8, 
+      "month": 8, 
+      "phase": "First Quarter", 
+      "time": "09:20", 
+      "year": 2095
+    }, 
+    {
+      "day": 15, 
+      "month": 8, 
+      "phase": "Full Moon", 
+      "time": "17:14", 
+      "year": 2095
+    }, 
+    {
+      "day": 22, 
+      "month": 8, 
+      "phase": "Last Quarter", 
+      "time": "07:58", 
+      "year": 2095
+    }, 
+    {
+      "day": 29, 
+      "month": 8, 
+      "phase": "New Moon", 
+      "time": "21:06", 
+      "year": 2095
+    }, 
+    {
+      "day": 7, 
+      "month": 9, 
+      "phase": "First Quarter", 
+      "time": "01:27", 
+      "year": 2095
+    }, 
+    {
+      "day": 14, 
+      "month": 9, 
+      "phase": "Full Moon", 
+      "time": "01:12", 
+      "year": 2095
+    }, 
+    {
+      "day": 20, 
+      "month": 9, 
+      "phase": "Last Quarter", 
+      "time": "16:17", 
+      "year": 2095
+    }, 
+    {
+      "day": 28, 
+      "month": 9, 
+      "phase": "New Moon", 
+      "time": "12:55", 
+      "year": 2095
+    }, 
+    {
+      "day": 6, 
+      "month": 10, 
+      "phase": "First Quarter", 
+      "time": "15:53", 
+      "year": 2095
+    }, 
+    {
+      "day": 13, 
+      "month": 10, 
+      "phase": "Full Moon", 
+      "time": "09:32", 
+      "year": 2095
+    }, 
+    {
+      "day": 20, 
+      "month": 10, 
+      "phase": "Last Quarter", 
+      "time": "04:09", 
+      "year": 2095
+    }, 
+    {
+      "day": 28, 
+      "month": 10, 
+      "phase": "New Moon", 
+      "time": "06:33", 
+      "year": 2095
+    }, 
+    {
+      "day": 5, 
+      "month": 11, 
+      "phase": "First Quarter", 
+      "time": "04:10", 
+      "year": 2095
+    }, 
+    {
+      "day": 11, 
+      "month": 11, 
+      "phase": "Full Moon", 
+      "time": "19:06", 
+      "year": 2095
+    }, 
+    {
+      "day": 18, 
+      "month": 11, 
+      "phase": "Last Quarter", 
+      "time": "19:56", 
+      "year": 2095
+    }, 
+    {
+      "day": 27, 
+      "month": 11, 
+      "phase": "New Moon", 
+      "time": "00:55", 
+      "year": 2095
+    }, 
+    {
+      "day": 4, 
+      "month": 12, 
+      "phase": "First Quarter", 
+      "time": "14:22", 
+      "year": 2095
+    }, 
+    {
+      "day": 11, 
+      "month": 12, 
+      "phase": "Full Moon", 
+      "time": "06:22", 
+      "year": 2095
+    }, 
+    {
+      "day": 18, 
+      "month": 12, 
+      "phase": "Last Quarter", 
+      "time": "15:15", 
+      "year": 2095
+    }, 
+    {
+      "day": 26, 
+      "month": 12, 
+      "phase": "New Moon", 
+      "time": "18:26", 
+      "year": 2095
+    }
+  ], 
+  "year": 2095
+}
