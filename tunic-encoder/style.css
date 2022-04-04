@@ -20,6 +20,12 @@ h1 {
     text-shadow: 0 0 1px black, 0 0 1px black;
 }
 
+h2 {
+    font-size: 12px;
+    margin: 0;
+    padding: 12px 0 6px 0;
+}
+
 p {
     margin: 0;
 }
@@ -48,10 +54,20 @@ svg.tunic {
     vertical-align: middle;
 }
 
+kbd {
+    border-radius: 1px;
+    border: 0.5px solid #999;
+    background: #ddd;
+    padding: 1px;
+}
+
 pre {
-    margin: 3px 0 3px 0;
+    margin: 0;
     white-space: pre-wrap;
-    border-bottom: 0.5px solid #aaa;
+}
+
+pre + pre {
+    border-top: 0.5px solid #aaa;
 }
 
 .ipa {
@@ -83,14 +99,17 @@ details[open] > summary {
 }
 
 .chart-entry {
+    background: none;
     display: inline-block;
     margin-right: 10px;
     padding: 2px;
     cursor: pointer;
+    border: 0.5px solid transparent;
     border-radius: 2px;
 }
 
 .chart-entry:hover {
+    border: 0.5px solid #daa95e;
     background: #fce7bd;
 }
 

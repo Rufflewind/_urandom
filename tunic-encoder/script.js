@@ -247,7 +247,7 @@ function renderChart(input, mask) {
             return null;
         }
         const [ipa, ascii] = component.names;
-        const entry = htmlElement("div", {"class": "chart-entry"}, [
+        const entry = htmlElement("button", {"class": "chart-entry"}, [
             renderWord([component.symbol], CHART_COLORS),
             " ",
             htmlElement("span", {"class": "ipa"}, [ipa]),
