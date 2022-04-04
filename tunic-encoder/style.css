@@ -1,42 +1,119 @@
+html {
+    font-family: "Roboto Slab", sans-serif;
+}
+
 body {
-    margin: 8px;
+    margin: 0;
+}
+
+body > * {
+    padding: 8px;
+}
+
+h1 {
+    font-size: 12px;
+    text-align: center;
+    margin: 0;
+    padding: 6px 0 6px 0;
+    background: #227317;
+    color: white;
+    text-shadow: 0 0 1px black, 0 0 1px black;
+}
+
+p {
+    margin: 0;
+}
+
+p + p {
+    margin-top: 8px;
+}
+
+a:link, a:visited {
+    color: #b9068f;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #f550ce;
+    text-decoration: underline;
+}
+
+.error {
+    background-color: red;
+    color: white;
+    font-family: monospace;
 }
 
 svg.tunic {
     vertical-align: middle;
 }
 
-#input {
-    margin-top: 10px;
-    width: 97%;
-    height: 50px;
-}
-
 pre {
-    margin: 5px 0 0 0;
+    margin: 3px 0 3px 0;
+    white-space: pre-wrap;
+    border-bottom: 0.5px solid #aaa;
 }
 
 .ipa {
     font-family: sans-serif;
 }
 
+details {
+    padding: 0;
+}
+
+details > article {
+    padding: 8px;
+}
+
+details > summary {
+    background: #ffe386;
+    border-top: 0.5px solid #daa95e;
+    color: #8e3429;
+    font-size: 12px;
+    padding: 7px;
+}
+
+details[open] > summary {
+    border-bottom: 0.5px solid #daa95e;
+}
+
+#instructions {
+    font-size: 11px;
+}
+
 .chart-entry {
     display: inline-block;
-    margin-right: 20px;
+    margin-right: 10px;
+    padding: 2px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.chart-entry:hover {
+    background: #fce7bd;
 }
 
 #chart .ascii {
     font-family: monospace;
 }
 
-#chart .baseline {
-    stroke: #aaa;
+#editor {
+    background: #ffe386;
+    border-bottom: 0.5px solid #daa95e;
+    border-top: 0.5px solid #daa95e;
 }
 
-#chart .consonant {
-    stroke: #ee2200;
+#input {
+    box-sizing: border-box;
+    max-width: 100%;
+    width: 100%;
+    height: 50px;
+    border: 0.5px solid #daa95e;
+    border-radius: 3px;
+    vertical-align: top
 }
 
-#chart .vowel {
-    stroke: #0088ee;
+#input:focus {
+    border: 0.5 solid transparent;
 }

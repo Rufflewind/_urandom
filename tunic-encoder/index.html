@@ -2,16 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="utf-8"/>
-    <meta name="viewport" content="width=decvice-width, initial-scale=1"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>tunic-encoder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet"/>
     <link href="style.css" rel="stylesheet"/>
   </head>
   <body>
-    <noscript>Error: JavaScript is not enabled.</noscript>
-    <div id="chart"></div>
-    <textarea id="input"></textarea>
+    <noscript class="error">Error: JavaScript is not enabled.</noscript>
+    <h1>tunic-encoder</h1>
+    <section id="editor">
+      <textarea id="input" spellcheck="false">></textarea>
+    </section>
     <pre id="output-ipa" class="ipa"></pre>
-    <pre id="output"></pre>
+    <pre id="output-tunic"></pre>
+    <details open="true">
+      <summary>Chart</summary>
+      <article id="chart"></article>
+    </details>
+    <details open="true">
+      <summary>Instructions</summary>
+      <article id="instructions">
+        <p><i>tunic-encoder</i> is a tool for converting <a href="https://en.wikipedia.org/wiki/English_phonology">English phonemes</a> into <a href="https://tunicgame.com">Tunic</a> symbols.</p>
+        <p>You can input using either <a href="https://en.wikipedia.org/wiki/International_Phonetic_Alphabet">IPA</a> symbols or the ASCII variants shown in the chart below. For example, instead of entering the IPA /<a href="https://en.wikipedia.org/wiki/Esh_(letter)" class="ipa">ʃ</a>/, which is probably not on your keyboard, you can type the ASCII code <code>sh</code>.</p>
+        <p>The input box does <em>not</em> accept regular English words. For example, entering “secret” will not give you the correct answer. Instead, you need to enter the phonemic transcription /<a href="https://en.wiktionary.org/wiki/secret#Pronunciation" class="ipa">sikrɪt</a>/ (<code>sikriht</code>). You can find IPA transcriptions in dictionaries like <a href="https://en.wiktionary.org">Wiktionary</a>.</p>
+        <p>The encoder will greedily combine phonemes into Tunic symbols. For example, /<span class="ipa">ʌweɪ</span>/ (<code>uhwei</code>) will render /<span class="ipa">ʌw</span>/ as a single Tunic character. If you instead want /<span class="ipa">weɪ</span>/ to be rendered as one unit, you need to separate them using a dot like this: /<span class="ipa">ʌ·weɪ</span>/ (<code>uh.wei</code>). </p>
+        <p>The /<span class="ipa">ə</span>/ phoneme does not seem to have a unique translation in Tunic. It usually translates to /<span class="ipa">ʌ</span>/, but can also translate to /<span class="ipa">ɛ</span>/ or /<span class="ipa">ʊ</span>/ depending on circumstances.</p>
+      </article>
+    </details>
     <script src="script.js"></script>
   </body>
 </html>
