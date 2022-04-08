@@ -1,4 +1,4 @@
-const SEGMENTS = [
+const PATH_SEGMENTS = [
     // baseline (0)
     "M -5  0 L +5  0",
     // consonant segments (1-7)
@@ -16,6 +16,25 @@ const SEGMENTS = [
     "M -5 +6 L  0 +9",
     "M  0 +9 L +5 +6",
     // segment 13 is the inversion circle, defined in renderSymbol
+];
+
+const MONOSPACE_HEIGHT = 6;
+const MONOSPACE_WIDTH = 4;
+const MONOSPACE_SEGMENTS = [
+    [{x: 0, y: 2, c: "-"}, {x: 1, y: 2, c: "-"}, {x: 2, y: 2, c: "-"}, {x: 3, y: 2, c: "-"}],
+    [{x: 1, y: 1, c: "\\"}],
+    [{x: 2, y: 0, c: "|"}, {x: 2, y: 1, c: "|"}],
+    [{x: 3, y: 1, c: "/"}],
+    [{x: 3, y: 3, c: "\\"}],
+    [{x: 2, y: 3, c: "|"}, {x: 2, y: 4, c: "|"}],
+    [{x: 1, y: 3, c: "/"}],
+    [{x: 2, y: 2, c: "|"}],
+    [{x: 3, y: 0, c: "\\"}],
+    [{x: 1, y: 0, c: "/"}],
+    [{x: 0, y: 1, c: "|"}, {x: 0, y: 2, c: "|"}, {x: 0, y: 3, c: "|"}],
+    [{x: 1, y: 4, c: "\\"}],
+    [{x: 3, y: 4, c: "/"}],
+    [{x: 2, y: 5, c: "o"}],
 ];
 
 const COMPONENTS = [
@@ -135,7 +154,7 @@ function error(...arguments) {
             document.body.firstChild,
         );
     }
-    error.innerText += `Error: ${arguments} (${JSON.stringify(arguments)})`;
+    error.innerText += `Error: ${arguments}`;
 }
 
 function insertUnique(map, key, value) {
@@ -202,7 +221,7 @@ function renderSymbol(symbol, x, y, colorByClass) {
                 ["vowel", MASK_VOWEL],
             ].map(([componentClass, mask]) =>
                 svgElement("path", {
-                    "d": SEGMENTS.filter((command, i) =>
+                    "d": PATH_SEGMENTS.filter((command, i) =>
                         (MASK_BASELINE | symbol) & mask & (1 << i)
                     ).join(" "),
                     "stroke": colorByClass[componentClass],
@@ -354,22 +373,115 @@ function encodeTunic(text) {
     return words;
 }
 
+const CHAR_MERGER = {
+    "-|": "+",
+};
+
+function mergeChars(char1, char2) {
+    const key = char1 + char2;
+    return CHAR_MERGER.hasOwnProperty(key) ? CHAR_MERGER[key] : char2;
+}
+
+function createMonospaceRows(width) {
+    const rows = [];
+    for (let y = 0; y < MONOSPACE_HEIGHT; ++y) {
+        rows.push(Array(width).fill(" "));
+    }
+    return rows;
+}
+
+function appendMonospaceRows(rows, outRows) {
+    for (let [y, row] of rows.entries()) {
+        outRows[outRows.length - rows.length + y].push(...row);
+    }
+}
+
+function renderMonospaceTunicSymbol(symbol) {
+    const rows = createMonospaceRows(MONOSPACE_WIDTH);
+    for (const [i, charDescs] of MONOSPACE_SEGMENTS.entries()) {
+        if ((symbol | MASK_BASELINE) & (1 << i)) {
+            for (const charDesc of charDescs) {
+                rows[charDesc.y][charDesc.x] = mergeChars(
+                    rows[charDesc.y][charDesc.x] || " ",
+                    charDesc.c,
+                );
+            }
+        }
+    }
+    return rows;
+}
+
+function renderMonospaceTunicWord(word, outRows) {
+    appendMonospaceRows(createMonospaceRows(1), outRows);
+    for (const symbol of word) {
+        appendMonospaceRows(renderMonospaceTunicSymbol(symbol), outRows);
+    }
+}
+
+function renderMonospaceLiteral(word, outRows) {
+    for (const [i, line] of word.split("\n").entries()) {
+        if (i != 0) {
+            outRows.push([], ...createMonospaceRows(0));
+        }
+        const spaces = " ".repeat(line.length * 2 + 1);
+        const baselineY = Math.floor(MONOSPACE_HEIGHT / 2);
+        for (const char of line) {
+            appendMonospaceRows(createMonospaceRows(1), outRows);
+            const rows = [];
+            for (let y = 0; y < MONOSPACE_HEIGHT; ++y) {
+                rows.push([y == baselineY ? char : " "]);
+            }
+            appendMonospaceRows(rows, outRows);
+        }
+    }
+}
+
+function textFromMonospaceRows(rows) {
+    return rows.map(row => row.join("")).join("\n");
+}
+
+function replaceNewlinesWithBr(str) {
+    let elements = [];
+    for (const [i, line] of str.split("\n").entries()) {
+        if (i != 0) {
+            elements.push(htmlElement("br", {}, []));
+        }
+        elements.push(line);
+    }
+    return elements;
+}
+
+function setReadonlyTextarea(textarea, text) {
+    textarea.value = text;
+    let height = textarea.scrollHeight + 1;
+    textarea.style.height = `${height}px`;
+    height += height - textarea.clientHeight;
+    textarea.style.height = `${height}px`;
+}
+
 function updateOutput(input) {
     const text = input.value;
     localStorage.setItem(LOCAL_STORAGE_INPUT_KEY, text);
-    const ipaElements = [];
     const tunicElements = [];
+    const ipaStrings = [];
+    const monospaceRows = createMonospaceRows(0);
     for (const word of encodeTunic(text)) {
         if (typeof word[0] == "number") {
-            ipaElements.push(ipaFromSymbols(word));
             tunicElements.push(renderWord(word, DEFAULT_COLORS));
+            ipaStrings.push(ipaFromSymbols(word));
+            renderMonospaceTunicWord(word, monospaceRows);
         } else {
-            ipaElements.push(word);
-            tunicElements.push(word);
+            tunicElements.push(...replaceNewlinesWithBr(word));
+            ipaStrings.push(word);
+            renderMonospaceLiteral(word, monospaceRows);
         }
     }
-    setChildren(document.getElementById("output-tunic"), tunicElements);
-    setChildren(document.getElementById("output-ipa"), ipaElements);
+    const outputTunic = document.getElementById("output-tunic");
+    const outputIpa = document.getElementById("output-ipa");
+    const outputMonospace = document.getElementById("output-monospace");
+    setChildren(outputTunic, tunicElements);
+    setReadonlyTextarea(outputIpa, ipaStrings.join(""));
+    setReadonlyTextarea(outputMonospace, textFromMonospaceRows(monospaceRows));
 }
 
 function main() {
