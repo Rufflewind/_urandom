@@ -12,6 +12,9 @@ deploy: dist/.git/config all
 	mkdir -p $(<D)/../ctype
 	ln -f ctype/index.html ctype/main.js $(<D)/../ctype
 
+	mkdir -p $(<D)/../loopy-game
+	ln -f loopy-game/index.html loopy-game/script.js loopy-game/style.css $(<D)/../loopy-game
+
 	mkdir -p $(<D)/../moon-calendar
 	ln -f moon-calendar/index.html $(<D)/../moon-calendar
 
