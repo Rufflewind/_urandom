@@ -12,9 +12,13 @@
     <header>
       <p>
         <button id="reset-button">Reset</button>
-        <label>
+        <label title="Automatically apply simple deduction rules after every move.">
           <input type="checkbox" id="auto-reduction-checkbox"/>
           Auto reduction
+        </label>
+        <label title="Run the backtracking solver.">
+          <input type="checkbox" id="solve-checkbox"/>
+          Solve
         </label>
       </p>
       <p>(To change the puzzle, generate a puzzle using the <a href="https://www.chiark.greenend.org.uk/~sgtatham/puzzles/js/loopy.html">upstream game</a> and copy-paste the <a href="https://en.wikipedia.org/wiki/URI_fragment">URL hash fragment</a> here.)</p>

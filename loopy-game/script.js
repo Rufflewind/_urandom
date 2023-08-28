@@ -7,6 +7,14 @@ function getOrInsert(object, property, callback) {
     return value;
 }
 
+function invertObject(object) {
+    const inverted = {};
+    for (const [key, value] of Object.entries(object)) {
+        inverted[value] = key;
+    }
+    return inverted;
+}
+
 function shuffleInPlace(random, array) {
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
     for (let i = array.length; --i > 0;) {
@@ -39,9 +47,39 @@ function svgElement(...arguments) {
 }
 
 const ALPHABETIC_BASE = 0x60;
-const EDGE_STATES = ["n", "u", "y"];
+const EDGE_NO = 0;
+const EDGE_UNKNOWN = 1;
+const EDGE_YES = 2;
+const EDGE_STATE_BY_CHAR = {"n": EDGE_NO, "u": EDGE_UNKNOWN, "y": EDGE_YES};
+const EDGE_CHAR_BY_STATE = invertObject(EDGE_STATE_BY_CHAR);
 const DEFAULT_HASH = "#10x10t0:a32b23b32a13a2a2a2f22a131h2a121b122c332b2211a1b3a3a1a222a2c312a3223a3c3f";
 const MOVE_SEP = "";
+
+function decodeEdgeStates(moves, edgeStates) {
+    for (const match of moves.matchAll(/(\d+)([nuy])/g)) {
+        edgeStates[+match[1]] = EDGE_STATE_BY_CHAR[match[2]];
+    }
+}
+
+function joinMoves(moves) { return moves.join(""); }
+
+function encodeEdgeStates(edgeStates) {
+    let moves = [];
+    for (const [i, edgeState] of edgeStates.entries()) {
+        if (edgeState != EDGE_UNKNOWN) {
+            moves.push(`${i}${EDGE_CHAR_BY_STATE[edgeState]}`);
+        }
+    }
+    return joinMoves(moves);
+}
+
+function modifyEdgeState(edgeState, direction) {
+    const result = edgeState + direction;
+    if (result < EDGE_NO || result > EDGE_YES) {
+        return edgeState - direction;
+    }
+    return result;
+}
 
 function decodeSaveFile(saveFile) {
     const entries = {};
@@ -50,24 +88,8 @@ function decodeSaveFile(saveFile) {
         entries[name] ??= [];
         entries[name].push(match[2]);
     }
-    const moves = entries.MOVES.join(MOVE_SEP);
+    const moves = joinMoves(entries.MOVES);
     return `#${entries.PARAMS[0]}:${entries.DESC[0]}:${moves}`;
-}
-
-function decodeEdgeStates(moves, edgeStates) {
-    for (const match of moves.matchAll(/(\d+)([nuy])/g)) {
-        edgeStates[+match[1]] = match[2];
-    }
-}
-
-function encodeEdgeStates(edgeStates) {
-    let moves = [];
-    for (const [i, edgeState] of edgeStates.entries()) {
-        if (edgeState != "u") {
-            moves.push(`${i}${edgeState}`);
-        }
-    }
-    return moves.join(MOVE_SEP);
 }
 
 // Removes the moves from the hash to obtain the "#<game-id>".
@@ -99,7 +121,7 @@ function decodeHash(hash) {
         }
     }
     const grid = buildGrid(params);
-    const edgeStates = Array(grid.edges.length).fill("u");
+    const edgeStates = Array(grid.edges.length).fill(EDGE_UNKNOWN);
     decodeEdgeStates(moves || "", edgeStates);
     return {desc, grid, faceClues, edgeStates};
 }
@@ -200,42 +222,31 @@ function buildGrid(params) {
     return {params, edges, faces, vertices};
 }
 
-function modifyEdgeState(state, edgeIx, direction) {
-    if (direction == null) {
-        return state;
-    }
+function modifyEdgeInState(state, edgeIx, direction) {
     const edgeStates = state.edgeStates.slice();
-    const oldState = edgeStates[edgeIx];
-    let newState = EDGE_STATES[EDGE_STATES.indexOf(oldState) + direction];
-    if (newState == undefined) {
-        newState = EDGE_STATES[EDGE_STATES.indexOf(oldState) - direction];
-    }
-    edgeStates[edgeIx] = newState;
+    edgeStates[edgeIx] = modifyEdgeState(edgeStates[edgeIx], direction);
     return Object.assign({}, state, {edgeStates});
 }
 
-function updateEdgeState(state, edgeIx, direction) {
-    if (direction == null) {
-        return;
-    }
-    let newState = modifyEdgeState(state, edgeIx, direction);
+function updateEdgeInGame(game, edgeIx, direction) {
+    let newState = modifyEdgeInState(game.state, edgeIx, direction);
     const autoReductionEnabled =
           document.getElementById("auto-reduction-checkbox").checked;
     if (autoReductionEnabled && findViolations(newState).valid) {
         const reducedState = reduceState(newState);
-        if (reducedState.edgeStates[edgeIx] == newState.edgeStates[edgeIx]) {
+        if (reducedState.edgeStates[edgeIx] == newState.edgeStates[edgeIx]
+            && findViolations(reducedState).valid) {
             newState = reducedState;
         }
     }
-    Object.assign(state, newState);
-    updateHash(state);
-    redrawState(state);
+    updateGameState(game, newState);
 }
 
 const VISUAL_LINE_THICKNESS = 0.008;
 const INTERACTIVE_LINE_THICKNESS = 0.03;
 
-function drawGrid(state, svg) {
+function drawGrid(game) {
+    const state = game.state;
     const grid = state.grid;
     const params = grid.params;
     const gridSize = Math.min(params.width, params.height);
@@ -305,18 +316,18 @@ function drawGrid(state, svg) {
                 "stroke-width": INTERACTIVE_LINE_THICKNESS,
             },
             listeners: {
-                "click": event => updateEdgeState(state, edge.ix, +1),
-                "contextmenu": event => updateEdgeState(state, edge.ix, -1),
+                "click": event => updateEdgeInGame(game, edge.ix, +1),
+                "contextmenu": event => updateEdgeInGame(game, edge.ix, -1),
             },
         }));
     }
     g.append(...lowerLines, ...upperLines, ...interactiveLines);
-    svg.replaceChildren(g);
-    Object.assign(state, {faceTexts, upperLines, lowerLines});
+    game.svg.replaceChildren(g);
+    game.state = Object.assign({}, state, {faceTexts, upperLines, lowerLines});
 }
 
-function minEdgeStateCount(edgeState) { return edgeState == "y"; }
-function maxEdgeStateCount(edgeState) { return edgeState != "n"; }
+function minEdgeStateCount(edgeState) { return edgeState == EDGE_YES; }
+function maxEdgeStateCount(edgeState) { return edgeState != EDGE_NO; }
 
 function tallyEdges(edgeStates, edgeIxs) {
     let min = 0;
@@ -365,11 +376,11 @@ function findViolations(state) {
                 continue;
             }
             visited[edgeIx] = true;
-            if (state.edgeStates[edgeIx] == "n") {
+            if (state.edgeStates[edgeIx] == EDGE_NO) {
                 continue;
             }
             component.push(edgeIx);
-            if (state.edgeStates[edgeIx] == "y") {
+            if (state.edgeStates[edgeIx] == EDGE_YES) {
                 populated = true;
             }
             const edge = state.grid.edges[edgeIx];
@@ -401,16 +412,16 @@ function applyVertexRules(grid, edgeStates) {
         const tally = tallyEdges(edgeStates, vertex.edgeIxs);
         if (tally.min == 2 || tally.max == 1) {
             for (const edgeIx of vertex.edgeIxs) {
-                if (edgeStates[edgeIx] == "u") {
-                    edgeStates[edgeIx] = "n";
+                if (edgeStates[edgeIx] == EDGE_UNKNOWN) {
+                    edgeStates[edgeIx] = EDGE_NO;
                     changed = true;
                 }
             }
         }
         if (tally.min == 1 && tally.max == 2) {
             for (const edgeIx of vertex.edgeIxs) {
-                if (edgeStates[edgeIx] == "u") {
-                    edgeStates[edgeIx] = "y";
+                if (edgeStates[edgeIx] == EDGE_UNKNOWN) {
+                    edgeStates[edgeIx] = EDGE_YES;
                     changed = true;
                 }
             }
@@ -431,16 +442,16 @@ function reduceState(state) {
             const tally = tallyEdges(edgeStates, face.edgeIxs);
             if (tally.max == clue) {
                 for (const edgeIx of face.edgeIxs) {
-                    if (edgeStates[edgeIx] == "u") {
-                        edgeStates[edgeIx] = "y";
+                    if (edgeStates[edgeIx] == EDGE_UNKNOWN) {
+                        edgeStates[edgeIx] = EDGE_YES;
                         changed = true;
                     }
                 }
             }
             if (tally.min == clue) {
                 for (const edgeIx of face.edgeIxs) {
-                    if (edgeStates[edgeIx] == "u") {
-                        edgeStates[edgeIx] = "n";
+                    if (edgeStates[edgeIx] == EDGE_UNKNOWN) {
+                        edgeStates[edgeIx] = EDGE_NO;
                         changed = true;
                     }
                 }
@@ -451,66 +462,216 @@ function reduceState(state) {
             break;
         }
     }
-    const newState = Object.assign({}, state, {edgeStates});
-    if (!findViolations(newState).valid) {
-        return state;
-    }
-    return newState;
+    return Object.assign({}, state, {edgeStates});
 }
 
 function redrawState(state) {
     const violations = findViolations(state);
     for (const [edgeIx, edgeState] of state.edgeStates.entries()) {
-        state.lowerLines[edgeIx].style.stroke =
-            edgeState == "u" ? "skyblue" : "";
-        state.upperLines[edgeIx].style.stroke =
-            edgeState != "y" ? "" :
-            violations.violatedEdgeIxs[edgeIx] ? "red" : "black";
+        state.lowerLines[edgeIx].setAttribute(
+            "class",
+            edgeState == EDGE_UNKNOWN ? "edge-unknown" : "",
+        );
+        state.upperLines[edgeIx].setAttribute(
+            "class",
+            edgeState != EDGE_YES ? "" :
+                violations.violatedEdgeIxs[edgeIx] ? "edge-bad" : "edge",
+        );
     }
     for (const [faceIx, text] of state.faceTexts.entries()) {
-        text.style.fill = violations.violatedFaceIxs[faceIx] ? "red" : "black";
+        text.setAttribute(
+            "class",
+            violations.violatedFaceIxs[faceIx] ? "face-bad" : "face",
+        );
     }
+}
+
+function updateGameState(game, state, options) {
+    options ??= {};
+    game.state = state;
+    if (!options.skipHash) {
+        game.hashLoader.update(encodeHash(state));
+    }
+    redrawState(state);
 }
 
 function listUnsolvedEdgeIxs(state) {
     const unsolvedEdgeIxs = [];
     for (const [edgeIx, edgeState] of state.edgeStates.entries()) {
-        if (edgeState == "u") {
+        if (edgeState == EDGE_UNKNOWN) {
             unsolvedEdgeIxs.push(edgeIx);
         }
     }
     return unsolvedEdgeIxs;
 }
 
-let currentHash = null;                 // for ignoring events from ourself
-
-function updateHash(state) {
-    location.hash = encodeHash(state);
-    currentHash = location.hash;
+function sleep(delay) {
+    return new Promise((resolve, reject) => window.setTimeout(resolve, delay));
 }
 
-function reloadFromHash(svg) {
-    let hash = location.hash || DEFAULT_HASH;
-    if (currentHash == hash) {
-        return;
+// Inspired by https://en.wikipedia.org/wiki/DPLL_algorithm
+async function solve(ctx, state, depth) {
+    const reducedState = reduceState(state);
+    if (!await ctx.onProgress(reducedState)) {
+        return "STOP";
     }
-    document.getElementById("credit-link").href
-        .replace(/#.*/, stripMovesFromHash(hash));
-    const state = decodeHash(hash);
-    drawGrid(state, svg);
-    redrawState(state);
-    currentHash = hash;
+    if (!findViolations(reducedState).valid) {
+        return false;
+    }
+    const unsolvedEdgeIxs = listUnsolvedEdgeIxs(state);
+    const numUnsolvedEdges = unsolvedEdgeIxs.length;
+    if (numUnsolvedEdges == 0) {
+        return true;
+    }
+
+    // Rank the unsolved edges based on how much reduction would occur.
+    const score = {};
+    for (const edgeIx of unsolvedEdgeIxs) {
+        const newUnsolved1 = listUnsolvedEdgeIxs(
+            reduceState(modifyEdgeInState(state, edgeIx, +1))).length;
+        const newUnsolved2 = listUnsolvedEdgeIxs(
+            reduceState(modifyEdgeInState(state, edgeIx, -1))).length;
+        score[edgeIx] = Math.min(newUnsolved1, newUnsolved2);
+    }
+    unsolvedEdgeIxs.sort((a, b) => score[b] - score[a]); // lower is better
+
+    if (depth >= ctx.maxDepth) {
+        return null;
+    }
+    while (unsolvedEdgeIxs.length > 0) {
+        const edgeIx = unsolvedEdgeIxs.pop();
+        const direction = Math.floor(ctx.random() * 2) * 2 - 1;
+        const state1 = modifyEdgeInState(state, edgeIx, direction);
+        const state2 = modifyEdgeInState(state, edgeIx, -direction);
+        const status1 = await solve(ctx, state1, depth + 1);
+        if (status1 == true || status1 == "STOP") {
+            return status1;
+        }
+        const status2 = await solve(ctx, state2, depth + 1);
+        if (status2 == true || status2 == "STOP") {
+            return status1;
+        }
+        if (status2 == false && status1 == false) {
+            return false;
+        }
+        if (depth == 0 && status1 == false) {
+            ctx.bestState = state2;
+            return null;
+        }
+        if (depth == 0 && status2 == false) {
+            ctx.bestState = state1;
+            return null;
+        }
+    }
+    return null;
+}
+
+async function runSolverStep(game) {
+    game.maxDepth ??= 1;
+    while (true) {
+        let iterations = 0;
+        const ctx = {
+            random: Math.random,
+            maxDepth: game.maxDepth,
+            bestState: null,
+            async onProgress(state) {
+                if (!game.solveCheckbox.checked) {
+                    return false;
+                }
+                ++iterations;
+                if (Math.random() < 0.003) {
+                    redrawState(state);
+                    await sleep(100);    // Let the browser breathe.
+                }
+                return true;
+            },
+        };
+        const status = await solve(ctx, game.state, 0);
+        console.log("Iterations ran:", iterations);
+        if (status != null) {
+            game.maxDepth = 1;
+            return true;
+        }
+        if (ctx.bestState != null) {
+            game.maxDepth = 1;
+            updateGameState(game, reduceState(ctx.bestState));
+            return false;
+        }
+        ++game.maxDepth;
+        console.log("(!) No progress. Increasing maxDepth to:", game.maxDepth);
+    }
+}
+
+class HashLoader {
+    constructor(initialHash) {
+        this._currentHash = null;       // for ignoring self-events
+        this._initialHash = initialHash;
+    }
+    _load(listener) {
+        const hash = location.hash || this._initialHash;
+        if (this._currentHash == hash) {
+            return;
+        }
+        this._currentHash = hash;
+        listener(hash);
+    }
+    registerAndLoad(window, listener) {
+        window.addEventListener("hashchange", event => this._load(listener));
+        this._load(listener);
+    }
+    update(hash) {
+        this._currentHash = hash;
+        location.hash = hash;
+    }
+}
+
+function reloadGame(game, state) {
+    game.creditLink.href.replace(/#.*/, stripMovesFromHash(encodeHash(state)));
+    game.state = state;
+    drawGrid(game);
+    redrawState(game.state);
+}
+
+function waitUntilCheckboxTrue(checkbox) {
+    return new Promise(resolve => {
+        async function handler() {
+            if (checkbox.checked) {
+                checkbox.removeEventListener("change", handler);
+                resolve();
+            }
+        };
+        checkbox.addEventListener("change", handler);
+    });
 }
 
 function main() {
-    const svg = document.getElementById("view");
-    svg.addEventListener("contextmenu", event => event.preventDefault());
-    window.addEventListener("hashchange", event => reloadFromHash(svg));
-    reloadFromHash(svg);
+    const hashLoader = new HashLoader(DEFAULT_HASH);
+    const game = {
+        svg: document.getElementById("view"),
+        creditLink: document.getElementById("credit-link"),
+        hashLoader,
+        state: decodeHash(DEFAULT_HASH),
+        solveCheckbox: document.getElementById("solve-checkbox"),
+    };
+    game.svg.addEventListener("contextmenu", event => event.preventDefault());
+    hashLoader.registerAndLoad(window, hash => {
+        reloadGame(game, decodeHash(hash));
+    });
     document.getElementById("reset-button")
-        .addEventListener("click", event => {
+        .addEventListener("click", () => {
             location.hash = stripMovesFromHash(location.hash);
+            location.reload();
         });
+    (async () => {
+        while (true) {
+            await waitUntilCheckboxTrue(game.solveCheckbox);
+            while (!await runSolverStep(game)) {
+                await sleep(100);
+            }
+            redrawState(game.state);
+            game.solveCheckbox.checked = false;
+        }
+    })();
 }
 
 main();
