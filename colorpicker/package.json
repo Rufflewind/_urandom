@@ -6,9 +6,9 @@
     "serve": "webpack-dev-server --mode=production"
   },
   "devDependencies": {
-    "webpack": "^4.28.3",
-    "webpack-cli": "^3.2.0",
-    "webpack-dev-server": "^3.1.14"
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.1"
   },
   "dependencies": {
     "ciecam02": "^0.4.6"
