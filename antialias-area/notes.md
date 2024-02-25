@@ -1,3 +1,7 @@
+---
+title: Area of a square cut by a line
+---
+
 # Area of a square cut by a line
 
 [Rendered](https://rufflewind.com/_urandom/antialias-area)
