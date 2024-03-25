@@ -41,20 +41,15 @@
   <body>
     <h1>Wuff calendar</h1>
     <p id="footer" class="hidden">In memory of <a href="https://twitter.com/Kexie_">Kex</a> 🍪</p>
-    <p>Data provided courtesy of <a href="https://api.usno.navy.mil">api.usno.navy.mil</a>.</p>
+    <p>Data provided courtesy of <a href="https://aa.usno.navy.mil/data/api">aa.usno.navy.mil</a></p>
     <ul id="calendar"></ul>
     <script>
-      function parseDate(date, time) {
-          var MONTHS = [
-              "jan", "feb", "mar", "apr", "may", "jun",
-              "jul", "aug", "sep", "oct", "nov", "dec",
-          ];
-          var ymd = /(\d+) (\w+) (\d+)/.exec(date);
-          var hm = /(\d+):(\d+)/.exec(time);
+      function parseDate(phase) {
+          var hm = /(\d+):(\d+)/.exec(phase.time);
           return new Date(Date.UTC(
-              +ymd[1],
-              MONTHS.indexOf(ymd[2].toLowerCase()),
-              +ymd[3],
+              phase.year,
+              phase.month - 1,
+              phase.day,
               +hm[1],
               +hm[2]
           ));
@@ -89,7 +84,7 @@
               for (var i = 0; i < response.phasedata.length; ++i) {
                   var phase = response.phasedata[i];
                   var li = document.createElement("li");
-                  var t = parseDate(phase.date, phase.time)
+                  var t = parseDate(phase);
                   li.appendChild(document.createTextNode(renderDate(t, timezoneOffset) + " "));
                   switch (phase.phase) {
                   case "New Moon":
@@ -131,7 +126,7 @@
       var calendar = document.getElementById("calendar");
       var xhr = new XMLHttpRequest();
       xhr.addEventListener("load", load);
-      xhr.open("GET", "https://api.usno.navy.mil/moon/phase?ID=WUFCALEN&year=" + year);
+      xhr.open("GET", "data/" + year + ".json");
       xhr.send();
     </script>
   </body>

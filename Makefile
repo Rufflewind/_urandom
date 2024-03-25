@@ -1,4 +1,5 @@
 all: colorpicker/nobuild.tmp
+	$(MAKE) -C moon-calendar
 
 deploy: dist/.git/config all
 
@@ -18,8 +19,9 @@ deploy: dist/.git/config all
 	mkdir -p $(<D)/../loopy-game
 	ln -f loopy-game/index.html loopy-game/script.js loopy-game/style.css $(<D)/../loopy-game
 
-	mkdir -p $(<D)/../moon-calendar
+	mkdir -p $(<D)/../moon-calendar/data
 	ln -f moon-calendar/index.html $(<D)/../moon-calendar
+	ln -f moon-calendar/data/*.json $(<D)/../moon-calendar/data
 
 	mkdir -p $(<D)/../tunic-encoder
 	ln -f tunic-encoder/index.html tunic-encoder/script.js tunic-encoder/style.css $(<D)/../tunic-encoder
