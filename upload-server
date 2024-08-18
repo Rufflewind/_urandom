@@ -2,11 +2,12 @@
 import argparse, base64, crypt, hmac, http.server, os
 import random, re, ssl, string, subprocess, sys, threading
 
-DEFAULT_LISTEN = "localhost:8080"
-DEFAULT_OUTPUT_PATH = "/tmp/output.dat"
 AUTOGEN_CERT = "fyl-localhost.pem"
 PASSWORD_LEN = 6
 MAX_LOGIN_FAILS = 4
+
+class UserError(Exception):
+    pass
 
 class ServerHandler:
 
@@ -14,78 +15,92 @@ class ServerHandler:
         self.server = server
         self.req_handler = req_handler
 
-    def get(self):
-        self.respond((
-            '<form method="post" enctype="multipart/form-data">'
-            '<input type="file" name="file">'
-            '<button type="submit">Upload</button>'
+    def render(self, message='', code=200):
+        html = (
+            '<form style="font-family: sans-serif" method="post" enctype="multipart/form-data">'
+            '<ol>'
+            '<li><input type="text" name="password" autocomplete="off" placeholder="Password"/></li>'
+            '<li><input type="file" name="file"/></li>'
+            '<li><button type="submit">Upload</button></li>'
+            '</ol>'
+            '<strong style="color: red">{message}</strong>'
             '</form>'
-        ), headers={"Content-Type": "text/html"})
+        ).format(message=message)
+        self.respond(
+            html,
+            headers={"Content-Type": "text/html"},
+            code=code,
+        )
+
+    def get(self):
+        self.render()
 
     def post(self):
-        if not self.is_authorized():
-            return
+        try:
+            self.inner_post()
+        except UserError as e:
+            self.render('Bad Request: {}'.format(e), code=400)
+            raise
+        except:
+            self.render('Server Error', code=500)
+            raise
 
+    def inner_post(self):
         content_type = self.req_handler.headers["Content-Type"]
         _, boundary = content_type.split("=", 1)
         boundary = boundary.encode("utf-8")
+        start_boundary = b"--" + boundary + b"\r\n"
+        mid_boundary = b"\r\n--" + boundary + b"\r\n"
+        end_boundary = b"\r\n--" + boundary + b"--\r\n"
         n = int(self.req_handler.headers["Content-Length"])
 
-        for _ in range(4):
-            n -= len(next(self.req_handler.rfile))
+        reader = Reader(self.req_handler.rfile, b"", 512, n)
+        _, found = reader.read_until(start_boundary, 50)
+        if not found:
+            raise UserError("start boundary not found")
 
+        name = parse_multipart_header(reader)
+        if name != b"password":
+            raise UserError("expected password")
+        password, found = reader.read_until(mid_boundary, 512)
+        if not found:
+            raise UserError("mid boundary not found")
+        if not self.is_authorized(password.decode("utf-8")):
+            return
+
+        name = parse_multipart_header(reader)
+        if name != b"file":
+            raise UserError("expected file")
+        partial_matcher = PartialMatcher(end_boundary)
         with open(self.server.output_path, "wb") as f:
-            prev_line = next(self.req_handler.rfile)
-            n -= len(prev_line)
-            while n > 0:
-                line = next(self.req_handler.rfile)
-                n -= len(line)
-                if boundary in line:
-                    prev_line = re.match(b"(.*?)\r?\n$", prev_line).group(1)
-                    f.write(prev_line)
+            while True:
+                chunk, found = reader.read_chunk_until(partial_matcher)
+                f.write(chunk)
+                if found:
                     break
-                else:
-                    f.write(prev_line)
-                    prev_line = line
-            else:
-                raise ValueError("end of data??")
+                if not chunk:
+                    raise UserError("end boundary not found")
 
         self.respond("OK\n")
         sys.stderr.write("Upload complete.\n")
         sys.stderr.flush()
         self.shutdown(None)
 
-    def is_authorized(self):
-        authorization = self.req_handler.headers["Authorization"]
-        if authorization is None:
-            self.respond("Unauthorized\n", code=401, headers={
-                "WWW-Authenticate": 'Basic realm="simple"',
-            })
-            return
-        scheme, credentials = authorization.split(None, 1)
-        if scheme.strip() != "Basic":
-            raise ValueError("unknown authentication scheme: {}"
-                             .format(scheme))
-        credentials = base64.b64decode(credentials).decode("utf-8")
-        username, password = credentials.split(":", 1)
-        username = username.strip().lower()
-        crypt_password = self.server.auth_creds.get(username, None)
+    def is_authorized(self, password):
+        crypt_password = self.server.crypt_password
         if (crypt_password is None or
             not hmac.compare_digest(crypt_password,
                                     crypt.crypt(password, crypt_password))):
-            sys.stderr.write("(!) Failed login ({}/{}) for user {!r}\n".format(
+            sys.stderr.write("(!) Failed login ({}/{}) with password {!r}\n".format(
                 self.server.login_fails,
                 self.server.max_login_fails,
-                username,
                 password,
             ))
             sys.stderr.flush()
             retry = self.mark_auth_fail()
-            self.respond("Unauthorized\n", code=401, headers={
-                "WWW-Authenticate": 'Basic realm="simple"',
-            } if retry else {})
+            self.render(message="Invalid password\n", code=401)
             if not retry:
-                self.server.auth_creds = {}
+                self.server.crypt_password = None
                 self.shutdown("Too many login failures, bye!")
             return
 
@@ -114,9 +129,9 @@ class ServerHandler:
 
 class Server:
 
-    def __init__(self, output_path, auth_creds, max_login_fails):
+    def __init__(self, output_path, crypt_password, max_login_fails):
         self.output_path = output_path
-        self.auth_creds = auth_creds
+        self.crypt_password = crypt_password
         self.login_fails = 0
         self.max_login_fails = max_login_fails
 
@@ -136,14 +151,13 @@ def parse_host_port(host_port):
 def gen_password(random, alphabet, length):
     return "".join(random.choice(alphabet) for _ in range(length))
 
-def gen_guest_creds():
-    username = "guest"
+def gen_creds():
     password = gen_password(
         random.SystemRandom(),
         string.ascii_lowercase,
         PASSWORD_LEN,
     )
-    return password, {username: crypt.crypt(password)}
+    return password, crypt.crypt(password)
 
 def get_cert(path):
     if not path:
@@ -165,28 +179,91 @@ def get_cert(path):
             ])
     return path
 
+class PartialMatcher:
+
+    def __init__(self, delimiter):
+        # Either partial matches at the end or full matches anywhere.
+        # Example: r"\Z|a(\Z|b(\Z|c(...)))"
+        self.length = len(delimiter)
+        self.pattern = re.compile(
+            b"".join([rb"\Z|" + re.escape(bytes([c])) + b"(" for c in delimiter])
+            + b")" * len(delimiter)
+        )
+
+class Reader:
+
+    def __init__(self, f, buf, read_size, max_length):
+        self._f = f
+        self._buf = buf
+        self._read_size = read_size
+        self._max_length = max_length
+
+    def read_into_buf(self):
+        chunk = self._f.read(min(self._read_size, self._max_length))
+        self._buf += chunk
+        self._max_length -= len(chunk)
+        return bool(chunk)
+
+    def consume_buf(self):
+        buf = self._buf
+        self._buf = b""
+        return buf
+
+    def read_chunk_until(self, partial_matcher):
+        while True:
+            start, end = partial_matcher.pattern.search(self._buf).span()
+            is_full_match = end - start == partial_matcher.length
+            prematch = self._buf[:start]
+            self._buf = self._buf[end if is_full_match else start:]
+            if prematch or is_full_match:
+                return prematch, is_full_match
+            if not self.read_into_buf():
+                return self.consume_buf(), False
+
+    def read_until(self, delimiter, stop_len):
+        partial_matcher = PartialMatcher(delimiter)
+        chunks = []
+        n = 0
+        while True:
+            chunk, found = self.read_chunk_until(partial_matcher)
+            chunks.append(chunk)
+            n += len(chunk)
+            if n >= stop_len or found or not chunk:
+                return b"".join(chunks), found
+
+def parse_multipart_header(reader):
+    name = ""
+    while True:
+        line, found = reader.read_until(b"\r\n", 512)
+        if not found:
+            raise ValueError("EOL not found")
+        if not line.strip():
+            return name
+        pattern = rb'(?i)Content-Disposition:\s*form-data;\s*name="([^"]*)"'
+        match = re.search(pattern, line)
+        if match:
+            name = match.group(1)
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--cert", "-c",
                    help="Leave blank to create a self-signed certificate.")
-    p.add_argument("--listen", "-l",
-                   default=DEFAULT_LISTEN,
-                   type=parse_host_port)
-    p.add_argument("--output-path", "-o", default=DEFAULT_OUTPUT_PATH)
+    p.add_argument("--listen-host-port", "-l",
+                   type=parse_host_port, required=True)
+    p.add_argument("--output-path", "-o", required=True)
     args = p.parse_args()
-    password, auth_creds = gen_guest_creds()
+    password, crypt_password = gen_creds()
     sys.stdout.write("".join([
-        "Listening: {}:{} (HTTPS)\n".format(*args.listen),
-        "Username: {}\n".format(*auth_creds),
+        "Listening: {}:{} (HTTPS)\n".format(*args.listen_host_port),
         "Password: {}\n".format(password),
     ]))
     sys.stdout.flush()
     server = Server(
         output_path=args.output_path,
-        auth_creds=auth_creds,
+        crypt_password=crypt_password,
         max_login_fails=MAX_LOGIN_FAILS,
     )
-    httpd = http.server.HTTPServer(args.listen, server.handler())
+    httpd = http.server.HTTPServer(args.listen_host_port, server.handler())
     httpd.socket = ssl.wrap_socket(
         httpd.socket,
         certfile=get_cert(args.cert),
