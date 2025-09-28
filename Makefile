@@ -13,6 +13,9 @@ deploy: dist/.git/config all
 	mkdir -p $(<D)/../ctype
 	ln -f ctype/index.html ctype/main.js $(<D)/../ctype
 
+	mkdir -p $(<D)/../ember-court
+	ln -f ember-court/index.html $(<D)/../ember-court
+
 	mkdir -p $(<D)/../galaxies-game
 	ln -f galaxies-game/index.html galaxies-game/script.js $(<D)/../galaxies-game
 

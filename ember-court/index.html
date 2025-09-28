@@ -1,0 +1,399 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Ember Court Planner</title>
+    <style>
+      html {
+          font-family: sans-serif;
+          background: #222;
+          color: #ddd;
+      }
+      summary {
+          font-weight: bold;
+      }
+      img.icon {
+          vertical-align: middle;
+      }
+      #preference .status-trait {
+          padding: 4px;
+      }
+      #preference .status-trait.missing {
+          background: #f00;
+          color: #000;
+      }
+      #preference .status-trait.used {
+          background: #0f0;
+          color: #000;
+      }
+      #preference .status-trait.used.excess {
+          background: #0ff;
+          color: #000;
+      }
+      #guests .trait.unused {
+          color: #0f0;
+      }
+      #guests .trait.used {
+          color: #0f0;
+      }
+      #guests .trait.used.excess {
+          color: #0ff;
+      }
+      #guests .trait.missing {
+          color: #f00;
+      }
+      #amenities .trait.missing {
+          color: #ff0;
+      }
+      #amenities .trait.used {
+          color: #0f0;
+      }
+      #amenities .trait.used.excess {
+          color: #0ff;
+      }
+    </style>
+  </head>
+  <body>
+    <details>
+      <summary>Help</summary>
+      Red = Unsatisfied need. Green = Satisfied. Cyan = Satisfied multiple times.
+    </details>
+    <fieldset id="guests">
+      <legend>Guests</legend>
+    </fieldset>
+    <table id="preference">
+      <tr id="preference-0"></tr>
+      <tr id="preference-1"></tr>
+    </table>
+    <fieldset id="amenities">
+      <legend>Amenities</legend>
+    </fieldset>
+    <script>
+      function parseCsv(text, keyCol) {
+          let header = null;
+          const recordByKey = {};
+          for (const line of text.trimRight(/\r?\n/).split(/\r?\n/)) {
+              const fields = line.split(/,/);
+              if (header == null) {
+                  header = fields;
+              } else {
+                  const record = {};
+                  for (const [i, value] of fields.entries()) {
+                      record[header[i]] = value;
+                  }
+                  recordByKey[record[keyCol]] = record;
+              }
+          }
+          return recordByKey;
+      }
+
+      function modify(object, ...modifiers) {
+          for (const modifier of modifiers) {
+              modifier(object);
+          }
+          return object;
+      }
+
+      function identifier(name) {
+          return name.toLowerCase().replace(/^[^a-z]|[^0-9a-z]/g, "_");
+      }
+
+      const SLOTS = [
+          {
+              "Sika": ["Clean"],
+              "Plague Deviser Marileth": ["Messy"],
+              "Choofa": ["Exciting"],
+              "Cryptkeeper Kassir": ["Formal"],
+          },
+          {
+              "Kleia and Pelagos": ["Humble"],
+              "Grandmaster Vole": ["Dangerous"],
+              "Droman Aliothe": ["Relaxing"],
+              "Stonehead": ["Casual"],
+          },
+          {
+              "Polemarch Adrestes": ["Clean", "Formal"],
+              "Alexandros Mograine": ["Safe", "Humble"],
+              "Hunt-Captain Korayn": ["Dangerous", "Casual"],
+              "Rendle and Cudgelface": ["Messy", "Relaxing"],
+          },
+          {
+              "Mikanikos": ["Clean", "Safe", "Humble"],
+              "Baroness Vashj": ["Dangerous", "Decadent", "Exciting"],
+              "Lady Moonberry": ["Messy", "Exciting", "Casual"],
+              "The Countess": ["Decadent", "Relaxing", "Formal"],
+          },
+      ];
+
+      const AMENITIES = {
+          "Entertainment": {
+              "Atoning Rituals": ["Humble", "Formal"],
+              "Glimpse of the Wilds": ["Clean", "Safe"],
+              "Lost Chalice Band": ["Decadent", "Exciting"],
+          },
+          "Refreshment": {
+              "Tubbin's Tea Party": ["Relaxing", "Formal"],
+              "Divine Desserts": ["Messy", "Decadent"],
+              "Mushroom Surprise": ["Dangerous", "Humble"],
+          },
+          "Decorations": {
+              "Traditional": ["Clean", "Dangerous"],
+              "Mortal Reminders": ["Relaxing", "Casual"],
+              "Mystery Mirrors": ["Safe", "Exciting"],
+          },
+          "Security": {
+              "Venthyr Volunteers": ["Dangerous", "Exciting"],
+              "Stoneborn Reserves": ["Safe", "Decadent"],
+              "Maldraxxian Army": ["Messy", "Casual"],
+          }
+      };
+
+      const LEVELS = {
+          "Cleanliness Level": [
+              {name: "Messy", icon: "ability_creature_poison_06"},
+              {name: "Clean", icon: "inv_pet_broom"},
+          ],
+          "Danger Level": [
+              {name: "Safe", icon: "ability_priest_angelicbulwark"},
+              {name: "Dangerous", icon: "achievement_legionpvptier3"},
+          ],
+          "Decadence Level": [
+              {name: "Humble", icon: "inv_crate_07"},
+              {name: "Decadent", icon: "inv_misc_food_145_cake"},
+          ],
+          "Excitement Level": [
+              {name: "Relaxing", icon: "spell_nature_healingtouch"},
+              {name: "Exciting", icon: "inv_misc_missilelarge_purple"},
+          ],
+          "Formality Level": [
+              {name: "Casual", icon: "inv_shirt_12"},
+              {name: "Formal", icon: "inv_shirt_white_01"},
+          ],
+      };
+
+      const TRAITS = {
+          "Messy": {
+              "name": "Messy",
+              "icon": "ability_creature_poison_06",
+              "level": "Cleanliness Level",
+              "direction": -1
+          },
+          "Clean": {
+              "name": "Clean",
+              "icon": "inv_pet_broom",
+              "level": "Cleanliness Level",
+              "direction": 1
+          },
+          "Safe": {
+              "name": "Safe",
+              "icon": "ability_priest_angelicbulwark",
+              "level": "Danger Level",
+              "direction": -1
+          },
+          "Dangerous": {
+              "name": "Dangerous",
+              "icon": "achievement_legionpvptier3",
+              "level": "Danger Level",
+              "direction": 1
+          },
+          "Humble": {
+              "name": "Humble",
+              "icon": "inv_crate_07",
+              "level": "Decadence Level",
+              "direction": -1
+          },
+          "Decadent": {
+              "name": "Decadent",
+              "icon": "inv_misc_food_145_cake",
+              "level": "Decadence Level",
+              "direction": 1
+          },
+          "Relaxing": {
+              "name": "Relaxing",
+              "icon": "spell_nature_healingtouch",
+              "level": "Excitement Level",
+              "direction": -1
+          },
+          "Exciting": {
+              "name": "Exciting",
+              "icon": "inv_misc_missilelarge_purple",
+              "level": "Excitement Level",
+              "direction": 1
+          },
+          "Casual": {
+              "name": "Casual",
+              "icon": "inv_shirt_12",
+              "level": "Formality Level",
+              "direction": -1
+          },
+          "Formal": {
+              "name": "Formal",
+              "icon": "inv_shirt_white_01",
+              "level": "Formality Level",
+              "direction": 1
+          }
+      };
+
+      function makeElement(tagName, attributes, children) {
+          const element = document.createElement(tagName)
+          for (const [name, value] of Object.entries(attributes)) {
+              const match = /^on(.*)$/.exec(name);
+              if (match) {
+                  element.addEventListener(match[1], value);
+              } else {
+                  element.setAttribute(name, value);
+              }
+          }
+          for (const child of children) {
+              element.append(child);
+          }
+          return element;
+      }
+
+      function renderIcon(icon) {
+          return makeElement("img", {
+              "class": "icon",
+              "src": `https://wow.zamimg.com/images/wow/icons/tiny/${icon}.gif`,
+          }, []);
+      }
+
+      function renderTrait(trait) {
+          return makeElement("span", {"class": `trait trait-${trait.name}`}, [
+              renderIcon(trait.icon),
+              " ",
+              trait.name,
+          ]);
+      }
+
+      function intersperse(separator, items) {
+          return items.flatMap(item => [separator, item]).slice(1);
+      }
+
+      function onchange(e) {
+          const element = e.target;
+          localStorage.setItem(`fyl-ember-court-${element.id}`, element.checked);
+          updateAll();
+      }
+
+      function updateAll() {
+          const preferences = {};
+          for (const guests of SLOTS) {
+              for (const [guest, traits] of Object.entries(guests)) {
+                  const checkbox = document.querySelector(`#guest-${identifier(guest)} input[type=checkbox]`);
+                  if (checkbox.checked) {
+                      for (const trait of traits) {
+                          preferences[trait] = true;
+                      }
+                  }
+              }
+          }
+          const atmosphere = {};
+          for (const [amenity, options] of Object.entries(AMENITIES)) {
+              for (const [option, traits] of Object.entries(options)) {
+                  const checkbox = document.querySelector(`#amenity-${identifier(amenity)}-${identifier(option)} input[type=checkbox]`);
+                  if (checkbox.checked) {
+                      for (const trait of traits) {
+                          atmosphere[trait] = (atmosphere[trait] || 0) + 1;
+                      }
+                  }
+              }
+          }
+          for (const trait of Object.keys(TRAITS)) {
+              const traitAtmosphere = atmosphere[trait] || 0;
+              const className = (() => {
+                  if (preferences[trait]) {
+                      if (traitAtmosphere > 1) {
+                          return "used excess";
+                      } else if (traitAtmosphere > 0) {
+                          return "used";
+                      } else {
+                          return "missing";
+                      }
+conflictingTraits[trait]
+                  } else {
+                      if (traitAtmosphere > 0) {
+                          return "unused";
+                      } else {
+                          return "";
+                      }
+                  }
+              })()
+              document.querySelector(`#status-${trait}`).
+                  setAttribute("class", `status-trait ${className}`);
+              for (const element of document.querySelectorAll(`#guests .trait-${trait}`)) {
+                  element.setAttribute("class", `trait trait-${trait} ${className}`);
+              }
+              for (const element of document.querySelectorAll(`#amenities .trait-${trait}`)) {
+                  element.setAttribute("class", `trait trait-${trait} ${className}`);
+              }
+          }
+      }
+
+      for (const row of [0, 1]) {
+          document.getElementById(`preference-${row}`).replaceChildren(
+              ...intersperse(" ", Object.keys(TRAITS).flatMap((trait, i) =>
+                  i % 2 == row ? [makeElement("td", {
+                      "id": `status-${trait}`,
+                      "class": "status-trait",
+                  }, [renderTrait(TRAITS[trait])])] : []
+              )),
+          );
+      }
+      document.getElementById("guests").replaceChildren(
+          ...SLOTS.map((guests, slot) =>
+              makeElement("fieldset", {}, [
+                  makeElement("legend", {}, [`Slot ${slot + 1}`]),
+                  ...Object.entries(guests).map(([guest, traits], i) =>
+                      makeElement("div", {
+                          "id": `guest-${identifier(guest)}`,
+                      }, [
+                          makeElement("label", {}, [
+                              makeElement("input", {
+                                  "type": "checkbox",
+                                  "id":  `guest-checkbox-${identifier(guest)}`,
+                                  "onchange": onchange,
+                              }, []),
+                              guest,
+                              ": ",
+                              ...intersperse(" ", traits.map(trait =>
+                                  renderTrait(TRAITS[trait]))),
+                          ]),
+                      ])
+                  ),
+              ])
+          )
+      );
+
+      document.getElementById("amenities").append(
+          ...Object.entries(AMENITIES).map(([amenity, options]) =>
+              makeElement("fieldset", {}, [
+                  makeElement("legend", {}, [amenity]),
+                  ...Object.entries(options).map(([option, traits]) =>
+                      makeElement("div", {
+                          "id": `amenity-${identifier(amenity)}-${identifier(option)}`,
+                      }, [
+                          makeElement("label", {}, [
+                              makeElement("input", {
+                                  "type": "checkbox",
+                                  "id":  `amenity-checkbox-${identifier(amenity)}-${identifier(option)}`,
+                                  "onchange": onchange,
+                              }, []),
+                              option,
+                              ": ",
+                              ...intersperse(
+                                  " ",
+                                  traits.map(trait => renderTrait(TRAITS[trait])),
+                              ),
+                          ]),
+                      ])
+                  ),
+              ])
+          )
+      );
+
+      for (const element of document.querySelectorAll("input[type=checkbox]")) {
+          element.checked = localStorage.getItem(`fyl-ember-court-${element.id}`) == "true";
+      }
+      updateAll();
+    </script>
+  </body>
+</html>
