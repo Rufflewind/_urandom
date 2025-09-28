@@ -5,7 +5,7 @@
     <style>
       html {
           font-family: sans-serif;
-          background: #222;
+          background: #282828;
           color: #ddd;
       }
       summary {
@@ -14,45 +14,79 @@
       img.icon {
           vertical-align: middle;
       }
-      #preference .status-trait {
+      #matrix {
+          border-collapse: collapse;
+      }
+      #matrix td, #matrix th {
+          border: solid 1px #888;
           padding: 4px;
       }
-      #preference .status-trait.missing {
+      #matrix th {
+          background: #111;
+      }
+      #preference .status-level {
+          padding: 4px;
+      }
+      #preference .status-level.missing {
           background: #f00;
           color: #000;
       }
-      #preference .status-trait.used {
+      #preference .status-level.used {
           background: #0f0;
           color: #000;
       }
-      #preference .status-trait.used.excess {
+      #preference .status-level.used.excess {
           background: #0ff;
           color: #000;
       }
-      #guests .trait.unused {
+      #guests .level.unused {
           color: #0f0;
       }
-      #guests .trait.used {
+      #guests .level.used {
           color: #0f0;
       }
-      #guests .trait.used.excess {
+      #guests .level.used.excess {
           color: #0ff;
       }
-      #guests .trait.missing {
+      #guests .level.missing {
           color: #f00;
       }
-      #amenities .trait.missing {
+      #amenities .level.missing {
           color: #ff0;
       }
-      #amenities .trait.used {
+      #amenities .level.used {
           color: #0f0;
       }
-      #amenities .trait.used.excess {
+      #amenities .level.used.excess {
           color: #0ff;
       }
     </style>
   </head>
   <body>
+    <table id="matrix"></table>
+   <!--
+      <tr>
+        <th>Slot</th>
+        <th><input type="checkbox"></th>
+        <th>Option</th>
+        <th><a href="https://www.wowhead.com/spell=331380"><img class="icon" src="https://wow.zamimg.com/images/wow/icons/tiny/inv_pet_broom.gif" alt="Cleanliness Level"></a></th>
+        <th><a href="https://www.wowhead.com/spell=331382"><img class="icon" src="https://wow.zamimg.com/images/wow/icons/tiny/achievement_legionpvptier3.gif" alt="Danger Level"></a></th>
+      </tr>
+      <tr>
+        <td>Guest 1</td>
+        <td><input type="checkbox" id="sika"></td>
+        <td><label for="sika"><div>Sika</div></label></td>
+        <td>+1</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Guest 1</td>
+        <td><input type="checkbox" id="marileth"></td>
+        <td><label for="marileth">Plague Deviser Marileth</label></td>
+        <td>-1</td>
+        <td></td>
+      </tr>
+    </table> -->
     <details>
       <summary>Help</summary>
       Red = Unsatisfied need. Green = Satisfied. Cyan = Satisfied multiple times.
@@ -68,22 +102,121 @@
       <legend>Amenities</legend>
     </fieldset>
     <script>
-      function parseCsv(text, keyCol) {
-          let header = null;
-          const recordByKey = {};
-          for (const line of text.trimRight(/\r?\n/).split(/\r?\n/)) {
-              const fields = line.split(/,/);
-              if (header == null) {
-                  header = fields;
-              } else {
-                  const record = {};
-                  for (const [i, value] of fields.entries()) {
-                      record[header[i]] = value;
-                  }
-                  recordByKey[record[keyCol]] = record;
-              }
+      const ATTRIBUTES = [
+          {
+              id: 331380,
+              name: "Cleanliness",
+              levels: [
+                  {name: "Messy", icon: "ability_creature_poison_06"},
+                  {name: "Clean", icon: "inv_pet_broom"},
+              ]
+          },
+          {
+              id: 331382,
+              name: "Danger",
+              levels: [
+                  {name: "Safe", icon: "ability_priest_angelicbulwark"},
+                  {name: "Dangerous", icon: "achievement_legionpvptier3"},
+              ],
+          },
+          {
+              id: 331383,
+              name: "Decadence",
+              levels: [
+                  {name: "Humble", icon: "inv_crate_07"},
+                  {name: "Decadent", icon: "inv_misc_food_145_cake"},
+              ],
+          },
+          {
+              id: 331384,
+              name: "Excitement",
+              levels: [
+                  {name: "Relaxing", icon: "spell_nature_healingtouch"},
+                  {name: "Exciting", icon: "inv_misc_missilelarge_purple"},
+              ],
+          },
+          {
+              id: 331385,
+              name: "Formality",
+              levels: [
+                  {name: "Casual", icon: "inv_shirt_12"},
+                  {name: "Formal", icon: "inv_shirt_white_01"},
+              ],
+          },
+      ];
+
+      const SLOTS = [
+          {
+              guests: [
+                  {name: "Sika", preferences: {0: 1}},
+                  {name: "Plague Deviser Marileth", preferences: {0: 0}},
+                  {name: "Choofa", preferences: {3: 1}},
+                  {name: "Cryptkeeper Kassir", preferences: {4: 1}}
+              ],
+          },
+          {
+              guests: [
+                  {name: "Kleia and Pelagos", preferences: {2: 0}},
+                  {name: "Grandmaster Vole", preferences: {1: 1}},
+                  {name: "Droman Aliothe", preferences: {3: 0}},
+                  {name: "Stonehead", preferences: {4: 0}}
+              ],
+          },
+          {
+              guests: [
+                  {name: "Polemarch Adrestes", preferences: {0: 1, 4: 1}},
+                  {name: "Alexandros Mograine", preferences: {1: 0, 2: 0}},
+                  {name: "Hunt-Captain Korayn", preferences: {1: 1, 4: 0}},
+                  {name: "Rendle and Cudgelface", preferences: {0: 0, 3: 0}}
+              ],
+          },
+          {
+              guests: [
+                  {name: "Mikanikos", preferences: {0: 1, 1: 0, 2: 0}},
+                  {name: "Baroness Vashj", preferences: {1: 1, 2: 1, 3: 1}},
+                  {name: "Lady Moonberry", preferences: {0: 0, 3: 1, 4: 0}},
+                  {name: "The Countess", preferences: {2: 1, 3: 0, 4: 1}}
+              ],
           }
-          return recordByKey;
+      ];
+
+      const BUILDINGS = [
+          {
+              name: "Entertainment",
+              amenities: [
+                  {name: "Atoning Rituals", features: {2: 0, 4: 1}},
+                  {name: "Glimpse of the Wilds", features: {0: 1, 1: 0}},
+                  {name: "Lost Chalice Band", features: {2: 1, 3: 1}}
+              ]
+          },
+          {
+              name: "Refreshment",
+              amenities: [
+                  {name: "Tubbin's Tea Party", features: {3: 0, 4: 1}},
+                  {name: "Divine Desserts", features: {0: 0, 2: 1}},
+                  {name: "Mushroom Surprise", features: {1: 1, 2: 0}}
+              ]
+          },
+          {
+              name: "Decorations",
+              amenities: [
+                  {name: "Traditional", features: {0: 1, 1: 1}},
+                  {name: "Mortal Reminders", features: {3: 0, 4: 0}},
+                  {name: "Mystery Mirrors", features: {1: 0, 3: 1}}
+              ]
+          },
+          {
+              name: "Security",
+              amenities: [
+                  {name: "Venthyr Volunteers", features: {1: 1, 3: 1}},
+                  {name: "Stoneborn Reserves", features: {1: 0, 2: 1}},
+                  {name: "Maldraxxian Army", features: {0: 0, 4: 0}}
+              ]
+          }
+      ];
+
+      function intersperse(separator, items) {
+          return items.flatMap(item => [separator, item]).slice(1);
       }
 
       function modify(object, ...modifiers) {
@@ -92,146 +225,6 @@
           }
           return object;
       }
-
-      function identifier(name) {
-          return name.toLowerCase().replace(/^[^a-z]|[^0-9a-z]/g, "_");
-      }
-
-      const SLOTS = [
-          {
-              "Sika": ["Clean"],
-              "Plague Deviser Marileth": ["Messy"],
-              "Choofa": ["Exciting"],
-              "Cryptkeeper Kassir": ["Formal"],
-          },
-          {
-              "Kleia and Pelagos": ["Humble"],
-              "Grandmaster Vole": ["Dangerous"],
-              "Droman Aliothe": ["Relaxing"],
-              "Stonehead": ["Casual"],
-          },
-          {
-              "Polemarch Adrestes": ["Clean", "Formal"],
-              "Alexandros Mograine": ["Safe", "Humble"],
-              "Hunt-Captain Korayn": ["Dangerous", "Casual"],
-              "Rendle and Cudgelface": ["Messy", "Relaxing"],
-          },
-          {
-              "Mikanikos": ["Clean", "Safe", "Humble"],
-              "Baroness Vashj": ["Dangerous", "Decadent", "Exciting"],
-              "Lady Moonberry": ["Messy", "Exciting", "Casual"],
-              "The Countess": ["Decadent", "Relaxing", "Formal"],
-          },
-      ];
-
-      const AMENITIES = {
-          "Entertainment": {
-              "Atoning Rituals": ["Humble", "Formal"],
-              "Glimpse of the Wilds": ["Clean", "Safe"],
-              "Lost Chalice Band": ["Decadent", "Exciting"],
-          },
-          "Refreshment": {
-              "Tubbin's Tea Party": ["Relaxing", "Formal"],
-              "Divine Desserts": ["Messy", "Decadent"],
-              "Mushroom Surprise": ["Dangerous", "Humble"],
-          },
-          "Decorations": {
-              "Traditional": ["Clean", "Dangerous"],
-              "Mortal Reminders": ["Relaxing", "Casual"],
-              "Mystery Mirrors": ["Safe", "Exciting"],
-          },
-          "Security": {
-              "Venthyr Volunteers": ["Dangerous", "Exciting"],
-              "Stoneborn Reserves": ["Safe", "Decadent"],
-              "Maldraxxian Army": ["Messy", "Casual"],
-          }
-      };
-
-      const LEVELS = {
-          "Cleanliness Level": [
-              {name: "Messy", icon: "ability_creature_poison_06"},
-              {name: "Clean", icon: "inv_pet_broom"},
-          ],
-          "Danger Level": [
-              {name: "Safe", icon: "ability_priest_angelicbulwark"},
-              {name: "Dangerous", icon: "achievement_legionpvptier3"},
-          ],
-          "Decadence Level": [
-              {name: "Humble", icon: "inv_crate_07"},
-              {name: "Decadent", icon: "inv_misc_food_145_cake"},
-          ],
-          "Excitement Level": [
-              {name: "Relaxing", icon: "spell_nature_healingtouch"},
-              {name: "Exciting", icon: "inv_misc_missilelarge_purple"},
-          ],
-          "Formality Level": [
-              {name: "Casual", icon: "inv_shirt_12"},
-              {name: "Formal", icon: "inv_shirt_white_01"},
-          ],
-      };
-
-      const TRAITS = {
-          "Messy": {
-              "name": "Messy",
-              "icon": "ability_creature_poison_06",
-              "level": "Cleanliness Level",
-              "direction": -1
-          },
-          "Clean": {
-              "name": "Clean",
-              "icon": "inv_pet_broom",
-              "level": "Cleanliness Level",
-              "direction": 1
-          },
-          "Safe": {
-              "name": "Safe",
-              "icon": "ability_priest_angelicbulwark",
-              "level": "Danger Level",
-              "direction": -1
-          },
-          "Dangerous": {
-              "name": "Dangerous",
-              "icon": "achievement_legionpvptier3",
-              "level": "Danger Level",
-              "direction": 1
-          },
-          "Humble": {
-              "name": "Humble",
-              "icon": "inv_crate_07",
-              "level": "Decadence Level",
-              "direction": -1
-          },
-          "Decadent": {
-              "name": "Decadent",
-              "icon": "inv_misc_food_145_cake",
-              "level": "Decadence Level",
-              "direction": 1
-          },
-          "Relaxing": {
-              "name": "Relaxing",
-              "icon": "spell_nature_healingtouch",
-              "level": "Excitement Level",
-              "direction": -1
-          },
-          "Exciting": {
-              "name": "Exciting",
-              "icon": "inv_misc_missilelarge_purple",
-              "level": "Excitement Level",
-              "direction": 1
-          },
-          "Casual": {
-              "name": "Casual",
-              "icon": "inv_shirt_12",
-              "level": "Formality Level",
-              "direction": -1
-          },
-          "Formal": {
-              "name": "Formal",
-              "icon": "inv_shirt_white_01",
-              "level": "Formality Level",
-              "direction": 1
-          }
-      };
 
       function makeElement(tagName, attributes, children) {
           const element = document.createElement(tagName)
@@ -249,6 +242,10 @@
           return element;
       }
 
+      function identifier(name) {
+          return name.toLowerCase().replace(/^[^a-z]|[^0-9a-z]/g, "_");
+      }
+
       function renderIcon(icon) {
           return makeElement("img", {
               "class": "icon",
@@ -256,16 +253,12 @@
           }, []);
       }
 
-      function renderTrait(trait) {
-          return makeElement("span", {"class": `trait trait-${trait.name}`}, [
-              renderIcon(trait.icon),
+      function renderLevel(level) {
+          return makeElement("span", {"class": `level level-${level.name}`}, [
+              renderIcon(level.icon),
               " ",
-              trait.name,
+              level.name,
           ]);
-      }
-
-      function intersperse(separator, items) {
-          return items.flatMap(item => [separator, item]).slice(1);
       }
 
       function onchange(e) {
@@ -276,86 +269,91 @@
 
       function updateAll() {
           const preferences = {};
-          for (const guests of SLOTS) {
-              for (const [guest, traits] of Object.entries(guests)) {
-                  const checkbox = document.querySelector(`#guest-${identifier(guest)} input[type=checkbox]`);
+          for (const slot of SLOTS) {
+              for (const guest of slot.guests) {
+                  const checkbox = document.querySelector(`#guest-${identifier(guest.name)} input[type=checkbox]`);
                   if (checkbox.checked) {
-                      for (const trait of traits) {
-                          preferences[trait] = true;
+                      for (const [attribute, level] of Object.entries(guest.preferences)) {
+                          const attrLevel = attribute * 2 + level;
+                          preferences[attrLevel] = true;
                       }
                   }
               }
           }
-          const atmosphere = {};
-          for (const [amenity, options] of Object.entries(AMENITIES)) {
-              for (const [option, traits] of Object.entries(options)) {
-                  const checkbox = document.querySelector(`#amenity-${identifier(amenity)}-${identifier(option)} input[type=checkbox]`);
+          const features = {};
+          for (const building of BUILDINGS) {
+              for (const amenity of building.amenities) {
+                  const checkbox = document.querySelector(`#amenity-${identifier(building.name)}-${identifier(amenity.name)} input[type=checkbox]`);
                   if (checkbox.checked) {
-                      for (const trait of traits) {
-                          atmosphere[trait] = (atmosphere[trait] || 0) + 1;
+                      for (const [attribute, level] of Object.entries(amenity.features)) {
+                          const attrLevel = attribute * 2 + level;
+                          features[attrLevel] = (features[attrLevel] || 0) + 1;
                       }
                   }
               }
           }
-          for (const trait of Object.keys(TRAITS)) {
-              const traitAtmosphere = atmosphere[trait] || 0;
-              const className = (() => {
-                  if (preferences[trait]) {
-                      if (traitAtmosphere > 1) {
-                          return "used excess";
-                      } else if (traitAtmosphere > 0) {
-                          return "used";
+          for (const [attrIndex, attribute] of ATTRIBUTES.entries()) {
+              for (const [levelIndex, level] of attribute.levels.entries()) {
+                  const attrLevel = attrIndex * 2 + levelIndex;
+                  const feature = features[attrLevel] || 0;
+                  const className = (() => {
+                      if (preferences[attrLevel]) {
+                          if (feature > 1) {
+                              return "used excess";
+                          } else if (feature > 0) {
+                              return "used";
+                          } else {
+                              return "missing";
+                          }
                       } else {
-                          return "missing";
+                          if (feature > 0) {
+                              return "unused";
+                          } else {
+                              return "";
+                          }
                       }
-conflictingTraits[trait]
-                  } else {
-                      if (traitAtmosphere > 0) {
-                          return "unused";
-                      } else {
-                          return "";
-                      }
+                  })()
+                  document.querySelector(`#status-${level.name}`).
+                      setAttribute("class", `status-level ${className}`);
+                  for (const element of document.querySelectorAll(`#guests .level-${level.name}`)) {
+                      element.setAttribute("class", `level level-${level.name} ${className}`);
                   }
-              })()
-              document.querySelector(`#status-${trait}`).
-                  setAttribute("class", `status-trait ${className}`);
-              for (const element of document.querySelectorAll(`#guests .trait-${trait}`)) {
-                  element.setAttribute("class", `trait trait-${trait} ${className}`);
-              }
-              for (const element of document.querySelectorAll(`#amenities .trait-${trait}`)) {
-                  element.setAttribute("class", `trait trait-${trait} ${className}`);
+                  for (const element of document.querySelectorAll(`#amenities .level-${level.name}`)) {
+                      element.setAttribute("class", `level level-${level.name} ${className}`);
+                  }
               }
           }
       }
 
       for (const row of [0, 1]) {
           document.getElementById(`preference-${row}`).replaceChildren(
-              ...intersperse(" ", Object.keys(TRAITS).flatMap((trait, i) =>
-                  i % 2 == row ? [makeElement("td", {
-                      "id": `status-${trait}`,
-                      "class": "status-trait",
-                  }, [renderTrait(TRAITS[trait])])] : []
+              ...intersperse(" ", ATTRIBUTES.map(attribute =>
+                  makeElement("td", {
+                      "id": `status-${attribute.levels[row].name}`,
+                      "class": "status-level",
+                  }, [renderLevel(attribute.levels[row])])
               )),
           );
       }
       document.getElementById("guests").replaceChildren(
-          ...SLOTS.map((guests, slot) =>
+          ...SLOTS.map((slot, slotIndex) =>
               makeElement("fieldset", {}, [
-                  makeElement("legend", {}, [`Slot ${slot + 1}`]),
-                  ...Object.entries(guests).map(([guest, traits], i) =>
+                  makeElement("legend", {}, [`Slot ${slotIndex + 1}`]),
+                  ...slot.guests.map(guest =>
                       makeElement("div", {
-                          "id": `guest-${identifier(guest)}`,
+                          "id": `guest-${identifier(guest.name)}`,
                       }, [
                           makeElement("label", {}, [
                               makeElement("input", {
                                   "type": "checkbox",
-                                  "id":  `guest-checkbox-${identifier(guest)}`,
+                                  "id":  `guest-checkbox-${identifier(guest.name)}`,
                                   "onchange": onchange,
                               }, []),
-                              guest,
+                              guest.name,
                               ": ",
-                              ...intersperse(" ", traits.map(trait =>
-                                  renderTrait(TRAITS[trait]))),
+                              ...intersperse(" ", Object.entries(guest.preferences).map(([attribute, level]) =>
+                                  renderLevel(ATTRIBUTES[attribute].levels[level])
+                              )),
                           ]),
                       ])
                   ),
@@ -364,25 +362,24 @@ conflictingTraits[trait]
       );
 
       document.getElementById("amenities").append(
-          ...Object.entries(AMENITIES).map(([amenity, options]) =>
+          ...BUILDINGS.map(building =>
               makeElement("fieldset", {}, [
-                  makeElement("legend", {}, [amenity]),
-                  ...Object.entries(options).map(([option, traits]) =>
+                  makeElement("legend", {}, [building.name]),
+                  ...building.amenities.map(amenity =>
                       makeElement("div", {
-                          "id": `amenity-${identifier(amenity)}-${identifier(option)}`,
+                          "id": `amenity-${identifier(building.name)}-${identifier(amenity.name)}`,
                       }, [
                           makeElement("label", {}, [
                               makeElement("input", {
                                   "type": "checkbox",
-                                  "id":  `amenity-checkbox-${identifier(amenity)}-${identifier(option)}`,
+                                  "id":  `amenity-checkbox-${identifier(building.name)}-${identifier(amenity.name)}`,
                                   "onchange": onchange,
                               }, []),
-                              option,
+                              amenity.name,
                               ": ",
-                              ...intersperse(
-                                  " ",
-                                  traits.map(trait => renderTrait(TRAITS[trait])),
-                              ),
+                              ...intersperse(" ", Object.entries(amenity.features).map(([attribute, level]) =>
+                                  renderLevel(ATTRIBUTES[attribute].levels[level])
+                              )),
                           ]),
                       ])
                   ),
@@ -390,10 +387,15 @@ conflictingTraits[trait]
           )
       );
 
+      lstorageitems = [];
       for (const element of document.querySelectorAll("input[type=checkbox]")) {
+          lstorageitems.push(`${element.id}`)
           element.checked = localStorage.getItem(`fyl-ember-court-${element.id}`) == "true";
       }
+
       updateAll();
     </script>
+    <script>const whTooltips = {};</script>
+    <script src="https://wow.zamimg.com/js/tooltips.js"></script>
   </body>
 </html>
