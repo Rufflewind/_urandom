@@ -5,145 +5,156 @@
     <style>
       html {
           font-family: sans-serif;
-          background: #282828;
+          background: #111;
           color: #ddd;
       }
-      summary {
-          font-weight: bold;
-      }
       img.icon {
+          border: 1px solid rgba(0, 0, 0, 0);
+          border-radius: 2px;
           vertical-align: middle;
       }
-      #matrix {
+      .matrix {
+          vertical-align: middle;
           border-collapse: collapse;
+          display: inline-block;
+          margin: 5px;
       }
-      #matrix td, #matrix th {
-          border: solid 1px #888;
+      .matrix td, .matrix th {
+          border: solid 1px #777;
           padding: 4px;
+          text-align: left;
       }
-      #matrix th {
-          background: #111;
+      .matrix th {
+          background: #000;
       }
-      #preference .status-level {
-          padding: 4px;
+      .matrix td > label {
+          display: block;
       }
-      #preference .status-level.missing {
-          background: #f00;
-          color: #000;
+      .matrix tr:has(> td > input[type="checkbox"]:checked) td.selectable {
+          background: #292929;
       }
-      #preference .status-level.used {
-          background: #0f0;
-          color: #000;
+      .level-low.atmosphere-low img,
+      .level-high.atmosphere-high img {
+          border: 1px solid #ddd;
       }
-      #preference .status-level.used.excess {
-          background: #0ff;
-          color: #000;
+      .level-low.atmosphere-high img,
+      .level-high.atmosphere-low img {
+          opacity: 20%;
       }
-      #guests .level.unused {
-          color: #0f0;
-      }
-      #guests .level.used {
-          color: #0f0;
-      }
-      #guests .level.used.excess {
-          color: #0ff;
-      }
-      #guests .level.missing {
-          color: #f00;
-      }
-      #amenities .level.missing {
-          color: #ff0;
-      }
-      #amenities .level.used {
-          color: #0f0;
-      }
-      #amenities .level.used.excess {
-          color: #0ff;
+      .atmosphere-mid img {
+          opacity: 40%;
       }
     </style>
   </head>
   <body>
-    <table id="matrix"></table>
-   <!--
-      <tr>
-        <th>Slot</th>
-        <th><input type="checkbox"></th>
-        <th>Option</th>
-        <th><a href="https://www.wowhead.com/spell=331380"><img class="icon" src="https://wow.zamimg.com/images/wow/icons/tiny/inv_pet_broom.gif" alt="Cleanliness Level"></a></th>
-        <th><a href="https://www.wowhead.com/spell=331382"><img class="icon" src="https://wow.zamimg.com/images/wow/icons/tiny/achievement_legionpvptier3.gif" alt="Danger Level"></a></th>
-      </tr>
-      <tr>
-        <td>Guest 1</td>
-        <td><input type="checkbox" id="sika"></td>
-        <td><label for="sika"><div>Sika</div></label></td>
-        <td>+1</td>
-        <td></td>
-      </tr>
-      <tr>
-        <td>Guest 1</td>
-        <td><input type="checkbox" id="marileth"></td>
-        <td><label for="marileth">Plague Deviser Marileth</label></td>
-        <td>-1</td>
-        <td></td>
-      </tr>
-    </table> -->
-    <details>
-      <summary>Help</summary>
-      Red = Unsatisfied need. Green = Satisfied. Cyan = Satisfied multiple times.
-    </details>
-    <fieldset id="guests">
-      <legend>Guests</legend>
-    </fieldset>
-    <table id="preference">
-      <tr id="preference-0"></tr>
-      <tr id="preference-1"></tr>
-    </table>
-    <fieldset id="amenities">
-      <legend>Amenities</legend>
-    </fieldset>
+    <table id="guests" class="matrix"></table>
+    <table id="amenities" class="matrix"></table>
     <script>
+      function* chain(...iters) {
+          for (const items of iters) {
+              for (const item of items) {
+                  yield item;
+              }
+          }
+      }
+
+      function* batched(size, items) {
+          let batch = [];
+          for (const item of items) {
+              batch.push(item);
+              if (batch.length >= size) {
+                  yield batch;
+                  batch = [];
+              }
+          }
+          if (batch.length) {
+              yield batch;
+          }
+      }
+
+      function intersperse(separator, items) {
+          return items.flatMap(item => [separator, item]).slice(1);
+      }
+
+      function encodeBits(bits) {
+          return Array.from(function*() {
+              for (const eightBits of batched(8, bits)) {
+                  let byte = 0;
+                  for (const [position, bit] of eightBits.entries()) {
+                      byte |= bit << position;
+                  }
+                  if (eightBits.length != 8) {
+                      yield String.fromCharCode("f".charCodeAt(0) + eightBits.length);
+                  }
+                  yield byte.toString(16).padStart(2, "0");
+              }
+          } ()).join("");
+      }
+
+      function* decodeBits(str) {
+          let width = 8;
+          for (const [matched] of str.matchAll(/[0-9a-f]{2}|[g-m]/g)) {
+              switch (matched.length) {
+              case 1:
+                  width = matched.charCodeAt(0) - "f".charCodeAt(0);
+                  break;
+              case 2:
+                  const byte = parseInt(matched, 16);
+                  for (let i = 0; i < width; ++i) {
+                      yield (!!(byte & (1 << i)));
+                  }
+                  width = 8;
+                  break;
+              }
+          }
+      }
+
       const ATTRIBUTES = [
           {
-              id: 331380,
-              name: "Cleanliness",
+              spellId: 331380,
+              name: "Cleanliness Level",
               levels: [
-                  {name: "Messy", icon: "ability_creature_poison_06"},
-                  {name: "Clean", icon: "inv_pet_broom"},
+                  {spellId: 327339, name: "Messy", icon: "ability_creature_poison_06"},
+                  {spellId: 327340, name: "Clean", icon: "inv_pet_broom"},
               ]
           },
           {
-              id: 331382,
-              name: "Danger",
+              spellId: 331382,
+              name: "Danger Level",
               levels: [
-                  {name: "Safe", icon: "ability_priest_angelicbulwark"},
-                  {name: "Dangerous", icon: "achievement_legionpvptier3"},
+                  {spellId: 327341, name: "Safe", icon: "ability_priest_angelicbulwark"},
+                  {spellId: 327342, name: "Dangerous", icon: "achievement_legionpvptier3"},
               ],
           },
           {
-              id: 331383,
-              name: "Decadence",
+              spellId: 331383,
+              name: "Decadence Level",
               levels: [
-                  {name: "Humble", icon: "inv_crate_07"},
-                  {name: "Decadent", icon: "inv_misc_food_145_cake"},
+                  {spellId: 327343, name: "Humble", icon: "inv_crate_07"},
+                  {spellId: 327344, name: "Decadent", icon: "inv_misc_food_145_cake"},
               ],
           },
           {
-              id: 331384,
-              name: "Excitement",
+              spellId: 331384,
+              name: "Excitement Level",
               levels: [
-                  {name: "Relaxing", icon: "spell_nature_healingtouch"},
-                  {name: "Exciting", icon: "inv_misc_missilelarge_purple"},
+                  {spellId: 327347, name: "Relaxing", icon: "spell_nature_healingtouch"},
+                  {spellId: 327346, name: "Exciting", icon: "inv_misc_missilelarge_purple"},
               ],
           },
           {
-              id: 331385,
-              name: "Formality",
+              spellId: 331385,
+              name: "Formality Level",
               levels: [
-                  {name: "Casual", icon: "inv_shirt_12"},
-                  {name: "Formal", icon: "inv_shirt_white_01"},
+                  {spellId: 327348, name: "Casual", icon: "inv_shirt_12"},
+                  {spellId: 327349, name: "Formal", icon: "inv_shirt_white_01"},
               ],
           },
       ];
+
+      for (const [index, attribute] of ATTRIBUTES.entries()) {
+          attribute.index = index;
+      }
 
       const SLOTS = [
           {
@@ -180,6 +191,18 @@
           }
       ];
 
+      const GUESTS = [];
+      for (const [index, slot] of SLOTS.entries()) {
+          slot.index = index;
+          slot.number = index + 1;
+          for (const [subindex, guest] of slot.guests.entries()) {
+              guest.index = GUESTS.length;
+              guest.subindex = subindex;
+              guest.slot = slot;
+              GUESTS.push(guest);
+          }
+      }
+
       const BUILDINGS = [
           {
               name: "Entertainment",
@@ -215,8 +238,15 @@
           }
       ];
 
-      function intersperse(separator, items) {
-          return items.flatMap(item => [separator, item]).slice(1);
+      const AMENITIES = [];
+      for (const [index, building] of BUILDINGS.entries()) {
+          building.index = index;
+          for (const [subindex, amenity] of building.amenities.entries()) {
+              amenity.index = AMENITIES.length;
+              amenity.subindex = subindex;
+              amenity.building = building;
+              AMENITIES.push(amenity);
+          }
       }
 
       function modify(object, ...modifiers) {
@@ -253,6 +283,31 @@
           }, []);
       }
 
+      function attributeIcon(attribute) {
+          const maxLevel = attribute.levels[attribute.levels.length - 1];
+          return makeElement("a", {
+              "href": `https://wowhead.com/spell=${attribute.spellId}`,
+          }, [
+              makeElement("img", {
+                  "class": "icon",
+                  "alt": attribute.name,
+                  "src": `https://wow.zamimg.com/images/wow/icons/small/${maxLevel.icon}.jpg`,
+              }, []),
+          ]);
+      }
+
+      function levelIcon(level) {
+          return makeElement("a", {
+              "href": `https://wowhead.com/spell=${level.spellId}`,
+          }, [
+              makeElement("img", {
+                  "class": "icon",
+                  "alt": level.name,
+                  "src": `https://wow.zamimg.com/images/wow/icons/small/${level.icon}.jpg`,
+              }, []),
+          ]);
+      }
+
       function renderLevel(level) {
           return makeElement("span", {"class": `level level-${level.name}`}, [
               renderIcon(level.icon),
@@ -261,138 +316,255 @@
           ]);
       }
 
-      function onchange(e) {
-          const element = e.target;
-          localStorage.setItem(`fyl-ember-court-${element.id}`, element.checked);
+      function onchange() {
+          setHashFromState();
           updateAll();
       }
 
+      function checkAll(checkbox, container) {
+          for (const cb of document.querySelectorAll(`#${container} td > input[type=checkbox]`)) {
+              cb.checked = checkbox.checked;
+          }
+          setHashFromState();
+          updateAll();
+      }
+
+      function updateCheckAll(checkbox, container) {
+          let checked = null;
+          for (const cb of document.querySelectorAll(`#${container} td > input[type=checkbox]`)) {
+              if (checked == null) {
+                  checked = cb.checked;
+              } else if (checked != cb.checked) {
+                  checkbox.checked = true;
+                  checkbox.indeterminate = true;
+                  return;
+              }
+          }
+          checkbox.checked = checked;
+          checkbox.indeterminate = false;
+      }
+
+      function replaceClass(className, regexp, newClass) {
+          const classes = className.split(/ +/).filter(c => !regexp.test(c));
+          classes.push(newClass);
+          return classes.join(" ");
+      }
+
+      function interpolate(a, b, t) {
+          return a + (b - a) * t;
+      }
+      
       function updateAll() {
-          const preferences = {};
-          for (const slot of SLOTS) {
-              for (const guest of slot.guests) {
-                  const checkbox = document.querySelector(`#guest-${identifier(guest.name)} input[type=checkbox]`);
-                  if (checkbox.checked) {
-                      for (const [attribute, level] of Object.entries(guest.preferences)) {
-                          const attrLevel = attribute * 2 + level;
-                          preferences[attrLevel] = true;
-                      }
+          updateCheckAll(document.getElementById("guests-all"), "guests");
+          updateCheckAll(document.getElementById("amenities-all"), "amenities");
+          const slotWeights = SLOTS.map(() => 0);
+          for (const guest of GUESTS) {
+              if (guest.checkbox.checked) {
+                  ++slotWeights[guest.slot.index];
+              }
+          }
+          const preferences = ATTRIBUTES.map(() => 0);
+          for (const guest of GUESTS) {
+              if (guest.checkbox.checked) {
+                  const guestPreferences = Object.entries(guest.preferences);
+                  for (const [attribute, level] of guestPreferences) {
+                      const sign = (2 * level - 1);
+                      preferences[attribute] += sign
+                          / slotWeights[guest.slot.index]
+                          / guestPreferences.length;
                   }
               }
           }
-          const features = {};
-          for (const building of BUILDINGS) {
-              for (const amenity of building.amenities) {
-                  const checkbox = document.querySelector(`#amenity-${identifier(building.name)}-${identifier(amenity.name)} input[type=checkbox]`);
-                  if (checkbox.checked) {
-                      for (const [attribute, level] of Object.entries(amenity.features)) {
-                          const attrLevel = attribute * 2 + level;
-                          features[attrLevel] = (features[attrLevel] || 0) + 1;
-                      }
+          const buildingWeights = BUILDINGS.map(() => 0);
+          for (const amenity of AMENITIES) {
+              if (amenity.checkbox.checked) {
+                  ++buildingWeights[amenity.building.index];
+              }
+          }
+          const features = ATTRIBUTES.map(() => 0);
+          for (const amenity of AMENITIES) {
+              if (amenity.checkbox.checked) {
+                  const amenityFeatures = Object.entries(amenity.features);
+                  for (const [attribute, level] of amenityFeatures) {
+                      const sign = (2 * level - 1);
+                      features[attribute] += sign
+                          / buildingWeights[amenity.building.index]
+                          / (1 + (Math.sign(sign) != Math.sign(preferences[attribute])));
                   }
               }
           }
-          for (const [attrIndex, attribute] of ATTRIBUTES.entries()) {
-              for (const [levelIndex, level] of attribute.levels.entries()) {
-                  const attrLevel = attrIndex * 2 + levelIndex;
-                  const feature = features[attrLevel] || 0;
-                  const className = (() => {
-                      if (preferences[attrLevel]) {
-                          if (feature > 1) {
-                              return "used excess";
-                          } else if (feature > 0) {
-                              return "used";
-                          } else {
-                              return "missing";
-                          }
-                      } else {
-                          if (feature > 0) {
-                              return "unused";
-                          } else {
-                              return "";
-                          }
-                      }
-                  })()
-                  document.querySelector(`#status-${level.name}`).
-                      setAttribute("class", `status-level ${className}`);
-                  for (const element of document.querySelectorAll(`#guests .level-${level.name}`)) {
-                      element.setAttribute("class", `level level-${level.name} ${className}`);
-                  }
-                  for (const element of document.querySelectorAll(`#amenities .level-${level.name}`)) {
-                      element.setAttribute("class", `level level-${level.name} ${className}`);
-                  }
+          for (const [attribute, preference] of preferences.entries()) {
+              for (const td of document.querySelectorAll(`#guests td.attribute-${attribute}`)) {
+                  const lightness = interpolate(
+                      0.05,
+                      0.8,
+                      Math.pow(Math.abs(preference) / 1.84, 0.5));
+                  const color = `hsl(60deg 40% ${lightness * 100}%)`;
+                  console.log("PREFERENCE", ATTRIBUTES[attribute].name, preference, color);
+                  td.className = replaceClass(td.className, /^atmosphere-/, 
+                                              preference > 0 ? "atmosphere-high" :
+                                              preference < 0 ? "atmosphere-low" :
+                                              "atmosphere-mid");
+//                  td.style.backgroundColor = color;
+              }
+          }
+          for (const [attribute, feature] of features.entries()) {
+              for (const td of document.querySelectorAll(`#amenities td.attribute-${attribute}`)) {
+                  const lightness = interpolate(
+                      0.05,
+                      0.8,
+                      Math.pow(Math.abs(feature) / 3, 0.5));
+                  const color = `hsl(60deg 40% ${lightness * 100}%)`;
+                  console.log("FEATURE", ATTRIBUTES[attribute].name, feature, color);
+                  td.className = replaceClass(td.className, /^atmosphere-/, 
+                                              feature > 0 ? "atmosphere-high" :
+                                              feature < 0 ? "atmosphere-low" :
+                                              "atmosphere-mid");
               }
           }
       }
 
-      for (const row of [0, 1]) {
-          document.getElementById(`preference-${row}`).replaceChildren(
-              ...intersperse(" ", ATTRIBUTES.map(attribute =>
-                  makeElement("td", {
-                      "id": `status-${attribute.levels[row].name}`,
-                      "class": "status-level",
-                  }, [renderLevel(attribute.levels[row])])
-              )),
-          );
-      }
-      document.getElementById("guests").replaceChildren(
-          ...SLOTS.map((slot, slotIndex) =>
-              makeElement("fieldset", {}, [
-                  makeElement("legend", {}, [`Slot ${slotIndex + 1}`]),
-                  ...slot.guests.map(guest =>
-                      makeElement("div", {
-                          "id": `guest-${identifier(guest.name)}`,
-                      }, [
-                          makeElement("label", {}, [
-                              makeElement("input", {
-                                  "type": "checkbox",
-                                  "id":  `guest-checkbox-${identifier(guest.name)}`,
-                                  "onchange": onchange,
-                              }, []),
-                              guest.name,
-                              ": ",
-                              ...intersperse(" ", Object.entries(guest.preferences).map(([attribute, level]) =>
-                                  renderLevel(ATTRIBUTES[attribute].levels[level])
-                              )),
-                          ]),
-                      ])
-                  ),
-              ])
-          )
+      document.getElementById("guests").append(
+          makeElement("tr", {}, [
+              ...[
+                  makeElement("th", {}, []),
+                  makeElement("th", {}, [
+                      makeElement("input", {
+                          "id": "guests-all",
+                          "type": "checkbox",
+                          "checked": "",
+                          "onchange": e => checkAll(e.target, "guests"),
+                      }, []),
+                  ]),
+                  makeElement("th", {}, [
+                      makeElement("label", {"for": "guests-all"}, ["Guest"]),
+                  ]),
+              ],
+              ...ATTRIBUTES.map(attribute =>
+                  makeElement("th", {}, [attributeIcon(attribute)])
+              ),
+          ]),
+          ...GUESTS.map(guest => {
+              const checkbox = makeElement("input", {
+                  "id": `guest-${guest.index}`,
+                  "type": "checkbox",
+                  "checked": "",
+                  "onchange": onchange,
+              }, []);
+              guest.checkbox = checkbox;
+              return makeElement("tr", {}, [
+                  ...(guest.subindex == 0 ? [
+                      makeElement("th", {"rowspan": guest.slot.guests.length}, [
+                          `Guest ${guest.slot.number}`,
+                      ]),
+                  ] : []),
+                  ...[
+                      makeElement("td", {"class": "selectable"}, [checkbox]),
+                      makeElement("td", {"class": "selectable"}, [
+                          makeElement("label", {"for": checkbox.id}, [guest.name]),
+                      ]),
+                  ],
+                  ...ATTRIBUTES.map(attribute => {
+                      const levelIndex = guest.preferences[attribute.index];
+                      return makeElement(
+                          "td",
+                          {"class": `selectable attribute-${attribute.index} level-${levelIndex ? "high" : "low"}`},
+                          levelIndex != undefined ? [levelIcon(attribute.levels[levelIndex])] : [],
+                      )
+                  }),
+              ]);
+          }),
       );
 
       document.getElementById("amenities").append(
-          ...BUILDINGS.map(building =>
-              makeElement("fieldset", {}, [
-                  makeElement("legend", {}, [building.name]),
-                  ...building.amenities.map(amenity =>
-                      makeElement("div", {
-                          "id": `amenity-${identifier(building.name)}-${identifier(amenity.name)}`,
-                      }, [
-                          makeElement("label", {}, [
-                              makeElement("input", {
-                                  "type": "checkbox",
-                                  "id":  `amenity-checkbox-${identifier(building.name)}-${identifier(amenity.name)}`,
-                                  "onchange": onchange,
-                              }, []),
-                              amenity.name,
-                              ": ",
-                              ...intersperse(" ", Object.entries(amenity.features).map(([attribute, level]) =>
-                                  renderLevel(ATTRIBUTES[attribute].levels[level])
-                              )),
-                          ]),
-                      ])
-                  ),
-              ])
-          )
+          makeElement("tr", {}, [
+              ...[
+                  makeElement("th", {}, []),
+                  makeElement("th", {}, [
+                      modify(
+                          makeElement("input", {
+                              "id": "amenities-all",
+                              "type": "checkbox",
+                              "checked": true,
+                              "onchange": e => checkAll(e.target, "amenities"),
+                          }, []),
+                      ),
+                  ]),
+                  makeElement("th", {}, [
+                      makeElement("label", {"for": "amenities-all"}, ["Amenity"]),
+                  ]),
+              ],
+              ...ATTRIBUTES.map(attribute =>
+                  makeElement("th", {}, [attributeIcon(attribute)])
+              ),
+          ]),
+          ...AMENITIES.map(amenity => {
+              const checkbox = makeElement("input", {
+                  "id": `amenity-${amenity.index}`,
+                  "type": "checkbox",
+                  "checked": true,
+                  "onchange": onchange,
+              }, []);
+              amenity.checkbox = checkbox;
+              return makeElement("tr", {}, [
+                  ...(amenity.subindex == 0 ? [
+                      makeElement("th", {"rowspan": amenity.building.amenities.length}, [
+                          amenity.building.name,
+                      ]),
+                  ] : []),
+                  ...[
+                      makeElement("td", {"class": "selectable"}, [checkbox]),
+                      makeElement("td", {"class": "selectable"}, [
+                          makeElement("label", {"for": checkbox.id}, [amenity.name]),
+                      ]),
+                  ],
+                  ...ATTRIBUTES.map(attribute => {
+                      const levelIndex = amenity.features[attribute.index];
+                      return makeElement(
+                          "td",
+                          {"class": `selectable attribute-${attribute.index} level-${levelIndex ? "high" : "low"}`},
+                          levelIndex != undefined ? [levelIcon(attribute.levels[levelIndex])] : [],
+                      )
+                  }),
+              ]);
+          }),
       );
 
-      lstorageitems = [];
-      for (const element of document.querySelectorAll("input[type=checkbox]")) {
-          lstorageitems.push(`${element.id}`)
-          element.checked = localStorage.getItem(`fyl-ember-court-${element.id}`) == "true";
+      const CHECKBOXES = [
+          ...GUESTS.map(guest => guest.checkbox),
+          ...AMENITIES.map(amenity => amenity.checkbox),
+      ];
+
+      function getState() {
+          return encodeBits(function*() {
+              for (const checkbox of CHECKBOXES) {
+                  yield +checkbox.checked;
+              }
+          }());
       }
 
+      function setState(state) {
+          const bits = decodeBits(state);
+          for (const checkbox of CHECKBOXES) {
+              const bit = bits.next().value;
+              checkbox.checked = bit == undefined ? true : bit;
+          }
+      }
+
+      function setHashFromState() {
+          history.pushState(null, "", "#" + getState());
+      }
+
+      function setStateFromHash() {
+          setState(location.hash.replace(/^#/, ""));
+      }
+
+      window.addEventListener("popstate", event => {
+          console.log("popstate!");
+          setStateFromHash();
+      });
+      setStateFromHash();
+      setHashFromState();
       updateAll();
     </script>
     <script>const whTooltips = {};</script>
