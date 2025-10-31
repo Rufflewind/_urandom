@@ -8,11 +8,6 @@
           background: #111;
           color: #ddd;
       }
-      img.icon {
-          border: 1px solid rgba(0, 0, 0, 0);
-          border-radius: 2px;
-          vertical-align: middle;
-      }
       .matrix {
           vertical-align: middle;
           border-collapse: collapse;
@@ -33,16 +28,37 @@
       .matrix tr:has(> td > input[type="checkbox"]:checked) td.selectable {
           background: #292929;
       }
-      .level-low.atmosphere-low img,
-      .level-high.atmosphere-high img {
-          border: 1px solid #ddd;
+      img.icon {
+          border: 1px solid #000;
+          border-radius: 2px;
+          box-shadow: 0 0 3px 2px #000;
+          vertical-align: middle;
+      }
+      tr:has(> td > input[type="checkbox"]:checked) .level-low.atmosphere-low img,
+      tr:has(> td > input[type="checkbox"]:checked) .level-high.atmosphere-high img {
+          box-shadow: 0 0 3px 2px #ddd;
+//          border-color: #ddd;
+      }
+      .level-low.atmosphere-high,
+      .level-high.atmosphere-low {
+       //   background-color: #d5151540;
       }
       .level-low.atmosphere-high img,
       .level-high.atmosphere-low img {
           opacity: 20%;
       }
+      tr:has(> td > input[type="checkbox"]:checked) .level-low.atmosphere-high img,
+      tr:has(> td > input[type="checkbox"]:checked) .level-high.atmosphere-low img {
+          box-shadow: 0 0 3px 2px #f00;
+          opacity: 70%;
+      }
+      tr:has(> td > input[type="checkbox"]:checked) .level-low.atmosphere-mid img,
+      tr:has(> td > input[type="checkbox"]:checked) .level-high.atmosphere-mid img {
+          box-shadow: 0 0 3px 2px #ff0;
+          opacity: 70%;
+      }
       .atmosphere-mid img {
-          opacity: 40%;
+          opacity: 80%;
       }
     </style>
   </head>
@@ -76,37 +92,15 @@
           return items.flatMap(item => [separator, item]).slice(1);
       }
 
-      function encodeBits(bits) {
-          return Array.from(function*() {
-              for (const eightBits of batched(8, bits)) {
-                  let byte = 0;
-                  for (const [position, bit] of eightBits.entries()) {
-                      byte |= bit << position;
-                  }
-                  if (eightBits.length != 8) {
-                      yield String.fromCharCode("f".charCodeAt(0) + eightBits.length);
-                  }
-                  yield byte.toString(16).padStart(2, "0");
-              }
-          } ()).join("");
-      }
-
-      function* decodeBits(str) {
-          let width = 8;
-          for (const [matched] of str.matchAll(/[0-9a-f]{2}|[g-m]/g)) {
-              switch (matched.length) {
-              case 1:
-                  width = matched.charCodeAt(0) - "f".charCodeAt(0);
-                  break;
-              case 2:
-                  const byte = parseInt(matched, 16);
-                  for (let i = 0; i < width; ++i) {
-                      yield (!!(byte & (1 << i)));
-                  }
-                  width = 8;
-                  break;
-              }
+      // 'type' can be either Number or BigInt.
+      function packBits(type, bits) {
+          let integer = type(0);
+          let position = type(0);
+          for (const bit of bits) {
+              integer |= bit << position;
+              ++position;
           }
+          return integer;
       }
 
       const ATTRIBUTES = [
@@ -158,103 +152,108 @@
 
       const SLOTS = [
           {
-              guests: [
-                  {name: "Sika", preferences: {0: 1}},
-                  {name: "Plague Deviser Marileth", preferences: {0: 0}},
-                  {name: "Choofa", preferences: {3: 1}},
-                  {name: "Cryptkeeper Kassir", preferences: {4: 1}}
+              options: [
+                  {name: "Sika", attributes: {0: 1}},
+                  {name: "Plague Deviser Marileth", attributes: {0: 0}},
+                  {name: "Choofa", attributes: {3: 1}},
+                  {name: "Cryptkeeper Kassir", attributes: {4: 1}}
               ],
           },
           {
-              guests: [
-                  {name: "Kleia and Pelagos", preferences: {2: 0}},
-                  {name: "Grandmaster Vole", preferences: {1: 1}},
-                  {name: "Droman Aliothe", preferences: {3: 0}},
-                  {name: "Stonehead", preferences: {4: 0}}
+              options: [
+                  {name: "Kleia and Pelagos", attributes: {2: 0}},
+                  {name: "Grandmaster Vole", attributes: {1: 1}},
+                  {name: "Droman Aliothe", attributes: {3: 0}},
+                  {name: "Stonehead", attributes: {4: 0}}
               ],
           },
           {
-              guests: [
-                  {name: "Polemarch Adrestes", preferences: {0: 1, 4: 1}},
-                  {name: "Alexandros Mograine", preferences: {1: 0, 2: 0}},
-                  {name: "Hunt-Captain Korayn", preferences: {1: 1, 4: 0}},
-                  {name: "Rendle and Cudgelface", preferences: {0: 0, 3: 0}}
+              options: [
+                  {name: "Polemarch Adrestes", attributes: {0: 1, 4: 1}},
+                  {name: "Alexandros Mograine", attributes: {1: 0, 2: 0}},
+                  {name: "Hunt-Captain Korayn", attributes: {1: 1, 4: 0}},
+                  {name: "Rendle and Cudgelface", attributes: {0: 0, 3: 0}}
               ],
           },
           {
-              guests: [
-                  {name: "Mikanikos", preferences: {0: 1, 1: 0, 2: 0}},
-                  {name: "Baroness Vashj", preferences: {1: 1, 2: 1, 3: 1}},
-                  {name: "Lady Moonberry", preferences: {0: 0, 3: 1, 4: 0}},
-                  {name: "The Countess", preferences: {2: 1, 3: 0, 4: 1}}
+              options: [
+                  {name: "Mikanikos", attributes: {0: 1, 1: 0, 2: 0}},
+                  {name: "Baroness Vashj", attributes: {1: 1, 2: 1, 3: 1}},
+                  {name: "Lady Moonberry", attributes: {0: 0, 3: 1, 4: 0}},
+                  {name: "The Countess", attributes: {2: 1, 3: 0, 4: 1}}
               ],
           }
       ];
 
-      const GUESTS = [];
-      for (const [index, slot] of SLOTS.entries()) {
-          slot.index = index;
-          slot.number = index + 1;
-          for (const [subindex, guest] of slot.guests.entries()) {
-              guest.index = GUESTS.length;
-              guest.subindex = subindex;
-              guest.slot = slot;
-              GUESTS.push(guest);
+      const MAX_PREFERENCE = 6;
+      const GUESTS = Array.from(function*() {
+          let i = 0;
+          for (const [index, slot] of SLOTS.entries()) {
+              slot.index = index;
+              slot.name = `Guest ${index + 1}`;
+              for (const [subindex, guest] of slot.options.entries()) {
+                  const attributes = Object.entries(guest.attributes);
+                  guest.index = i++;
+                  guest.subindex = subindex;
+                  guest.group = slot;
+                  guest.preferences = new Int8Array(ATTRIBUTES.length);
+                  for (const [attribute, level] of attributes) {
+                      const numerator = (2 * level - 1) * MAX_PREFERENCE;
+                      console.assert(numerator % attributes.length == 0);
+                      guest.preferences[attribute] = numerator / attributes.length;
+                  }
+                  yield guest;
+              }
           }
-      }
+      } ());
 
       const BUILDINGS = [
           {
               name: "Entertainment",
-              amenities: [
-                  {name: "Atoning Rituals", features: {2: 0, 4: 1}},
-                  {name: "Glimpse of the Wilds", features: {0: 1, 1: 0}},
-                  {name: "Lost Chalice Band", features: {2: 1, 3: 1}}
+              options: [
+                  {name: "Atoning Rituals", attributes: {2: 0, 4: 1}},
+                  {name: "Glimpse of the Wilds", attributes: {0: 1, 1: 0}},
+                  {name: "Lost Chalice Band", attributes: {2: 1, 3: 1}}
               ]
           },
           {
               name: "Refreshment",
-              amenities: [
-                  {name: "Tubbin's Tea Party", features: {3: 0, 4: 1}},
-                  {name: "Divine Desserts", features: {0: 0, 2: 1}},
-                  {name: "Mushroom Surprise", features: {1: 1, 2: 0}}
+              options: [
+                  {name: "Tubbin's Tea Party", attributes: {3: 0, 4: 1}},
+                  {name: "Divine Desserts", attributes: {0: 0, 2: 1}},
+                  {name: "Mushroom Surprise", attributes: {1: 1, 2: 0}}
               ]
           },
           {
               name: "Decorations",
-              amenities: [
-                  {name: "Traditional", features: {0: 1, 1: 1}},
-                  {name: "Mortal Reminders", features: {3: 0, 4: 0}},
-                  {name: "Mystery Mirrors", features: {1: 0, 3: 1}}
+              options: [
+                  {name: "Traditional", attributes: {0: 1, 1: 1}},
+                  {name: "Mortal Reminders", attributes: {3: 0, 4: 0}},
+                  {name: "Mystery Mirrors", attributes: {1: 0, 3: 1}}
               ]
           },
           {
               name: "Security",
-              amenities: [
-                  {name: "Venthyr Volunteers", features: {1: 1, 3: 1}},
-                  {name: "Stoneborn Reserves", features: {1: 0, 2: 1}},
-                  {name: "Maldraxxian Army", features: {0: 0, 4: 0}}
+              options: [
+                  {name: "Venthyr Volunteers", attributes: {1: 1, 3: 1}},
+                  {name: "Stoneborn Reserves", attributes: {1: 0, 2: 1}},
+                  {name: "Maldraxxian Army", attributes: {0: 0, 4: 0}}
               ]
           }
       ];
 
-      const AMENITIES = [];
-      for (const [index, building] of BUILDINGS.entries()) {
-          building.index = index;
-          for (const [subindex, amenity] of building.amenities.entries()) {
-              amenity.index = AMENITIES.length;
-              amenity.subindex = subindex;
-              amenity.building = building;
-              AMENITIES.push(amenity);
+      const AMENITIES = Array.from(function*() {
+          let i = 0;
+          for (const [index, building] of BUILDINGS.entries()) {
+              building.index = index;
+              for (const [subindex, amenity] of building.options.entries()) {
+                  amenity.index = i++;
+                  amenity.subindex = subindex;
+                  amenity.group = building;
+                  yield amenity;
+              }
           }
-      }
-
-      function modify(object, ...modifiers) {
-          for (const modifier of modifiers) {
-              modifier(object);
-          }
-          return object;
-      }
+      } ());
 
       function makeElement(tagName, attributes, children) {
           const element = document.createElement(tagName)
@@ -270,17 +269,6 @@
               element.append(child);
           }
           return element;
-      }
-
-      function identifier(name) {
-          return name.toLowerCase().replace(/^[^a-z]|[^0-9a-z]/g, "_");
-      }
-
-      function renderIcon(icon) {
-          return makeElement("img", {
-              "class": "icon",
-              "src": `https://wow.zamimg.com/images/wow/icons/tiny/${icon}.gif`,
-          }, []);
       }
 
       function attributeIcon(attribute) {
@@ -305,14 +293,6 @@
                   "alt": level.name,
                   "src": `https://wow.zamimg.com/images/wow/icons/small/${level.icon}.jpg`,
               }, []),
-          ]);
-      }
-
-      function renderLevel(level) {
-          return makeElement("span", {"class": `level level-${level.name}`}, [
-              renderIcon(level.icon),
-              " ",
-              level.name,
           ]);
       }
 
@@ -351,44 +331,45 @@
       }
 
       function interpolate(a, b, t) {
-          return a + (b - a) * t;
+          return a + (b - a) * Math.max(0, Math.min(1, t));
       }
-      
+
       function updateAll() {
+          execute();
           updateCheckAll(document.getElementById("guests-all"), "guests");
           updateCheckAll(document.getElementById("amenities-all"), "amenities");
           const slotWeights = SLOTS.map(() => 0);
           for (const guest of GUESTS) {
               if (guest.checkbox.checked) {
-                  ++slotWeights[guest.slot.index];
+                  ++slotWeights[guest.group.index];
               }
           }
           const preferences = ATTRIBUTES.map(() => 0);
           for (const guest of GUESTS) {
               if (guest.checkbox.checked) {
-                  const guestPreferences = Object.entries(guest.preferences);
-                  for (const [attribute, level] of guestPreferences) {
+                  const guestAttributes = Object.entries(guest.attributes);
+                  for (const [attribute, level] of guestAttributes) {
                       const sign = (2 * level - 1);
                       preferences[attribute] += sign
-                          / slotWeights[guest.slot.index]
-                          / guestPreferences.length;
+                          / slotWeights[guest.group.index]
+                          / guestAttributes.length;
                   }
               }
           }
           const buildingWeights = BUILDINGS.map(() => 0);
           for (const amenity of AMENITIES) {
               if (amenity.checkbox.checked) {
-                  ++buildingWeights[amenity.building.index];
+                  ++buildingWeights[amenity.group.index];
               }
           }
           const features = ATTRIBUTES.map(() => 0);
           for (const amenity of AMENITIES) {
               if (amenity.checkbox.checked) {
-                  const amenityFeatures = Object.entries(amenity.features);
-                  for (const [attribute, level] of amenityFeatures) {
+                  const amenityAttributes = Object.entries(amenity.attributes);
+                  for (const [attribute, level] of amenityAttributes) {
                       const sign = (2 * level - 1);
                       features[attribute] += sign
-                          / buildingWeights[amenity.building.index]
+                          / buildingWeights[amenity.group.index]
                           / (1 + (Math.sign(sign) != Math.sign(preferences[attribute])));
                   }
               }
@@ -400,8 +381,8 @@
                       0.8,
                       Math.pow(Math.abs(preference) / 1.84, 0.5));
                   const color = `hsl(60deg 40% ${lightness * 100}%)`;
-                  console.log("PREFERENCE", ATTRIBUTES[attribute].name, preference, color);
-                  td.className = replaceClass(td.className, /^atmosphere-/, 
+//                  console.log("PREFERENCE", ATTRIBUTES[attribute].name, preference, color);
+                  td.className = replaceClass(td.className, /^atmosphere-/,
                                               preference > 0 ? "atmosphere-high" :
                                               preference < 0 ? "atmosphere-low" :
                                               "atmosphere-mid");
@@ -415,8 +396,8 @@
                       0.8,
                       Math.pow(Math.abs(feature) / 3, 0.5));
                   const color = `hsl(60deg 40% ${lightness * 100}%)`;
-                  console.log("FEATURE", ATTRIBUTES[attribute].name, feature, color);
-                  td.className = replaceClass(td.className, /^atmosphere-/, 
+//                  console.log("FEATURE", ATTRIBUTES[attribute].name, feature, color);
+                  td.className = replaceClass(td.className, /^atmosphere-/,
                                               feature > 0 ? "atmosphere-high" :
                                               feature < 0 ? "atmosphere-low" :
                                               "atmosphere-mid");
@@ -424,110 +405,73 @@
           }
       }
 
-      document.getElementById("guests").append(
-          makeElement("tr", {}, [
-              ...[
-                  makeElement("th", {}, []),
-                  makeElement("th", {}, [
-                      makeElement("input", {
-                          "id": "guests-all",
-                          "type": "checkbox",
-                          "checked": "",
-                          "onchange": e => checkAll(e.target, "guests"),
-                      }, []),
-                  ]),
-                  makeElement("th", {}, [
-                      makeElement("label", {"for": "guests-all"}, ["Guest"]),
-                  ]),
-              ],
-              ...ATTRIBUTES.map(attribute =>
-                  makeElement("th", {}, [attributeIcon(attribute)])
-              ),
-          ]),
-          ...GUESTS.map(guest => {
-              const checkbox = makeElement("input", {
-                  "id": `guest-${guest.index}`,
-                  "type": "checkbox",
-                  "checked": "",
-                  "onchange": onchange,
-              }, []);
-              guest.checkbox = checkbox;
-              return makeElement("tr", {}, [
-                  ...(guest.subindex == 0 ? [
-                      makeElement("th", {"rowspan": guest.slot.guests.length}, [
-                          `Guest ${guest.slot.number}`,
-                      ]),
-                  ] : []),
+      function makeTableRows(parentName, title, entities) {
+          return [
+              makeElement("tr", {}, [
                   ...[
-                      makeElement("td", {"class": "selectable"}, [checkbox]),
-                      makeElement("td", {"class": "selectable"}, [
-                          makeElement("label", {"for": checkbox.id}, [guest.name]),
-                      ]),
-                  ],
-                  ...ATTRIBUTES.map(attribute => {
-                      const levelIndex = guest.preferences[attribute.index];
-                      return makeElement(
-                          "td",
-                          {"class": `selectable attribute-${attribute.index} level-${levelIndex ? "high" : "low"}`},
-                          levelIndex != undefined ? [levelIcon(attribute.levels[levelIndex])] : [],
-                      )
-                  }),
-              ]);
-          }),
-      );
-
-      document.getElementById("amenities").append(
-          makeElement("tr", {}, [
-              ...[
-                  makeElement("th", {}, []),
-                  makeElement("th", {}, [
-                      modify(
+                      makeElement("th", {}, [
                           makeElement("input", {
-                              "id": "amenities-all",
+                              "id": `${parentName}-all`,
                               "type": "checkbox",
-                              "checked": true,
-                              "onchange": e => checkAll(e.target, "amenities"),
+                              "checked": "",
+                              "onchange": e => checkAll(e.target, parentName),
                           }, []),
-                      ),
-                  ]),
-                  makeElement("th", {}, [
-                      makeElement("label", {"for": "amenities-all"}, ["Amenity"]),
-                  ]),
-              ],
-              ...ATTRIBUTES.map(attribute =>
-                  makeElement("th", {}, [attributeIcon(attribute)])
-              ),
-          ]),
-          ...AMENITIES.map(amenity => {
-              const checkbox = makeElement("input", {
-                  "id": `amenity-${amenity.index}`,
-                  "type": "checkbox",
-                  "checked": true,
-                  "onchange": onchange,
-              }, []);
-              amenity.checkbox = checkbox;
-              return makeElement("tr", {}, [
-                  ...(amenity.subindex == 0 ? [
-                      makeElement("th", {"rowspan": amenity.building.amenities.length}, [
-                          amenity.building.name,
                       ]),
-                  ] : []),
-                  ...[
-                      makeElement("td", {"class": "selectable"}, [checkbox]),
-                      makeElement("td", {"class": "selectable"}, [
-                          makeElement("label", {"for": checkbox.id}, [amenity.name]),
-                      ]),
+                      makeElement("th", {}, [title]),
                   ],
-                  ...ATTRIBUTES.map(attribute => {
-                      const levelIndex = amenity.features[attribute.index];
-                      return makeElement(
-                          "td",
-                          {"class": `selectable attribute-${attribute.index} level-${levelIndex ? "high" : "low"}`},
-                          levelIndex != undefined ? [levelIcon(attribute.levels[levelIndex])] : [],
-                      )
-                  }),
-              ]);
-          }),
+                  ...ATTRIBUTES.map(attribute =>
+                      makeElement("th", {}, [attributeIcon(attribute)])
+                  ),
+                  makeElement("th", {}, []),
+              ]),
+              ...entities.flatMap(entity => {
+                  const checkbox = makeElement("input", {
+                      "id": `${parentName}-entity-${entity.index}`,
+                      "type": "checkbox",
+                      "checked": "",
+                      "onchange": onchange,
+                  }, []);
+                  entity.checkbox = checkbox;
+                  const prefix =
+                        entity.subindex == 0 ?
+                        [makeElement("tr", {}, [
+                            makeElement("th", {}, []),
+                            makeElement("th", {}, [entity.group.name]),
+                            makeElement("th", {"colspan": ATTRIBUTES.length + 1}, []),
+                        ])] : [];
+                  return [...prefix, makeElement("tr", {}, [
+                      ...[
+                          makeElement("td", {"class": "selectable"}, [checkbox]),
+                          makeElement("td", {"class": "selectable"}, [
+                              makeElement("label", {"for": checkbox.id}, [entity.name]),
+                          ]),
+                      ],
+                      ...ATTRIBUTES.map(attribute => {
+                          const levelIndex = entity.attributes[attribute.index];
+                          const levelClass =
+                                levelIndex == 0 ? "level-low" :
+                                levelIndex == 1 ? "level-high" :
+                                "level-mid";
+                          return makeElement(
+                              "td",
+                              {"class": `selectable attribute-${attribute.index} ${levelClass}`},
+                              levelIndex != undefined ? [levelIcon(attribute.levels[levelIndex])] : [],
+                          )
+                      }),
+                      makeElement("td", {
+                          "id": `${parentName}-score-${entity.index}`,
+                          "style": "font-family: monospace; font-size: small; text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;",
+                      }, ["000"]),
+                  ])];
+              }),
+          ];
+      }
+
+      document.getElementById("guests").append(
+          ...makeTableRows("guests", "Guests", GUESTS),
+      );
+      document.getElementById("amenities").append(
+          ...makeTableRows("amenities", "Amenities", AMENITIES),
       );
 
       const CHECKBOXES = [
@@ -536,18 +480,14 @@
       ];
 
       function getState() {
-          return encodeBits(function*() {
-              for (const checkbox of CHECKBOXES) {
-                  yield +checkbox.checked;
-              }
-          }());
+          return packBits(Number, CHECKBOXES.map(checkbox => checkbox.checked))
+              .toString(16).padStart(Math.ceil(CHECKBOXES.length / 4), "0");
       }
 
       function setState(state) {
-          const bits = decodeBits(state);
-          for (const checkbox of CHECKBOXES) {
-              const bit = bits.next().value;
-              checkbox.checked = bit == undefined ? true : bit;
+          const bits = parseInt(state, 16);
+          for (const [i, checkbox] of CHECKBOXES.entries()) {
+              checkbox.checked = Number.isNaN(bits) ? true : bits & (1 << i);
           }
       }
 
@@ -559,13 +499,115 @@
           setState(location.hash.replace(/^#/, ""));
       }
 
-      window.addEventListener("popstate", event => {
-          console.log("popstate!");
-          setStateFromHash();
-      });
+      window.addEventListener("popstate", setStateFromHash);
       setStateFromHash();
       setHashFromState();
       updateAll();
+
+      function* productInner(prefix, iters) {
+          if (prefix.length >= iters.length) {
+              yield prefix;
+              return;
+          }
+          for (const item of iters[prefix.length]) {
+              prefix.push(item);
+              yield* productInner(prefix, iters);
+              prefix.pop();
+          }
+      }
+
+      function* product(...iters) {
+          yield* productInner([], iters);
+      }
+
+      function checkedOptions(entity) {
+          const filtered = entity.options.filter(o => o.checkbox.checked);
+          if (filtered.length == 0) {
+              return [];
+          }
+          return [filtered];
+      }
+
+      function execute() {
+          const startTime = performance.now()
+
+          const amenityCombos = Array.from(function*() {
+              for (const amenities of product(...BUILDINGS.flatMap(checkedOptions))) {
+                  const negFeatures = new Int8Array(ATTRIBUTES.length);
+                  const posFeatures = new Int8Array(ATTRIBUTES.length);
+                  for (const amenity of amenities) {
+                      for (const [attribute, level] of Object.entries(amenity.attributes)) {
+                          if (level) {
+                              ++posFeatures[attribute];
+                          } else {
+                              ++negFeatures[attribute];
+                          }
+                      }
+                  }
+                  const amenityIndices = amenities.map(a => a.index);
+                  yield {amenityIndices, negFeatures, posFeatures}
+              }
+          } ());
+          const guestCombos = Array.from(function*() {
+              for (const guests of product(...SLOTS.flatMap(checkedOptions))) {
+                  const preferences = new Int8Array(ATTRIBUTES.length);
+                  for (const guest of guests) {
+                      for (const [attribute, preference] of guest.preferences.entries()) {
+                          preferences[attribute] += preference;
+                      }
+                  }
+                  const guestIndices = guests.map(a => a.index);
+                  yield {guestIndices, preferences};
+              }
+          } ());
+
+          let minScore = Infinity;
+          let maxScore = -Infinity;
+          const guestScores = GUESTS.map(() => ({totalScore: 0, count: 0, maxScore: -Infinity}));
+          const amenityScores = AMENITIES.map(() => ({totalScore: 0, count: 0, maxScore: -Infinity}));
+          // TODO: Add -1? penalty per amenity feature used
+          // TODO: Add 8+1n bonus per amenity feature surplus
+          for (const {guestIndices, preferences} of guestCombos) {
+              for (const {amenityIndices, negFeatures, posFeatures} of amenityCombos) {
+                  const score = ATTRIBUTES
+                        .map(attribute => {
+                            const PASSIVE = 1;
+                            const ACTIVE = 10;
+                            const i = attribute.index;
+                            const p = preferences[i];
+                            const f = p > 0
+                                  ? ACTIVE * posFeatures[i] - PASSIVE * negFeatures[i]
+                                  : PASSIVE * posFeatures[i] - ACTIVE * negFeatures[i];
+                            console.log(p, f, posFeatures, negFeatures);
+                            return p * f + p * 10;
+                        })
+                        .reduce((x, y) => x + y, 0);
+                  for (const index of guestIndices) {
+                      const marginScore = guestScores[index];
+                      marginScore.totalScore += score;
+                      marginScore.maxScore = Math.max(marginScore.maxScore, score);
+                      marginScore.count += 1;
+                  }
+                  for (const index of amenityIndices) {
+                      const marginScore = amenityScores[index];
+                      marginScore.totalScore += score;
+                      marginScore.maxScore = Math.max(marginScore.maxScore, score);
+                      marginScore.count += 1;
+                  }
+                  minScore = Math.min(minScore, score);
+                  maxScore = Math.max(maxScore, score);
+              }
+          }
+          for (const [parentName, marginScores] of [["guests", guestScores], ["amenities", amenityScores]]) {
+              for (const [index, score] of marginScores.entries()) {
+                  const permille = Math.max(0, Math.round(score.maxScore));
+                  const td = document.getElementById(`${parentName}-score-${index}`);
+                  td.innerText = permille.toString().padStart(3, "0");
+                  td.style.backgroundColor = `hsl(60deg 50% ${interpolate(0, 100, permille / 1000)}%)`;
+              }
+          }
+          console.log(performance.now() - startTime, "ms", minScore, "~", maxScore);
+      }
     </script>
     <script>const whTooltips = {};</script>
     <script src="https://wow.zamimg.com/js/tooltips.js"></script>
