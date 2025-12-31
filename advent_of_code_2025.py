@@ -460,24 +460,208 @@ def day10a(inp):
 assert day10a("[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 7
 
 def day10b(inp):
-    import re
-    from scipy import optimize          # requires scipy 1.9.0 or higher
+    import collections, math, re
+
+    def idiv(x, y):
+        assert x % y == 0, (x, y)
+        return x // y
+
+    def sign(x):
+        return (x > 0) - (0 > x)
+
+    def rationalize(x, y):
+        return sign(y) * x, abs(y)
+
+    def ap(dicts, func, zero=0):
+        keys = set()
+        for d in dicts:
+            keys.update(d)
+        result = {}
+        for key in sorted(keys):
+            value = func(*(d.get(key, zero) for d in dicts))
+            if value:
+                result[key] = value
+        return result
+
+    def select_entering_for_primal_max(equations, vz):
+        ez = equations[vz]
+        s = sign(ez[vz])
+        _, jp = max((
+            (s * v, j)
+            for j, v in ez.items()
+            if j not in ("", vz) and s * v < 0
+        ), default=(None, None))
+        return jp
+
+    def select_leaving_for_primal(equations, predicate, jp):
+        rp = None
+        ip = None
+        for i, e in equations.items():
+            if predicate(i) and e.get(jp, 0) > 0:
+                r = rationalize(e.get("", 0), e.get(jp, 0))
+                if rp is None or r[0] * rp[1] < rp[0] * r[1]:
+                    rp = r
+                    ip = i
+        return ip
+
+    def pivot_row(jp, ep, e):
+        c = e.get(jp, 0)
+        d = ep[jp]
+        if d < 0:
+            d = -d
+            c = -c
+        g = math.gcd(c, d)
+        c = idiv(c, g)
+        d = idiv(d, g)
+        return ap([e, ep], lambda ej, epj: d * ej - c * epj)
+
+    def pivot_equations(equations, ip, jp):
+        ep = equations[ip]
+        new_equations = {}
+        for i, e in equations.items():
+            at_pivot = i == ip
+            if at_pivot:
+                i = jp
+            elif jp in e:
+                e = pivot_row(jp, ep, e)
+            if not e:                   # ignore 0 = 0 equations
+                continue
+            g = math.gcd(*e.values())
+            if at_pivot and ep[jp] < 0:
+                g = -g
+            new_equations[i] = ap([e], lambda ej: idiv(ej, g))
+        return new_equations
+
+    def is_feasible(equations, vzs):
+        return all(e.get("", 0) >= 0 for i, e in equations.items() if i not in vzs)
+
+    def primal_simplex(equations, vzs):
+        while True:
+            jp = select_entering_for_primal_max(equations, vzs[0])
+            if jp is None:
+                break
+            ip = select_leaving_for_primal(equations, lambda i: i not in vzs, jp)
+            assert ip is not None, "objective function is unbounded"
+            equations = pivot_equations(equations, ip, jp)
+        return equations
+
+    def phase_one_cleanup(equations):
+        """Ensures all artificial variables are removed from the basis."""
+        for ip in equations:
+            ep = equations[ip]    # re-fetch since equations are being updated
+            if ip in ep:
+                continue
+            jp = next(j for j in ep if j not in equations and j != "")
+            equations = pivot_equations(equations, ip, jp)
+        return equations
+
+    def two_phase_primal_simplex(equations, vz):
+        """Two-phased primal simplex algorithm with exact integer arithmetic."""
+        js = list({j: None for e in equations.values() for j in e if j != vz})
+
+        # simplex phase I - bring into standard form using artificial variables
+        # https://en.wikipedia.org/wiki/Simplex_algorithm#Finding_an_initial_canonical_tableau
+        vw = max(js) + "_W"             # synthesize a unique variable name
+        equations = {
+            i if i == vz else f"?{idx}": ap([e], lambda ej: -ej if i != vz and e.get("", 0) < 0 else ej)
+            for idx, (i, e) in enumerate(equations.items())
+        }
+        equations = {
+            vw: ap([{vw: 1}, *(e for i, e in equations.items() if i != vz)], lambda w, *v: w - sum(v)),
+            **equations,
+        }
+        equations = primal_simplex(equations, [vw, vz])
+        ew = equations.pop(vw)
+        assert ew[vw] > 0
+        if ew.get("", 0) != 0:
+            return equations, False     # solution is infeasible
+        equations = phase_one_cleanup(equations)
+        assert all(e[v] > 0 for v, e in equations.items())
+        assert all(v not in e for v in equations.keys() for v2, e in equations.items() if v2 != v)
+
+        # simplex phase II - find maximum within feasible space
+        # https://en.wikipedia.org/wiki/Simplex_algorithm#Algorithm
+        assert is_feasible(equations, [vz])
+        equations = primal_simplex(equations, [vz])
+        assert is_feasible(equations, [vz])
+        return equations, True
+
     total = 0
-    for line in inp.splitlines():
+    for line_num, line in enumerate(inp.splitlines()):
         _, wirings_str, joltages_str = re.fullmatch(r"\s*\[([^]]*)\](.*)\{([^}]*)\}\s*", line).groups()
         wirings = [[int(s) for s in match.group(1).split(",")]
                    for match in re.finditer("\(([^)]*)\)", wirings_str)]
-        goal = tuple(int(j) for j in joltages_str.split(","))
-        matrix = [[0] * len(wirings) for _ in goal]
-        for button, wiring in enumerate(wirings):
+        goal = [int(j) for j in joltages_str.split(",")]
+
+        wi = len(str(len(goal)))
+        wj = len(str(len(wirings)))
+        eis = ["?" + str(i).zfill(wi) for i in range(len(goal))]
+        xjs = ["X" + str(j).zfill(wj) for j in range(len(wirings))]
+        equations = {
+            "Z": {"Z": 1, **{j: 1 for j in xjs}},
+            **{i: {"": bi} for i, bi in zip(eis, goal)},
+        }
+        for j, wiring in zip(xjs, wirings):
             for machine in wiring:
-                matrix[machine][button] = 1
-        n = len(wirings)
-        constraint = optimize.LinearConstraint(matrix, goal, goal)
-        result = optimize.milp([1] * n, integrality=[1] * n, constraints=constraint)
-        assert abs(round(result.fun) - result.fun) < 1e-6
-        min_cost = round(result.fun)
+                equations[eis[machine]][j] = 1
+
+        # https://en.wikipedia.org/wiki/Branch_and_bound
+        upper_bound = None             # maximum based on full relaxed problem
+        lower_bound = None             # best integral solution so far
+        best_solution = None
+        queue = collections.deque([equations])
+        slack_num = 0
+        while queue:
+            equations = queue.popleft()
+            equations, relaxed_feasible = two_phase_primal_simplex(equations, "Z")
+            if not relaxed_feasible:
+                continue
+            z = equations["Z"].get("", 0) // equations["Z"].get("Z")
+            if lower_bound is not None and z <= lower_bound:
+                continue                # skip search if not strictly better
+            if upper_bound is None:     # only ever set once
+                upper_bound = z
+            assert z <= upper_bound
+            fractional_xj = None
+            solution = {}
+            for xj in xjs:
+                ex = equations.get(xj, {xj: 1})
+                xn = ex.get("", 0)
+                xd = ex[xj]
+                if xn % xd != 0:
+                    fractional_xj = xj, xn // xd
+                    break
+                solution[xj] = idiv(xn, xd)
+            if fractional_xj:           # branch if solution is not integral
+                xj, xb = fractional_xj
+                queue.append({
+                    **equations,
+                    f"S{slack_num}": {xj: 1, f"S{slack_num}": 1, "": xb},
+                })
+                slack_num += 1
+                queue.append({
+                    **equations,
+                    f"S{slack_num}": {xj: -1, f"S{slack_num}": 1, "": -(xb + 1)},
+                })
+                slack_num += 1
+                pass
+            else:                       # solution is integral
+                if lower_bound is None or z > lower_bound:
+                    lower_bound = z
+                    best_solution = solution
+                if lower_bound == upper_bound: # this is as good as it gets
+                    break
+
+        # assert solution is valid
+        result = [0] * len(goal)
+        for b, x in best_solution.items():
+            for m in wirings[int(b.lstrip("X"))]:
+                result[m] += x
+        assert result == goal, (result, goal, best_solution)
+
+        min_cost = -lower_bound
         total += min_cost
+
     return total
 
 assert day10b("[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 33
