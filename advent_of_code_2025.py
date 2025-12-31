@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# https://adventofcode.com/2025
 
 def day1a(inp, dial=50, cycle=100):
     zeroes = 0
@@ -459,7 +460,7 @@ def day10a(inp):
 assert day10a("[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 7
 
 def day10b(inp):
-    import heapq, math, re
+    import re
     from scipy import optimize          # requires scipy 1.9.0 or higher
     total = 0
     for line in inp.splitlines():
@@ -475,7 +476,7 @@ def day10b(inp):
         constraint = optimize.LinearConstraint(matrix, goal, goal)
         result = optimize.milp([1] * n, integrality=[1] * n, constraints=constraint)
         assert abs(round(result.fun) - result.fun) < 1e-6
-        min_cost = int(result.fun)
+        min_cost = round(result.fun)
         total += min_cost
     return total
 
