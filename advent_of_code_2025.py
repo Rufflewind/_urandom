@@ -665,3 +665,86 @@ def day10b(inp):
     return total
 
 assert day10b("[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 33
+
+def topo_sort(graph, start):
+    # https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search
+    result = []
+    stack = [(start, -1)]
+    visiting = {}
+    while stack:
+        node, i = stack.pop()
+        if i == -1:
+            if node not in visiting:
+                visiting[node] = True
+                stack.append((node, i + 1))
+        elif i >= 0 and i < len(successors := graph.get(node, [])):
+            stack.append((node, i + 1))
+            dst = successors[i]
+            assert not visiting.get(dst), "graph has cycle"
+            stack.append((dst, -1))
+        elif i == len(successors):
+            visiting[node] = False
+            result.append(node)
+        else:
+            assert False
+    result.reverse()
+
+    # verify the topo sort
+    indexes = {n: i for i, n in enumerate(result)}
+    for src, dsts in graph.items():
+        for dst in dsts:
+            assert indexes.get(src, -1) < indexes.get(dst, len(result)), (s, d)
+
+    return result
+
+def day11a(inp, start="you", end="out"):
+    graph = {}
+    for line in inp.splitlines():
+        src, dsts = line.split(":")
+        graph[src.strip()] = dsts.split()
+    counts = {start: 1}
+    counted = set()
+    for src in topo_sort(graph, start):
+        src_count = counts[src]
+        counted.add(src)
+        for dst in graph.get(src, []):
+            assert dst not in counted
+            counts[dst] = counts.get(dst, 0) + src_count
+    return counts.get(end, 0)
+
+assert day11a("aaa: you hhh\nyou: bbb ccc\nbbb: ddd eee\nccc: ddd eee fff\nddd: ggg\neee: out\nfff: out\nggg: out\nhhh: ccc fff iii\niii: out") == 5
+
+def day11b_v1(inp):
+    return (
+        day11a(inp, start="svr", end="dac")
+        * day11a(inp, start="dac", end="fft")
+        * day11a(inp, start="fft", end="out")
+    ) + (
+        day11a(inp, start="svr", end="fft")
+        * day11a(inp, start="fft", end="dac")
+        * day11a(inp, start="dac", end="out")
+    )
+
+assert day11b_v1("svr: aaa bbb\naaa: fft\nfft: ccc\nbbb: tty\ntty: ccc\nccc: ddd eee\nddd: hub\nhub: fff\neee: dac\ndac: fff\nfff: ggg hhh\nggg: out\nhhh: out") == 2
+
+def day11b_v2(inp, start="svr", end="out", waypoints=["dac", "fft"]):
+    graph = {}
+    for line in inp.splitlines():
+        src, dsts = line.split(":")
+        graph[src.strip()] = dsts.split()
+    waypoints_set = frozenset(waypoints)
+    counts = {start: {frozenset(): 1}}
+    counted = set()
+    for src in topo_sort(graph, start):
+        src_counts = counts[src]
+        counted.add(src)
+        for dst in graph.get(src, []):
+            assert dst not in counted
+            dst_counts = counts.setdefault(dst, {})
+            for traversed, count in src_counts.items():
+                if src in waypoints_set:
+                    traversed |= frozenset([src])
+                dst_counts[traversed] = dst_counts.get(traversed, 0) + count
+    return counts.get(end, {}).get(waypoints_set, 0)
+
+assert day11b_v2("svr: aaa bbb\naaa: fft\nfft: ccc\nbbb: tty\ntty: ccc\nccc: ddd eee\nddd: hub\nhub: fff\neee: dac\ndac: fff\nfff: ggg hhh\nggg: out\nhhh: out") == 2
