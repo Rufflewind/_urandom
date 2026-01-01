@@ -781,6 +781,9 @@ def day12(inp):
                    for row in shape)
         if area > width * height:
             continue
+        if sum(quantities) <= (width // 3) * (height // 3):
+            fits += 1
+            continue
 
         # minimize: SUM[s] e(s)
         # e(s) >= 0, m(b pq) >= 0
