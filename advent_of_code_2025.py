@@ -750,7 +750,7 @@ def day11b_v2(inp, start="svr", end="out", waypoints=["dac", "fft"]):
 assert day11b_v2("svr: aaa bbb\naaa: fft\nfft: ccc\nbbb: tty\ntty: ccc\nccc: ddd eee\nddd: hub\nhub: fff\neee: dac\ndac: fff\nfff: ggg hhh\nggg: out\nhhh: out") == 2
 
 def day12(inp):
-    import re
+    import re, string
     import pyscipopt                    # tested with 6.0.0
     sections = inp.split("\n\n")
     shapes = [
@@ -785,45 +785,65 @@ def day12(inp):
             fits += 1
             continue
 
-        # minimize: SUM[s] e(s)
-        # e(s) >= 0, m(b pq) >= 0
-        # e(s) + SUM[b pq] <s b> m(b pq) == c(s)
-        # SUM[b pq] <b pq xy> m(b pq) <= 1
-        ns = len(shapes)
-        ncons = ns + width * height
-        nvars = ns + (width - 2) * (height - 2) * len(blocks)
-        constraints = [{} for _ in range(ncons)]
-        for s in range(ns):
-            constraints[s][s] = 1
+        # minimize SUM[s] e(s) with constraints:
+        #
+        #     e(s) >= 0
+        #     m(b pq) >= 0 and are integers
+        #     forall s. e(s) + SUM[b pq] <s b> m(b pq) == c(s)
+        #     forall xy. SUM[b pq] <b pq xy> m(b pq) <= 1
+        model = pyscipopt.Model()
+        evs = [
+            model.addVar(f"e{j}", lb=0, ub=None)
+            for j in range(len(shapes))
+        ]
+        mvs = [
+            model.addVar(f"m{j}", lb=0, ub=None, vtype="INTEGER")
+            for j in range((width - 2) * (height - 2) * len(blocks))
+        ]
+        model.setObjective(pyscipopt.quicksum(evs), sense="minimize")
+        quantity_sums = [[] for _ in shapes]
         for b, (_, s) in enumerate(blocks):
             for q in range(height - 2):
                 for p in range(width - 2):
-                    constraints[s][ns + p + (width - 2) * (q + (height - 2) * b)] = 1
+                    j = p + (width - 2) * (q + (height - 2) * b)
+                    quantity_sums[s].append(mvs[j])
+        for s, (ev, quantity_sum, quantity) in enumerate(
+                zip(evs, quantity_sums, quantities)):
+            model.addCons(ev + pyscipopt.quicksum(quantity_sum) == quantity,
+                          name=f"Q{s}")
+        cell_sums = {}
         for q in range(height - 2):
             for p in range(width - 2):
                 for b, (block, _) in enumerate(blocks):
-                    for bx, row in enumerate(block):
-                        x = p + bx
-                        for by, cell in enumerate(row):
+                    j = (b * (height - 2) + q) * (width - 2) + p
+                    for by, row in enumerate(block):
+                        y = q + by
+                        for bx, cell in enumerate(row):
                             if not cell:
                                 continue
-                            y = q + by
-                            constraints[ns + x + width * y][ns + (b * (height - 2) + q) * (width - 2) + p] = 1
-        model = pyscipopt.Model()
-        vs = [
-            model.addVar(f"e{j}", lb=0, ub=None)
-            for j in range(ns)
-        ] + [
-            model.addVar(f"m{j}", lb=0, vtype="INTEGER")
-            for j in range((width - 2) * (height - 2) * len(blocks))
-        ]
-        model.setObjective(pyscipopt.quicksum(vs[j] for j in range(ns)), sense="minimize")
-        for i, constraint in enumerate(constraints):
-            if i < ns:
-                model.addCons(pyscipopt.quicksum(c * vs[j] for j, c in constraint.items()) == quantities[i])
-            else:
-                model.addCons(pyscipopt.quicksum(c * vs[j] for j, c in constraint.items()) <= 1)
+                            x = p + bx
+                            i = x + width * y
+                            cell_sums.setdefault(i, []).append(mvs[j])
+        for i, cell_sum in cell_sums.items():
+            model.addCons(pyscipopt.quicksum(cell_sum) <= 1, name=f"C{i}")
         model.optimize()
+
+        grid = [["."] * width for _ in range(height)]
+        for q in range(height - 2):
+            for p in range(width - 2):
+                for b, (block, _) in enumerate(blocks):
+                    j = (b * (height - 2) + q) * (width - 2) + p
+                    if not model.getVal(mvs[j]):
+                        continue
+                    for by, row in enumerate(block):
+                        y = q + by
+                        for bx, cell in enumerate(row):
+                            if not cell:
+                                continue
+                            x = p + bx
+                            assert grid[y][x] == "."
+                            grid[y][x] = string.ascii_uppercase[j % 26]
+
         if model.getObjVal() < 1e-3:
             fits += 1
     return fits
