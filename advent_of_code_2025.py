@@ -750,8 +750,7 @@ def day11b_v2(inp, start="svr", end="out", waypoints=["dac", "fft"]):
 assert day11b_v2("svr: aaa bbb\naaa: fft\nfft: ccc\nbbb: tty\ntty: ccc\nccc: ddd eee\nddd: hub\nhub: fff\neee: dac\ndac: fff\nfff: ggg hhh\nggg: out\nhhh: out") == 2
 
 def day12(inp):
-    import re, string
-    import pyscipopt                    # tested with 6.0.0
+    import itertools, re, string
     sections = inp.split("\n\n")
     shapes = [
         [[int(c == "#") for c in line] for line in section.splitlines()[1:]]
@@ -779,73 +778,73 @@ def day12(inp):
         area = sum(sum(row) * qty
                    for shape, qty in zip(shapes, quantities)
                    for row in shape)
+
+        # check for easy cases
         if area > width * height:
             continue
         if sum(quantities) <= (width // 3) * (height // 3):
             fits += 1
             continue
 
-        # minimize SUM[s] e(s) with constraints:
-        #
-        #     e(s) >= 0
-        #     m(b pq) >= 0 and are integers
-        #     forall s. e(s) + SUM[b pq] <s b> m(b pq) == c(s)
-        #     forall xy. SUM[b pq] <b pq xy> m(b pq) <= 1
-        model = pyscipopt.Model()
-        evs = [
-            model.addVar(f"e{j}", lb=0, ub=None)
-            for j in range(len(shapes))
+        # brute-force search -- only needed for the 3 small examples
+        positions = [
+            px + width * py
+            for py in range(height - 2)
+            for px in range(width - 2)
         ]
-        mvs = [
-            model.addVar(f"m{j}", lb=0, ub=None, vtype="INTEGER")
-            for j in range((width - 2) * (height - 2) * len(blocks))
+        bit_blocks = [
+            (
+                sum(
+                    cell << (bx + width * by)
+                    for by, row in enumerate(block)
+                    for bx, cell in enumerate(row)
+                ),
+                s,
+            )
+            for block, s in blocks
         ]
-        model.setObjective(pyscipopt.quicksum(evs), sense="minimize")
-        quantity_sums = [[] for _ in shapes]
-        for b, (_, s) in enumerate(blocks):
-            for q in range(height - 2):
-                for p in range(width - 2):
-                    j = p + (width - 2) * (q + (height - 2) * b)
-                    quantity_sums[s].append(mvs[j])
-        for s, (ev, quantity_sum, quantity) in enumerate(
-                zip(evs, quantity_sums, quantities)):
-            model.addCons(ev + pyscipopt.quicksum(quantity_sum) == quantity,
-                          name=f"Q{s}")
-        cell_sums = {}
-        for q in range(height - 2):
-            for p in range(width - 2):
-                for b, (block, _) in enumerate(blocks):
-                    j = (b * (height - 2) + q) * (width - 2) + p
-                    for by, row in enumerate(block):
-                        y = q + by
-                        for bx, cell in enumerate(row):
-                            if not cell:
-                                continue
-                            x = p + bx
-                            i = x + width * y
-                            cell_sums.setdefault(i, []).append(mvs[j])
-        for i, cell_sum in cell_sums.items():
-            model.addCons(pyscipopt.quicksum(cell_sum) <= 1, name=f"C{i}")
-        model.optimize()
+        block_combos = []
+        for s, quantity in enumerate(quantities):
+            subblocks = [block for block, sb in bit_blocks if sb == s]
+            block_combos.append(list(itertools.combinations_with_replacement(
+                subblocks,
+                quantity,
+            )))
+        solution = None
+        for combo_set in itertools.product(*block_combos):
+            combo = list(itertools.chain(*combo_set))
+            nk = len(combo)
+            np = len(positions)
+            stack = [(0, 0)]
+            while stack:
+                p, bitmap = stack.pop()
+                k = len(stack)
+                if k == nk:
+                    solution = [b << positions[p - 1] for b, (p, _) in zip(combo, stack)]
+                    break
+                while p < np:
+                    positioned_block = combo[k] << positions[p]
+                    p += 1
+                    if bitmap & positioned_block == 0:
+                        break
+                else:
+                    continue
+                stack.append((p, bitmap))
+                stack.append((0, bitmap | positioned_block))
+            if solution is not None:
+                break
 
-        grid = [["."] * width for _ in range(height)]
-        for q in range(height - 2):
-            for p in range(width - 2):
-                for b, (block, _) in enumerate(blocks):
-                    j = (b * (height - 2) + q) * (width - 2) + p
-                    if not model.getVal(mvs[j]):
-                        continue
-                    for by, row in enumerate(block):
-                        y = q + by
-                        for bx, cell in enumerate(row):
-                            if not cell:
-                                continue
-                            x = p + bx
-                            assert grid[y][x] == "."
-                            grid[y][x] = string.ascii_uppercase[j % 26]
-
-        if model.getObjVal() < 1e-3:
+        if solution is not None:
             fits += 1
+
+            # verify solution
+            cells = ["."] * (width * height)
+            for j, block in enumerate(solution):
+                for i, c in enumerate(cells):
+                    if block & (1 << i) == 0:
+                        continue
+                    assert c == "."
+                    cells[i] = string.ascii_uppercase[j % 26]
     return fits
 
 assert day12("0:\n###\n##.\n##.\n\n1:\n###\n##.\n.##\n\n2:\n.##\n###\n##.\n\n3:\n##.\n###\n##.\n\n4:\n###\n#..\n###\n\n5:\n###\n.#.\n###\n\n4x4: 0 0 0 0 2 0\n12x5: 1 0 1 0 2 2\n12x5: 1 0 1 0 3 2") == 2
